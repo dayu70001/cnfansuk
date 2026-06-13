@@ -1,0 +1,108 @@
+{
+  "links": {
+    "whatsappChannelUrl": "https://whatsapp.com/channel/0029VbCaLkaGpLHHrhnDip3N",
+    "telegramChannelUrl": "https://t.me/liusnning",
+    "instagramUrl": "https://instagram.com/PLACEHOLDER",
+    "facebookUrl": "https://facebook.com/PLACEHOLDER",
+    "personalWhatsappUrl": "https://api.whatsapp.com/send?phone=41799182999",
+    "personalWhatsappNumber": "41799182999",
+    "personalTelegramUrl": "https://t.me/kunkunyu0",
+    "personalTelegramUsername": "@kunkunyu0"
+  },
+  "homepage": {
+    "heroMainImageUrl": "https://taplink.st/p/2/2/4/0/70226615.jpg?6",
+    "heroMainImageFit": "cover",
+    "heroMainImagePosition": "center center",
+    "categories": [
+      {
+        "key": "hoodies",
+        "title": "Hoodies",
+        "subtitle": "Soft layers for everyday wear.",
+        "imageUrl": "https://taplink.st/p/e/2/4/9/70226617.jpg?3",
+        "imageFit": "cover",
+        "imagePosition": "70% center",
+        "href": "/category/hoodies"
+      },
+      {
+        "key": "tracksuits",
+        "title": "Tracksuits",
+        "subtitle": "Matching sets for clean daily styling.",
+        "imageUrl": "https://taplink.st/p/2/2/4/0/70226615.jpg?9",
+        "imageFit": "cover",
+        "imagePosition": "center center",
+        "href": "/category/tracksuits"
+      },
+      {
+        "key": "jackets",
+        "title": "Jackets",
+        "subtitle": "Outer layers for cooler days.",
+        "imageUrl": "https://taplink.st/p/a/1/8/8/70226769.jpg?2",
+        "imageFit": "cover",
+        "imagePosition": "60% center",
+        "href": "/category/jackets"
+      },
+      {
+        "key": "trousers",
+        "title": "Trousers",
+        "subtitle": "Easy bottoms for daily rotation.",
+        "imageUrl": "https://taplink.st/p/e/1/b/9/70226771.jpg?2",
+        "imageFit": "cover",
+        "imagePosition": "center bottom",
+        "href": "/category/jeans-trousers"
+      }
+    ],
+    "apparelEdit": {
+      "title": "Clean layers,\neveryday pieces.",
+      "subtitle": "Clean layers, relaxed fits and everyday pieces — colours that sit easily together and shapes built to be worn on repeat.",
+      "imageUrl": "https://taplink.st/p/2/2/4/0/70226615.jpg?5",
+      "imageFit": "cover",
+      "imagePosition": "center center",
+      "buttonText": "Shop the edit",
+      "buttonHref": "/category/new-in"
+    },
+    "latestDrops": [
+      {
+        "imageUrl": "https://taplink.st/p/f/9/3/e/70226926.jpg?0",
+        "href": "/category/new-in",
+        "label": "Latest fit 1",
+        "imageFit": "cover",
+        "imagePosition": "center center"
+      },
+      {
+        "imageUrl": "https://taplink.st/p/c/b/c/d/70226923.jpg?0",
+        "href": "/category/new-in",
+        "label": "Latest fit 2",
+        "imageFit": "cover",
+        "imagePosition": "center center"
+      },
+      {
+        "imageUrl": "https://taplink.st/p/e/1/b/9/70226771.jpg?1",
+        "href": "/category/new-in",
+        "label": "Latest fit 3",
+        "imageFit": "cover",
+        "imagePosition": "center center"
+      },
+      {
+        "imageUrl": "https://taplink.st/p/a/1/8/8/70226769.jpg?1",
+        "href": "/category/new-in",
+        "label": "Latest fit 4",
+        "imageFit": "cover",
+        "imagePosition": "center center"
+      },
+      {
+        "imageUrl": "https://taplink.st/p/e/2/4/9/70226617.jpg?2",
+        "href": "/category/new-in",
+        "label": "Latest fit 5",
+        "imageFit": "cover",
+        "imagePosition": "center center"
+      },
+      {
+        "imageUrl": "https://taplink.st/p/2/2/4/0/70226615.jpg?4",
+        "href": "/category/new-in",
+        "label": "Latest fit 6",
+        "imageFit": "cover",
+        "imagePosition": "center center"
+      }
+    ]
+  }
+}
