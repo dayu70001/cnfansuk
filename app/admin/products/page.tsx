@@ -1,7 +1,12 @@
+import { notFound } from "next/navigation";
 import { products } from "@/data/products";
 import { formatMoney } from "@/lib/formatMoney";
 
 export default function AdminProductsPage() {
+  if (process.env.NODE_ENV === "production") {
+    notFound();
+  }
+
   return (
     <section className="page-shell">
       <div className="page-heading">

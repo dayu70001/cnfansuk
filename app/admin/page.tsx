@@ -1,6 +1,11 @@
 import Link from "next/link";
+import { notFound } from "next/navigation";
 
 export default function AdminPage() {
+  if (process.env.NODE_ENV === "production") {
+    notFound();
+  }
+
   return (
     <section className="page-shell">
       <div className="page-heading">
