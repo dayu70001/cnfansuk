@@ -1,0 +1,38 @@
+{
+  "product_code": "CNF-APP-0001",
+  "slug": "sample-everyday-jacket",
+  "title": "Sample Everyday Jacket",
+  "subtitle": "A sample outerwear item for import testing.",
+  "description": "Fake product data used only to document the future catalog import shape.",
+  "category": "outerwear",
+  "subcategory": "jackets",
+  "price_gbp": 42,
+  "compare_at_price_gbp": 58,
+  "currency": "GBP",
+  "status": "draft",
+  "source_url": "https://example.com/sample-product",
+  "images": [
+    {
+      "image_key": "products/CNF-APP-0001/01.webp",
+      "position": 1,
+      "alt": "Sample everyday jacket front view"
+    },
+    {
+      "image_key": "products/CNF-APP-0001/02.webp",
+      "position": 2,
+      "alt": "Sample everyday jacket detail view"
+    }
+  ],
+  "options": [
+    {
+      "option_name": "Size",
+      "option_value": "M",
+      "position": 1
+    },
+    {
+      "option_name": "Colour",
+      "option_value": "Charcoal",
+      "position": 2
+    }
+  ]
+}
