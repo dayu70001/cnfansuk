@@ -2,14 +2,18 @@ import Link from "next/link";
 import type { CSSProperties } from "react";
 import { ProductCard } from "@/components/ProductCard";
 import { products } from "@/data/products";
+import { fetchCatalogProducts } from "@/lib/catalogApi";
 import { readSiteSettings } from "@/lib/siteSettings";
+import type { Product } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
-export default function Home() {
+export default async function Home() {
   const settings = readSiteSettings();
   const { homepage, links } = settings;
-  const newIn = products.filter((product) => product.newIn).slice(0, 10);
+  const catalogProducts = await fetchCatalogProducts({ limit: 24 });
+  const displayProducts = catalogProducts?.length ? mergeProducts(catalogProducts, products) : products;
+  const newIn = displayProducts.filter((product) => product.newIn).slice(0, 10);
   const categoryTones = ["forest", "navy", "stone", "charcoal"];
   const homeCategoryCards = [
     {
@@ -233,6 +237,11 @@ export default function Home() {
       </section>
     </>
   );
+}
+
+function mergeProducts(primary: Product[], fallback: Product[]) {
+  const seen = new Set(primary.map((product) => product.slug));
+  return [...primary, ...fallback.filter((product) => !seen.has(product.slug))];
 }
 
 function WhatsAppIcon() {

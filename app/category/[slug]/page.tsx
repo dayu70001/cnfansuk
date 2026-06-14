@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { ProductCard } from "@/components/ProductCard";
 import { getCategory } from "@/data/categories";
 import { getProductsByCategory, products } from "@/data/products";
+import { fetchCatalogProducts } from "@/lib/catalogApi";
 import type { Product } from "@/lib/types";
 
 type CategorySearchParams = {
@@ -86,7 +87,11 @@ export default async function CategoryPage({
   const style = cleanParam(query.style);
   const sort = cleanParam(query.sort) || "newest";
   const filterCategory = legacyCategoryMap[slug] || slug;
-  const baseProducts = getProductsByCategory(slug);
+  const localProducts = getProductsByCategory(slug);
+  const catalogProducts = await fetchCatalogProducts({ q, limit: 100 });
+  const matchingCatalogProducts =
+    catalogProducts?.filter((product) => (slug === "new-in" ? product.newIn : product.category === filterCategory)) || [];
+  const baseProducts = matchingCatalogProducts.length ? mergeProducts(matchingCatalogProducts, localProducts) : localProducts;
   const brandOptions = getBrandOptions(baseProducts);
   const styleGroup = styleOptionsByCategory[filterCategory];
   const categoryProducts = sortProducts(
@@ -231,6 +236,11 @@ function sortProducts(items: Product[], sort: string) {
     return nextItems.sort((a, b) => Number(b.featured) - Number(a.featured));
   }
   return nextItems.sort((a, b) => Number(b.newIn) - Number(a.newIn) || products.indexOf(a) - products.indexOf(b));
+}
+
+function mergeProducts(primary: Product[], fallback: Product[]) {
+  const seen = new Set(primary.map((product) => product.slug));
+  return [...primary, ...fallback.filter((product) => !seen.has(product.slug))];
 }
 
 function buildCategoryHref(slug: string, params: Required<CategorySearchParams>) {
