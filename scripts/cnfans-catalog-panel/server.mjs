@@ -78,7 +78,7 @@ function normalizeUrl(raw, baseUrl) {
 }
 
 function getCostFromTitle(title) {
-  const match = String(title || "").match(/(?:^|\s)p(\d+)(?:\s|$)/i);
+  const match = String(title || "").match(/p\s*(\d+)/i);
   return match ? Number(match[1]) : null;
 }
 
@@ -103,8 +103,12 @@ function calculatePrices(costCny) {
 }
 
 function rawPriceText(title) {
-  const match = String(title || "").match(/(?:^|\s)(p\d+)(?:\s|$)/i);
-  return match ? match[1].toLowerCase() : "";
+  const match = String(title || "").match(/p\s*(\d+)/i);
+  return match ? `p${match[1]}` : "";
+}
+
+function hasPriceMarker(title) {
+  return /p\s*\d+/i.test(String(title || ""));
 }
 
 async function collectListingCandidates(page, sourceUrl, maxScan) {
@@ -239,6 +243,7 @@ async function collectListingCandidates(page, sourceUrl, maxScan) {
   const items = [];
   for (const candidate of candidates) {
     const title = cleanText(candidate.title).slice(0, 180);
+    if (!hasPriceMarker(title)) continue;
     const imageUrls = Array.from(new Set((candidate.imageUrls || []).map((url) => normalizeUrl(url, sourceUrl)).filter(Boolean)));
     const url = normalizeUrl(candidate.url, sourceUrl) || sourceUrl;
     const key = imageUrls[0] || (url !== sourceUrl ? url : "") || title;

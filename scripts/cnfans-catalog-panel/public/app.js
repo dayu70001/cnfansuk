@@ -43,21 +43,6 @@ const SOURCE_PRESETS = [
 const mainCategories = ["新品", "外套", "上衣", "下装", "套装"];
 const subCategories = ["连帽卫衣", "短袖", "夹克", "运动套装", "长裤", "短裤", "成套搭配"];
 
-const mockTitles = [
-  ["p100 黑色连帽卫衣", 6, "p100", false, false],
-  ["p150 水洗夹克", 8, "p150", false, false],
-  ["p220 运动套装", 7, "p220", false, false],
-  ["未标价短袖样品", 6, "", false, false],
-  ["p80 棉质短袖", 4, "p80", false, false],
-  ["p120 宽松长裤", 5, "p120", false, false],
-  ["p180 加厚外套", 9, "p180", true, false],
-  ["p95 夏季短裤", 3, "p95", false, false],
-  ["p160 疑似重复卫衣", 6, "p160", false, true],
-  ["p130 拉链连帽卫衣", 7, "p130", false, false],
-  ["p260 高级运动套装", 8, "p260", false, false],
-  ["未标价夹克样品", 7, "", false, false],
-];
-
 function mergeState(nextState) {
   Object.assign(state, structuredClone(DEFAULT_STATE), nextState || {});
   state.source = { ...DEFAULT_STATE.source, ...(nextState?.source || {}) };
@@ -150,7 +135,7 @@ function renderCurrentSource() {
 }
 
 function getCostFromTitle(title) {
-  const match = title.match(/(?:^|\s)p(\d+)(?:\s|$)/i);
+  const match = title.match(/p\s*(\d+)/i);
   return match ? Number(match[1]) : null;
 }
 
@@ -196,48 +181,6 @@ function selectedCandidates() {
 
 function editableCandidates() {
   return selectedCandidates().filter((candidate) => candidate.collectStatus === "待编辑");
-}
-
-function makeMockCandidates() {
-  syncSourceFromInput();
-  const sourceUrl = document.querySelector("#sourceUrl").value.trim() || "https://mock.local/source";
-  const keyword = document.querySelector("#keyword").value.trim();
-  const skipD1 = document.querySelector("#skipD1").checked;
-  const skipDuplicate = document.querySelector("#skipDuplicate").checked;
-  const count = 8 + Math.floor(Math.random() * 5);
-  const rows = mockTitles.slice(0, count).filter(([, , , existsInD1, duplicate]) => {
-    if (skipD1 && existsInD1) return false;
-    if (skipDuplicate && duplicate) return false;
-    return true;
-  });
-
-  state.candidates = rows.map(([baseTitle, imageCount, rawPriceText, existsInD1, duplicate], index) => {
-    const title = keyword ? `${baseTitle} ${keyword}` : baseTitle;
-    const costCny = getCostFromTitle(title);
-    const prices = calculatePrices(costCny);
-    return {
-      id: `mock-${Date.now()}-${index + 1}`,
-      title,
-      description: `${title} 的本地草稿描述。正式发布前请人工检查标题、分类、价格和图片。`,
-      sourceUrl: `${sourceUrl.replace(/\/$/, "")}/item-${index + 1}`,
-      imageCount,
-      imageUrl: "占位图",
-      rawPriceText,
-      detectedCostCny: costCny,
-      saleCny: prices.saleCny,
-      prices: { GBP: prices.GBP, EUR: prices.EUR, USD: prices.USD },
-      status: "模拟候选",
-      collectStatus: "待采集",
-      category: "新品",
-      subcategory: "连帽卫衣",
-      sizes: [...state.settings.defaultSizes],
-      existsInD1,
-      duplicate,
-    };
-  });
-  state.selectedIds = [];
-  state.publishDrafts = [];
-  document.querySelector("#scanMessage").textContent = `已生成 ${state.candidates.length} 条模拟候选商品。`;
 }
 
 async function scanLatestCandidates() {
@@ -288,7 +231,7 @@ function renderStatusBar() {
 function renderCandidates() {
   const grid = document.querySelector("#candidateGrid");
   if (!state.candidates.length) {
-    grid.innerHTML = `<div class="empty-box">还没有候选商品。请先到“来源扫描”点击“开始模拟扫描”。</div>`;
+    grid.innerHTML = `<div class="empty-box">还没有候选商品。请先到“来源扫描”点击“真实扫描最新商品”。</div>`;
     return;
   }
 
@@ -586,13 +529,6 @@ document.querySelector("#sourceImageLimit").addEventListener("change", async (ev
   syncSettingsControls();
   await saveState();
   renderAll();
-});
-
-document.querySelector("#mockScanBtn").addEventListener("click", async () => {
-  makeMockCandidates();
-  await saveState();
-  renderAll();
-  showTab("pool");
 });
 
 document.querySelector("#realScanBtn").addEventListener("click", scanLatestCandidates);
