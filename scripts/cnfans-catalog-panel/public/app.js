@@ -1,4 +1,8 @@
 const DEFAULT_STATE = {
+  source: {
+    name: "",
+    url: "",
+  },
   settings: {
     imageLimit: 6,
     multiplier: 1.8,
@@ -28,6 +32,14 @@ const pageTitles = {
   settings: "面板设置",
 };
 
+const SOURCE_PRESETS = [
+  { name: "创维", url: "https://shop00128866.wecatalog.cn/t/63136SN" },
+  { name: "豆哥", url: "https://shop20459435.wecatalog.cn/t/6XLYnHt" },
+  { name: "可乐", url: "https://shop00246489.wecatalog.cn/t/5Kkb0zg" },
+  { name: "高端男装", url: "https://shop00242636.wecatalog.cn/t/cENPwPI" },
+  { name: "Aaa-Yc", url: "https://shop15552286.wecatalog.cn/t/oAXTyBz" },
+];
+
 const mainCategories = ["新品", "外套", "上衣", "下装", "套装"];
 const subCategories = ["连帽卫衣", "短袖", "夹克", "运动套装", "长裤", "短裤", "成套搭配"];
 
@@ -48,6 +60,7 @@ const mockTitles = [
 
 function mergeState(nextState) {
   Object.assign(state, structuredClone(DEFAULT_STATE), nextState || {});
+  state.source = { ...DEFAULT_STATE.source, ...(nextState?.source || {}) };
   state.settings = { ...DEFAULT_STATE.settings, ...(nextState?.settings || {}) };
   state.settings.rates = { ...DEFAULT_STATE.settings.rates, ...(nextState?.settings?.rates || {}) };
   state.settings.defaultSizes = Array.isArray(nextState?.settings?.defaultSizes)
@@ -82,6 +95,58 @@ function showTab(tabName) {
   panels.forEach((panel) => panel.classList.toggle("active-panel", panel.id === tabName));
   pageTitle.textContent = pageTitles[tabName] || "本地上架面板";
   renderAll();
+}
+
+function presetForUrl(url) {
+  return SOURCE_PRESETS.find((preset) => preset.url === url);
+}
+
+function sourceNameForUrl(url) {
+  if (!url) return "";
+  return presetForUrl(url)?.name || "手动来源";
+}
+
+function syncSourceFromInput() {
+  const url = document.querySelector("#sourceUrl").value.trim();
+  state.source = { name: sourceNameForUrl(url), url };
+}
+
+function syncSourceControl() {
+  document.querySelector("#sourceUrl").value = state.source.url || "";
+}
+
+function renderSourcePresets() {
+  const grid = document.querySelector("#sourcePresetGrid");
+  grid.innerHTML = SOURCE_PRESETS.map((preset) => {
+    const active = state.source.url === preset.url;
+    return `
+      <button class="source-preset ${active ? "active" : ""}" data-source-url="${escapeAttr(preset.url)}" type="button">
+        <span>${escapeHtml(preset.name)}</span>
+      </button>
+    `;
+  }).join("");
+
+  grid.querySelectorAll(".source-preset").forEach((button) => {
+    button.addEventListener("click", async () => {
+      const url = button.dataset.sourceUrl;
+      const preset = presetForUrl(url);
+      state.source = { name: preset?.name || "手动来源", url };
+      syncSourceControl();
+      await saveState();
+      renderSourcePresets();
+      renderCurrentSource();
+    });
+  });
+}
+
+function renderCurrentSource() {
+  const nameText = state.source.name ? `当前来源：${state.source.name}` : "当前来源：未选择";
+  const urlText = state.source.url ? `来源链接：${state.source.url}` : "来源链接：未填写";
+  const urlLink = document.querySelector("#currentSourceUrl");
+  document.querySelector("#currentSourceName").textContent = nameText;
+  urlLink.textContent = urlText;
+  urlLink.href = state.source.url || "#";
+  urlLink.classList.toggle("empty-link", !state.source.url);
 }
 
 function getCostFromTitle(title) {
@@ -132,6 +197,7 @@ function editableCandidates() {
 }
 
 function makeMockCandidates() {
+  syncSourceFromInput();
   const sourceUrl = document.querySelector("#sourceUrl").value.trim() || "https://mock.local/source";
   const keyword = document.querySelector("#keyword").value.trim();
   const skipD1 = document.querySelector("#skipD1").checked;
@@ -351,6 +417,8 @@ function renderSettings() {
 }
 
 function renderAll() {
+  renderSourcePresets();
+  renderCurrentSource();
   renderStatusBar();
   renderCandidates();
   renderCollect();
@@ -360,6 +428,7 @@ function renderAll() {
 }
 
 function syncSettingsControls() {
+  syncSourceControl();
   document.querySelector("#sourceImageLimit").value = String(state.settings.imageLimit);
   document.querySelector("#settingsImageLimit").value = String(state.settings.imageLimit);
   document.querySelector("#settingsMultiplier").value = String(state.settings.multiplier);
@@ -455,6 +524,19 @@ function escapeAttr(value) {
 }
 
 tabs.forEach((tab) => tab.addEventListener("click", () => showTab(tab.dataset.tab)));
+
+document.querySelector("#sourceUrl").addEventListener("input", () => {
+  syncSourceFromInput();
+  renderSourcePresets();
+  renderCurrentSource();
+});
+
+document.querySelector("#sourceUrl").addEventListener("change", async () => {
+  syncSourceFromInput();
+  await saveState();
+  renderSourcePresets();
+  renderCurrentSource();
+});
 
 document.querySelector("#sourceImageLimit").addEventListener("change", async (event) => {
   state.settings.imageLimit = Number(event.target.value);

@@ -1,4 +1,10 @@
 {
+  "source": {
+    "name": "",
+    "url": ""
+  },
+  "currentSourceName": "",
+  "currentSourceUrl": "",
   "settings": {
     "imageLimit": 6,
     "multiplier": 1.8,
@@ -7,7 +13,12 @@
       "EUR": 8,
       "USD": 7
     },
-    "defaultSizes": ["M", "L", "XL", "XXL"],
+    "defaultSizes": [
+      "M",
+      "L",
+      "XL",
+      "XXL"
+    ],
     "apiBase": "https://api.cnfans.co.uk",
     "r2ImageBase": "https://img.cnfans.co.uk"
   },
