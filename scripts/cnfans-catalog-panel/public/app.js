@@ -183,8 +183,10 @@ function statusFor(candidate) {
   if (candidate.existsInD1) return { key: "exists", label: "已存在", className: "local", collectable: false };
   if (candidate.duplicate) return { key: "duplicate", label: "疑似重复", className: "selected", collectable: false };
   if (!Number.isFinite(candidate.detectedCostCny)) return { key: "no-price", label: "未识别价格", className: "no-price", collectable: false };
+  if (candidate.imageStatus === "待验图" || candidate.imageCountType === "listing_cover") return { key: "pending-images", label: "待验图", className: "pending-images", collectable: true };
   if (candidate.imageCount < state.settings.imageLimit) return { key: "image-short", label: "图片不足", className: "image-short", collectable: false };
   if (candidate.collectStatus === "待编辑") return { key: "editing", label: "待编辑", className: "editing", collectable: true };
+  if (candidate.status === "真实候选") return { key: "real", label: "真实候选", className: "real", collectable: true };
   return { key: "collectable", label: "可采集", className: "collectable", collectable: true };
 }
 
@@ -238,6 +240,45 @@ function makeMockCandidates() {
   document.querySelector("#scanMessage").textContent = `已生成 ${state.candidates.length} 条模拟候选商品。`;
 }
 
+async function scanLatestCandidates() {
+  syncSourceFromInput();
+  if (!state.source.url) {
+    document.querySelector("#scanMessage").textContent = "请先选择或填写来源链接。";
+    return;
+  }
+
+  const button = document.querySelector("#realScanBtn");
+  button.disabled = true;
+  document.querySelector("#scanMessage").textContent = "正在扫描最新商品...";
+  try {
+    const response = await fetch("/api/scan-latest", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        sourceUrl: state.source.url,
+        sourceName: state.source.name,
+        maxScan: Number(document.querySelector("#maxScan").value),
+        imageLimit: Number(document.querySelector("#sourceImageLimit").value),
+      }),
+    });
+    const result = await response.json();
+    if (!response.ok || !result.ok) {
+      throw new Error(result.error || result.message || "真实扫描失败");
+    }
+    state.candidates = Array.isArray(result.items) ? result.items : [];
+    state.selectedIds = [];
+    state.publishDrafts = [];
+    await saveState();
+    document.querySelector("#scanMessage").textContent = result.message || `扫描完成，发现 ${state.candidates.length} 个真实候选商品。`;
+    renderAll();
+    showTab("pool");
+  } catch (error) {
+    document.querySelector("#scanMessage").textContent = `真实扫描失败：${error.message}`;
+  } finally {
+    button.disabled = false;
+  }
+}
+
 function renderStatusBar() {
   const label = state.apiStatus === "已连接" ? "接口：已连接" : state.apiStatus === "失败" ? "接口：失败" : "接口：未连接";
   apiStatus.textContent = label;
@@ -264,10 +305,12 @@ function renderCandidates() {
         <h4>${escapeHtml(candidate.title)}</h4>
         <div class="meta-lines">
           <span>识别价格：${candidate.rawPriceText || "未识别"}</span>
-          <span>图片数量：${candidate.imageCount} / 要求 ${state.settings.imageLimit}</span>
+          <span>图片数量：${candidate.imageCountType === "listing_cover" ? `列表封面 ${candidate.imageCount} / 详情待验` : `${candidate.imageCount} / 要求 ${state.settings.imageLimit}`}</span>
+          ${candidate.sourceName ? `<span>来源名称：${escapeHtml(candidate.sourceName)}</span>` : ""}
           <span>来源：<a href="${escapeAttr(candidate.sourceUrl)}" target="_blank" rel="noreferrer">查看来源</a></span>
         </div>
         <div class="tag-row">
+          ${candidate.status === "真实候选" && status.key !== "real" ? `<span class="tag real">真实候选</span>` : ""}
           <span class="tag ${status.className}">${status.label}</span>
           ${selected ? `<span class="tag selected">已选择</span>` : ""}
         </div>
@@ -551,6 +594,8 @@ document.querySelector("#mockScanBtn").addEventListener("click", async () => {
   renderAll();
   showTab("pool");
 });
+
+document.querySelector("#realScanBtn").addEventListener("click", scanLatestCandidates);
 
 document.querySelector("#selectCollectableBtn").addEventListener("click", async () => {
   state.selectedIds = state.candidates.filter((candidate) => statusFor(candidate).collectable).map((candidate) => candidate.id);

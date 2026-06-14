@@ -262,8 +262,14 @@ label {
   color: var(--orange);
 }
 
+.tag.pending-images {
+  background: var(--orange-bg);
+  color: var(--orange);
+}
+
 .tag.editing,
-.tag.collected {
+.tag.collected,
+.tag.real {
   background: var(--blue-bg);
   color: var(--blue);
 }
