@@ -1,0 +1,243 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>CNFans UK 本地上架面板</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar">
+        <div class="brand-block">
+          <p class="eyebrow">本地草稿工具</p>
+          <h1>CNFans UK<br />上架面板</h1>
+          <p>只做演示预览，不采集真实商品，不写入数据库，不上传图片。</p>
+        </div>
+        <nav class="tabs" aria-label="面板菜单">
+          <button class="tab active" data-tab="source"><span>01</span>来源扫描</button>
+          <button class="tab" data-tab="pool"><span>02</span>候选商品池</button>
+          <button class="tab" data-tab="collect"><span>03</span>已选采集队列</button>
+          <button class="tab" data-tab="review"><span>04</span>审核与定价</button>
+          <button class="tab" data-tab="publish"><span>05</span>发布预览</button>
+          <button class="tab" data-tab="settings"><span>06</span>面板设置</button>
+        </nav>
+      </aside>
+
+      <main class="main">
+        <header class="topbar">
+          <div class="title-block">
+            <p class="eyebrow">CNFans UK 本地上架面板</p>
+            <h2 id="pageTitle">来源扫描</h2>
+          </div>
+          <div class="status-bar" aria-label="面板状态">
+            <span id="apiStatus" class="status-pill neutral">接口：未连接</span>
+            <span class="status-pill draft">数据库：不写入</span>
+            <span class="status-pill draft">图片存储：不上传</span>
+            <span class="status-pill draft">模式：本地草稿</span>
+            <span class="status-pill draft">端口：5071</span>
+          </div>
+        </header>
+
+        <section id="source" class="panel active-panel">
+          <div class="panel-head">
+            <div>
+              <p class="eyebrow">第一步</p>
+              <h3>来源扫描</h3>
+              <p>输入来源和关键词后生成模拟候选商品。当前版本只做界面演示，不会真实采集。</p>
+            </div>
+          </div>
+          <div class="form-grid">
+            <label>
+              来源链接
+              <input id="sourceUrl" type="url" placeholder="填写来源页面链接" />
+            </label>
+            <label>
+              关键词
+              <input id="keyword" type="text" placeholder="例如：卫衣 / 套装 / 外套" />
+            </label>
+            <label>
+              最大扫描数量
+              <select id="maxScan">
+                <option>50</option>
+                <option>100</option>
+                <option>200</option>
+                <option>500</option>
+              </select>
+            </label>
+            <label>
+              图片数量限制
+              <select id="sourceImageLimit">
+                <option>4</option>
+                <option>5</option>
+                <option selected>6</option>
+                <option>7</option>
+                <option>8</option>
+                <option>9</option>
+              </select>
+            </label>
+            <label class="switch-row">
+              <input id="skipD1" type="checkbox" checked />
+              <span>跳过数据库已存在商品</span>
+            </label>
+            <label class="switch-row">
+              <input id="skipDuplicate" type="checkbox" checked />
+              <span>跳过疑似重复商品</span>
+            </label>
+          </div>
+          <div class="actions footer-actions">
+            <button id="mockScanBtn" class="primary">开始模拟扫描</button>
+            <span id="scanMessage" class="helper">点击后生成 8-12 条本地演示候选商品。</span>
+          </div>
+        </section>
+
+        <section id="pool" class="panel">
+          <div class="panel-head compact">
+            <div>
+              <p class="eyebrow">第二步</p>
+              <h3>候选商品池</h3>
+              <p>查看候选商品、图片数量、识别价格和计算后的多币种价格。</p>
+            </div>
+          </div>
+          <div class="toolbar">
+            <button id="selectCollectableBtn" class="primary-light">全选可采集</button>
+            <button id="clearSelectionBtn">取消全选</button>
+            <button id="keepImageQualifiedBtn">只保留图片达标</button>
+            <button id="removeImageShortBtn" class="danger-light">移除图片不足</button>
+            <button id="goCollectBtn" class="primary">进入已选队列</button>
+          </div>
+          <div id="candidateGrid" class="card-grid"></div>
+        </section>
+
+        <section id="collect" class="panel">
+          <div class="panel-head compact">
+            <div>
+              <p class="eyebrow">第三步</p>
+              <h3>已选采集队列</h3>
+              <p>这里仅模拟采集流程，不访问真实商品源。</p>
+            </div>
+            <button id="simulateCollectBtn" class="primary">模拟采集已选商品</button>
+          </div>
+          <div id="collectStats" class="stats-grid"></div>
+          <div id="collectList" class="list-stack"></div>
+        </section>
+
+        <section id="review" class="panel">
+          <div class="panel-head">
+            <div>
+              <p class="eyebrow">第四步</p>
+              <h3>审核与定价</h3>
+              <p>从标题识别 p 数字作为成本，并按本地定价规则计算人民币、英镑、欧元和美元价格。</p>
+            </div>
+          </div>
+          <div class="tool-panel">
+            <div class="form-grid tight">
+              <label>
+                主分类
+                <select id="bulkCategory">
+                  <option>新品</option>
+                  <option>外套</option>
+                  <option>上衣</option>
+                  <option>下装</option>
+                  <option>套装</option>
+                </select>
+              </label>
+              <label>
+                小类
+                <select id="bulkSubcategory">
+                  <option>连帽卫衣</option>
+                  <option>短袖</option>
+                  <option>夹克</option>
+                  <option>运动套装</option>
+                  <option>长裤</option>
+                  <option>短裤</option>
+                  <option>成套搭配</option>
+                </select>
+              </label>
+              <button id="applyCategoryBtn" class="primary inline-button">应用分类到已选商品</button>
+            </div>
+            <div class="pricing-note">
+              默认倍率 <strong id="multiplierText">1.8</strong>；固定汇率：英镑=<strong id="gbpRateText">9</strong>，欧元=<strong id="eurRateText">8</strong>，美元=<strong id="usdRateText">7</strong>。小数第一位 1-5 直接去掉，6-9 整数加一。
+            </div>
+          </div>
+          <div id="reviewList" class="review-grid"></div>
+        </section>
+
+        <section id="publish" class="panel">
+          <div class="panel-head compact">
+            <div>
+              <p class="eyebrow">第五步</p>
+              <h3>发布预览</h3>
+              <p>生成本地发布草稿，方便检查商品编号、图片路径和价格。</p>
+            </div>
+          </div>
+          <div class="toolbar">
+            <button id="generatePreviewBtn" class="primary">生成发布预览</button>
+            <button id="exportJsonBtn">导出草稿文件</button>
+            <button disabled class="disabled-button">正式发布到数据库和图片存储（下一版开放）</button>
+          </div>
+          <p class="helper warning">当前版本只做本地预览，不写入数据库，不上传图片。</p>
+          <div id="publishList" class="list-stack"></div>
+        </section>
+
+        <section id="settings" class="panel">
+          <div class="panel-head compact">
+            <div>
+              <p class="eyebrow">第六步</p>
+              <h3>面板设置</h3>
+              <p>固定配置可本地编辑并保存到状态文件。</p>
+            </div>
+            <button id="healthBtn" class="primary">检测接口连接</button>
+          </div>
+          <div class="settings-grid">
+            <label>
+              图片数量限制
+              <select id="settingsImageLimit">
+                <option>4</option>
+                <option>5</option>
+                <option>6</option>
+                <option>7</option>
+                <option>8</option>
+                <option>9</option>
+              </select>
+            </label>
+            <label>
+              默认倍率
+              <input id="settingsMultiplier" type="number" min="0" step="0.1" />
+            </label>
+            <label>
+              英镑汇率
+              <input id="settingsGbp" type="number" min="1" step="0.1" />
+            </label>
+            <label>
+              欧元汇率
+              <input id="settingsEur" type="number" min="1" step="0.1" />
+            </label>
+            <label>
+              美元汇率
+              <input id="settingsUsd" type="number" min="1" step="0.1" />
+            </label>
+            <label>
+              默认尺码
+              <input id="settingsSizes" type="text" />
+            </label>
+            <label>
+              接口地址
+              <input id="settingsApiBase" type="url" />
+            </label>
+            <label>
+              图片访问地址
+              <input id="settingsR2Base" type="url" />
+            </label>
+          </div>
+          <div class="actions footer-actions">
+            <button id="saveSettingsBtn">保存本地设置</button>
+            <span id="settingsMessage" class="helper">接口检测：未检测</span>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <script src="/app.js" type="module"></script>
+  </body>
+</html>
