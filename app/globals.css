@@ -605,17 +605,8 @@ section {
 
 .cat-card .frame {
   position: relative;
+  aspect-ratio: 4 / 5;
   overflow: hidden;
-  height: 0;
-  padding-bottom: 125%;
-}
-
-@supports (aspect-ratio: 4 / 5) {
-  .cat-card .frame {
-    height: auto;
-    padding-bottom: 0;
-    aspect-ratio: 4 / 5;
-  }
 }
 
 .cat-fill {
@@ -709,19 +700,10 @@ section {
 .product .shot {
   position: relative;
   display: block;
+  aspect-ratio: 4 / 5;
   overflow: hidden;
   margin-bottom: 14px;
   background: var(--oat);
-  height: 0;
-  padding-bottom: 125%;
-}
-
-@supports (aspect-ratio: 4 / 5) {
-  .product .shot {
-    height: auto;
-    padding-bottom: 0;
-    aspect-ratio: 4 / 5;
-  }
 }
 
 .product {
@@ -992,18 +974,9 @@ section {
 
 .ig-tile {
   position: relative;
-  overflow: hidden;
+  aspect-ratio: 1 / 1;
   cursor: default;
-  height: 0;
-  padding-bottom: 100%;
-}
-
-@supports (aspect-ratio: 1 / 1) {
-  .ig-tile {
-    height: auto;
-    padding-bottom: 0;
-    aspect-ratio: 1 / 1;
-  }
+  overflow: hidden;
 }
 
 .ig-fill {
@@ -3343,18 +3316,10 @@ select {
 
   .hero-img {
     order: 2;
-    height: 0;
+    aspect-ratio: 5 / 4;
+    height: auto;
     min-height: auto;
     max-height: none;
-    padding-bottom: 80%;
-  }
-
-  @supports (aspect-ratio: 5 / 4) {
-    .hero-img {
-      height: auto;
-      padding-bottom: 0;
-      aspect-ratio: 5 / 4;
-    }
   }
 
   section {
@@ -3413,18 +3378,10 @@ select {
   }
 
   .feat-img {
-    height: 0;
+    height: auto;
     min-height: auto;
     max-height: none;
-    padding-bottom: 80%;
-  }
-
-  @supports (aspect-ratio: 5 / 4) {
-    .feat-img {
-      height: auto;
-      padding-bottom: 0;
-      aspect-ratio: 5 / 4;
-    }
+    aspect-ratio: 5 / 4;
   }
 
   .std-item {
@@ -3810,16 +3767,7 @@ select {
   }
 
   .hero-img {
-    height: 0;
-    padding-bottom: 80%;
-  }
-
-  @supports (aspect-ratio: 5 / 4) {
-    .hero-img {
-      height: auto;
-      padding-bottom: 0;
-      aspect-ratio: 5 / 4;
-    }
+    aspect-ratio: 5 / 4;
   }
 
   .hero-img::before {
