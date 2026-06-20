@@ -1,23 +1,7 @@
+type WorkerEnv = Env & { ADMIN_TOKEN: string };
 type D1Value = string | number | boolean | null;
 
-interface D1PreparedStatement {
-  bind(...values: D1Value[]): D1PreparedStatement;
-  all<T = Record<string, unknown>>(): Promise<{ results?: T[] }>;
-  first<T = Record<string, unknown>>(): Promise<T | null>;
-}
-
-interface D1Database {
-  prepare(query: string): D1PreparedStatement;
-}
-
-interface R2Bucket {}
-
-interface Env {
-  DB: D1Database;
-  PRODUCT_IMAGES: R2Bucket;
-}
-
-interface ProductRow {
+type ProductRow = {
   id: number;
   product_code: string;
   slug: string;
@@ -26,7 +10,10 @@ interface ProductRow {
   description: string | null;
   category: string;
   subcategory: string | null;
+  brand: string | null;
   price_gbp: number;
+  price_eur: number | null;
+  price_usd: number | null;
   compare_at_price_gbp: number | null;
   currency: string;
   status: string;
@@ -34,9 +21,9 @@ interface ProductRow {
   source_url: string | null;
   created_at: string;
   updated_at: string;
-}
+};
 
-interface ProductImageRow {
+type ProductImageRow = {
   id: number;
   product_code: string;
   image_key: string;
@@ -44,267 +31,478 @@ interface ProductImageRow {
   position: number;
   alt: string | null;
   created_at: string;
-}
+};
 
-interface ProductOptionRow {
+type ProductOptionRow = {
   id: number;
   product_code: string;
   option_name: string;
   option_value: string;
   position: number;
-}
+};
+
+type OrderRow = {
+  id: string;
+  order_number: string;
+  created_at: string;
+  updated_at: string;
+  customer_name: string;
+  email: string;
+  phone: string;
+  preferred_contact: string | null;
+  whatsapp: string | null;
+  telegram: string | null;
+  country_code: string;
+  country_name: string;
+  address_line1: string;
+  address_line2: string | null;
+  city: string;
+  county: string | null;
+  postcode: string;
+  shipping_method_id: string;
+  shipping_method_label: string;
+  shipping_estimate: string;
+  shipping_fee: number;
+  subtotal: number;
+  total: number;
+  currency: "GBP" | "EUR" | "USD";
+  payment_method: string;
+  status: OrderStatus;
+};
+
+type OrderItemRow = {
+  id: number;
+  order_id: string;
+  product_code: string;
+  title: string;
+  slug: string;
+  product_url: string;
+  image_url: string | null;
+  size: string;
+  color: string | null;
+  quantity: number;
+  unit_price: number;
+  line_total: number;
+  currency: "GBP" | "EUR" | "USD";
+};
+
+type OrderStatus = "pending" | "confirmed" | "paid" | "processing" | "shipped" | "completed" | "cancelled";
+type CurrencyCode = "GBP" | "EUR" | "USD";
 
 const SERVICE_NAME = "cnfansuk-catalog-api";
 const IMAGE_BASE_URL = "https://img.cnfans.co.uk";
+const STOREFRONT_BASE_URL = "https://cnfansuk.vercel.app";
 const ALLOWED_ORIGINS = new Set([
   "https://cnfansuk.vercel.app",
   "https://cnfans.co.uk",
   "https://www.cnfans.co.uk",
   "http://localhost:4000",
 ]);
+const ALLOWED_CATEGORIES = new Set(["outerwear", "tops", "bottoms", "co-ords-sets"]);
+const ORDER_STATUSES = new Set<OrderStatus>(["pending", "confirmed", "paid", "processing", "shipped", "completed", "cancelled"]);
+const CURRENCIES = new Set<CurrencyCode>(["GBP", "EUR", "USD"]);
+const SHIPPING_METHODS = {
+  "royal-mail-tracked": { label: "Royal Mail Tracked", estimate: "7–12 business days", priceGbp: 5 },
+  "dhl-express": { label: "DHL Express", estimate: "7–12 business days", priceGbp: 5 },
+  "fedex-priority": { label: "FedEx Priority", estimate: "5–9 business days", priceGbp: 15 },
+} as const;
 
 function corsHeaders(request: Request): HeadersInit {
   const origin = request.headers.get("Origin");
   const headers: Record<string, string> = {
-    "Access-Control-Allow-Methods": "GET, OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type",
+    "Access-Control-Allow-Methods": "GET, POST, PATCH, OPTIONS",
+    "Access-Control-Allow-Headers": "Authorization, Content-Type",
     "Access-Control-Max-Age": "86400",
     Vary: "Origin",
   };
-
-  if (origin && ALLOWED_ORIGINS.has(origin)) {
-    headers["Access-Control-Allow-Origin"] = origin;
-  }
-
+  if (origin && ALLOWED_ORIGINS.has(origin)) headers["Access-Control-Allow-Origin"] = origin;
   return headers;
 }
 
 function jsonResponse(request: Request, body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: {
-      "Content-Type": "application/json; charset=utf-8",
-      ...corsHeaders(request),
-    },
-  });
+  return Response.json(body, { status, headers: corsHeaders(request) });
 }
 
-function normaliseLimit(value: string | null): number {
-  const limit = Number.parseInt(value ?? "24", 10);
-  if (Number.isNaN(limit)) return 24;
-  return Math.min(Math.max(limit, 1), 100);
+function cleanText(value: unknown, maxLength = 500): string {
+  return typeof value === "string" ? value.trim().slice(0, maxLength) : "";
+}
+
+function normaliseLimit(value: string | null, fallback = 24, maximum = 100): number {
+  const limit = Number.parseInt(value ?? String(fallback), 10);
+  if (Number.isNaN(limit)) return fallback;
+  return Math.min(Math.max(limit, 1), maximum);
 }
 
 function normaliseOffset(value: string | null): number {
   const offset = Number.parseInt(value ?? "0", 10);
-  if (Number.isNaN(offset)) return 0;
-  return Math.max(offset, 0);
+  return Number.isNaN(offset) ? 0 : Math.max(offset, 0);
+}
+
+function normalisePage(value: string | null): number {
+  const page = Number.parseInt(value ?? "1", 10);
+  return Number.isNaN(page) ? 1 : Math.max(page, 1);
+}
+
+function orderByClause(sort: string): string {
+  if (sort === "price-low-high") return "price_gbp ASC, created_at DESC, id DESC";
+  if (sort === "price-high-low") return "price_gbp DESC, created_at DESC, id DESC";
+  if (sort === "popular") return "sort_order ASC, created_at DESC, id DESC";
+  return "created_at DESC, id DESC";
 }
 
 function publicImageUrl(image: ProductImageRow): string {
-  return image.image_url || `${IMAGE_BASE_URL}/${image.image_key}`;
+  return image.image_url || `${IMAGE_BASE_URL}/${image.image_key.replace(/^\/+/, "")}`;
 }
 
 function mapImage(image: ProductImageRow) {
+  const url = publicImageUrl(image);
+  return { ...image, image_url: url, imageUrl: url, imageKey: image.image_key };
+}
+
+function mapProduct(product: ProductRow) {
+  const priceGbp = Number(product.price_gbp || 0);
   return {
-    ...image,
-    image_url: publicImageUrl(image),
+    ...product,
+    productCode: product.product_code,
+    productTitle: product.title,
+    shortDescription: product.subtitle,
+    brand: product.brand || "",
+    priceGbp,
+    priceEur: product.price_eur ?? priceGbp * 9 / 8,
+    priceUsd: product.price_usd ?? priceGbp * 9 / 7,
   };
 }
 
 async function imagesForProducts(db: D1Database, productCodes: string[]) {
   if (productCodes.length === 0) return new Map<string, ReturnType<typeof mapImage>[]>();
-
   const placeholders = productCodes.map(() => "?").join(", ");
-  const { results = [] } = await db
-    .prepare(
-      `SELECT * FROM product_images
-       WHERE product_code IN (${placeholders})
-       ORDER BY product_code ASC, position ASC, id ASC`,
-    )
-    .bind(...productCodes)
-    .all<ProductImageRow>();
-
+  const { results = [] } = await db.prepare(
+    `SELECT * FROM product_images WHERE product_code IN (${placeholders}) ORDER BY product_code, position, id`,
+  ).bind(...productCodes).all<ProductImageRow>();
   const grouped = new Map<string, ReturnType<typeof mapImage>[]>();
   for (const image of results) {
     const current = grouped.get(image.product_code) ?? [];
     current.push(mapImage(image));
     grouped.set(image.product_code, current);
   }
-
   return grouped;
 }
 
 async function optionsForProduct(db: D1Database, productCode: string) {
-  const { results = [] } = await db
-    .prepare(
-      `SELECT * FROM product_options
-       WHERE product_code = ?
-       ORDER BY position ASC, id ASC`,
-    )
-    .bind(productCode)
-    .all<ProductOptionRow>();
-
-  return results;
+  const { results = [] } = await db.prepare(
+    "SELECT * FROM product_options WHERE product_code = ? ORDER BY position, id",
+  ).bind(productCode).all<ProductOptionRow>();
+  if (results.length > 0) return results;
+  return ["M", "L", "XL", "XXL"].map((size, index) => ({
+    id: index + 1, product_code: productCode, option_name: "Size", option_value: size, position: index + 1,
+  }));
 }
 
-async function handleCatalog(request: Request, env: Env): Promise<Response> {
+async function handleCatalog(request: Request, env: WorkerEnv): Promise<Response> {
   const url = new URL(request.url);
-  const filters: string[] = ["status = ?"];
+  const filters = ["status = ?"];
   const values: D1Value[] = ["active"];
-
-  const category = url.searchParams.get("category");
-  const subcategory = url.searchParams.get("subcategory");
-  const q = url.searchParams.get("q");
-
-  if (category) {
-    filters.push("category = ?");
-    values.push(category);
-  }
-
-  if (subcategory) {
-    filters.push("subcategory = ?");
-    values.push(subcategory);
-  }
-
+  const category = cleanText(url.searchParams.get("category"), 100);
+  const subcategory = cleanText(url.searchParams.get("subcategory"), 100);
+  const brand = cleanText(url.searchParams.get("brand"), 100);
+  const q = cleanText(url.searchParams.get("q"), 100);
+  if (category) { filters.push("category = ?"); values.push(category); }
+  if (subcategory) { filters.push("subcategory = ?"); values.push(subcategory); }
+  if (brand) { filters.push("LOWER(brand) = LOWER(?)"); values.push(brand); }
   if (q) {
-    filters.push("(title LIKE ? OR subtitle LIKE ? OR description LIKE ? OR product_code LIKE ?)");
+    filters.push("(title LIKE ? OR subtitle LIKE ? OR description LIKE ? OR product_code LIKE ? OR brand LIKE ?)");
     const term = `%${q}%`;
-    values.push(term, term, term, term);
+    values.push(term, term, term, term, term);
   }
-
   const limit = normaliseLimit(url.searchParams.get("limit"));
-  const offset = normaliseOffset(url.searchParams.get("offset"));
-
-  const { results = [] } = await env.DB
-    .prepare(
-      `SELECT * FROM products
-       WHERE ${filters.join(" AND ")}
-       ORDER BY sort_order ASC, created_at DESC, id DESC
-       LIMIT ? OFFSET ?`,
-    )
-    .bind(...values, limit, offset)
-    .all<ProductRow>();
-
-  const images = await imagesForProducts(
-    env.DB,
-    results.map((product) => product.product_code),
-  );
-
+  const page = normalisePage(url.searchParams.get("page"));
+  const offset = url.searchParams.has("offset") ? normaliseOffset(url.searchParams.get("offset")) : (page - 1) * limit;
+  const countRow = await env.DB.prepare(`SELECT COUNT(*) AS total FROM products WHERE ${filters.join(" AND ")}`).bind(...values).first<{ total: number }>();
+  const { results = [] } = await env.DB.prepare(
+    `SELECT * FROM products WHERE ${filters.join(" AND ")} ORDER BY ${orderByClause(cleanText(url.searchParams.get("sort"), 30))} LIMIT ? OFFSET ?`,
+  ).bind(...values, limit, offset).all<ProductRow>();
+  const images = await imagesForProducts(env.DB, results.map((product) => product.product_code));
   return jsonResponse(request, {
-    products: results.map((product) => ({
-      ...product,
-      images: images.get(product.product_code) ?? [],
-    })),
-    pagination: { limit, offset },
+    products: results.map((product) => ({ ...mapProduct(product), images: images.get(product.product_code) ?? [] })),
+    pagination: { limit, offset, page, total: Number(countRow?.total || 0) },
   });
 }
 
-async function productByField(
-  request: Request,
-  env: Env,
-  field: "slug" | "product_code",
-  value: string,
-): Promise<Response> {
-  const product = await env.DB
-    .prepare(`SELECT * FROM products WHERE status = ? AND ${field} = ? LIMIT 1`)
-    .bind("active", value)
-    .first<ProductRow>();
-
-  if (!product) {
-    return jsonResponse(request, { error: "Product not found" }, 404);
-  }
-
+async function productByField(request: Request, env: WorkerEnv, field: "slug" | "product_code", value: string) {
+  const product = await env.DB.prepare(`SELECT * FROM products WHERE status = ? AND ${field} = ? LIMIT 1`).bind("active", value).first<ProductRow>();
+  if (!product) return jsonResponse(request, { error: "Product not found" }, 404);
   const images = await imagesForProducts(env.DB, [product.product_code]);
   const options = await optionsForProduct(env.DB, product.product_code);
-
-  return jsonResponse(request, {
-    product: {
-      ...product,
-      images: images.get(product.product_code) ?? [],
-      options,
-    },
-  });
+  return jsonResponse(request, { product: { ...mapProduct(product), images: images.get(product.product_code) ?? [], options } });
 }
 
-async function handleFilters(request: Request, env: Env): Promise<Response> {
-  const [{ results: categories = [] }, { results: subcategories = [] }] = await Promise.all([
-    env.DB
-      .prepare(
-        `SELECT category, COUNT(*) AS count
-         FROM products
-         WHERE status = ? AND category IS NOT NULL
-         GROUP BY category
-         ORDER BY category ASC`,
-      )
-      .bind("active")
-      .all<{ category: string; count: number }>(),
-    env.DB
-      .prepare(
-        `SELECT subcategory, COUNT(*) AS count
-         FROM products
-         WHERE status = ? AND subcategory IS NOT NULL AND subcategory != ''
-         GROUP BY subcategory
-         ORDER BY subcategory ASC`,
-      )
-      .bind("active")
-      .all<{ subcategory: string; count: number }>(),
+async function handleFilters(request: Request, env: WorkerEnv) {
+  const [{ results: categories = [] }, { results: subcategories = [] }, { results: brands = [] }] = await Promise.all([
+    env.DB.prepare("SELECT category, COUNT(*) AS count FROM products WHERE status = ? AND category IS NOT NULL GROUP BY category ORDER BY category").bind("active").all<{ category: string; count: number }>(),
+    env.DB.prepare("SELECT subcategory, category, COUNT(*) AS count FROM products WHERE status = ? AND subcategory IS NOT NULL AND subcategory != '' GROUP BY category, subcategory ORDER BY category, subcategory").bind("active").all<{ category: string; subcategory: string; count: number }>(),
+    env.DB.prepare("SELECT brand, COUNT(*) AS count FROM products WHERE status = ? AND brand IS NOT NULL AND brand != '' GROUP BY brand ORDER BY brand").bind("active").all<{ brand: string; count: number }>(),
   ]);
-
   return jsonResponse(request, {
     categories: categories.map((row) => row.category),
     subcategories: subcategories.map((row) => row.subcategory),
-    counts: {
-      categories,
-      subcategories,
-    },
+    brands: brands.map((row) => row.brand),
+    counts: { categories, subcategories, brands },
   });
 }
 
+async function verifyAdmin(request: Request, env: WorkerEnv): Promise<boolean> {
+  const provided = request.headers.get("Authorization")?.replace(/^Bearer\s+/i, "") || "";
+  const expected = env.ADMIN_TOKEN || "";
+  if (!provided || !expected) return false;
+  const encoder = new TextEncoder();
+  const [providedHash, expectedHash] = await Promise.all([
+    crypto.subtle.digest("SHA-256", encoder.encode(provided)),
+    crypto.subtle.digest("SHA-256", encoder.encode(expected)),
+  ]);
+  const left = new Uint8Array(providedHash);
+  const right = new Uint8Array(expectedHash);
+  let difference = 0;
+  for (let index = 0; index < left.length; index += 1) difference |= left[index] ^ right[index];
+  return difference === 0;
+}
+
+async function readBoundedJson(request: Request): Promise<unknown> {
+  const contentLength = Number(request.headers.get("Content-Length") || 0);
+  if (contentLength > 64_000) throw new Error("Payload too large");
+  return request.json();
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function getCurrencyPrice(product: ProductRow, currency: CurrencyCode): number {
+  if (currency === "EUR") return Number(product.price_eur ?? product.price_gbp * 9 / 8);
+  if (currency === "USD") return Number(product.price_usd ?? product.price_gbp * 9 / 7);
+  return Number(product.price_gbp);
+}
+
+function convertGbp(amount: number, currency: CurrencyCode) {
+  if (currency === "EUR") return amount * 9 / 8;
+  if (currency === "USD") return amount * 9 / 7;
+  return amount;
+}
+
+async function handleCreateOrder(request: Request, env: WorkerEnv): Promise<Response> {
+  const body = await readBoundedJson(request);
+  if (!isRecord(body) || !isRecord(body.customer) || !Array.isArray(body.items)) {
+    return jsonResponse(request, { error: "订单数据格式无效" }, 400);
+  }
+  const currencyText = cleanText(body.currency, 3).toUpperCase();
+  if (!CURRENCIES.has(currencyText as CurrencyCode)) return jsonResponse(request, { error: "币种无效" }, 400);
+  const currency = currencyText as CurrencyCode;
+  const shippingMethodId = cleanText(body.shippingMethodId, 40) as keyof typeof SHIPPING_METHODS;
+  const shippingMethod = SHIPPING_METHODS[shippingMethodId];
+  if (!shippingMethod) return jsonResponse(request, { error: "配送方式无效" }, 400);
+  if (body.items.length < 1 || body.items.length > 50) return jsonResponse(request, { error: "商品数量无效" }, 400);
+
+  const customer = body.customer;
+  const customerName = cleanText(customer.fullName, 120);
+  const email = cleanText(customer.email, 160).toLowerCase();
+  const phone = cleanText(customer.phone, 60);
+  const addressLine1 = cleanText(customer.addressLine1, 200);
+  const city = cleanText(customer.city, 100);
+  const postcode = cleanText(customer.postcode, 30);
+  const countryCode = cleanText(customer.countryCode, 3).toUpperCase();
+  const countryName = cleanText(customer.countryName, 100);
+  if (!customerName || !email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || !phone || !addressLine1 || !city || !postcode || !countryCode || !countryName) {
+    return jsonResponse(request, { error: "请填写完整有效的客户与地址信息" }, 400);
+  }
+
+  const requestedItems: Array<{ productCode: string; size: string; color: string; quantity: number }> = [];
+  for (const rawItem of body.items) {
+    if (!isRecord(rawItem)) return jsonResponse(request, { error: "商品数据无效" }, 400);
+    const productCode = cleanText(rawItem.productCode, 120);
+    const size = cleanText(rawItem.size, 60);
+    const color = cleanText(rawItem.color, 60);
+    const quantity = Number(rawItem.quantity);
+    if (!productCode || !size || !Number.isInteger(quantity) || quantity < 1 || quantity > 20) {
+      return jsonResponse(request, { error: "商品编号、尺码或数量无效" }, 400);
+    }
+    requestedItems.push({ productCode, size, color, quantity });
+  }
+
+  const uniqueCodes = Array.from(new Set(requestedItems.map((item) => item.productCode)));
+  const placeholders = uniqueCodes.map(() => "?").join(", ");
+  const { results: products = [] } = await env.DB.prepare(
+    `SELECT * FROM products WHERE status = 'active' AND product_code IN (${placeholders})`,
+  ).bind(...uniqueCodes).all<ProductRow>();
+  if (products.length !== uniqueCodes.length) return jsonResponse(request, { error: "订单包含不存在或已下架商品" }, 400);
+  const productsByCode = new Map(products.map((product) => [product.product_code, product]));
+  const images = await imagesForProducts(env.DB, uniqueCodes);
+
+  let subtotal = 0;
+  let subtotalGbp = 0;
+  const orderItems = requestedItems.map((item) => {
+    const product = productsByCode.get(item.productCode)!;
+    const unitPrice = getCurrencyPrice(product, currency);
+    const lineTotal = unitPrice * item.quantity;
+    subtotal += lineTotal;
+    subtotalGbp += Number(product.price_gbp) * item.quantity;
+    return { item, product, unitPrice, lineTotal, imageUrl: images.get(item.productCode)?.[0]?.imageUrl || null };
+  });
+  const shippingFee = subtotalGbp >= 120 ? 0 : convertGbp(shippingMethod.priceGbp, currency);
+  const total = subtotal + shippingFee;
+  const orderId = crypto.randomUUID();
+  const date = new Date().toISOString().slice(0, 10).replaceAll("-", "");
+  const orderNumber = `CNF-UK-${date}-${crypto.randomUUID().replaceAll("-", "").slice(0, 8).toUpperCase()}`;
+  const statements = [
+    env.DB.prepare(
+      `INSERT INTO orders (
+        id, order_number, customer_name, email, phone, preferred_contact, whatsapp, telegram,
+        country_code, country_name, address_line1, address_line2, city, county, postcode,
+        shipping_method_id, shipping_method_label, shipping_estimate, shipping_fee,
+        subtotal, total, currency, payment_method, status
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    ).bind(
+      orderId, orderNumber, customerName, email, phone, cleanText(customer.preferredContact, 30),
+      cleanText(customer.whatsapp, 100) || null, cleanText(customer.telegram, 100) || null,
+      countryCode, countryName, addressLine1, cleanText(customer.addressLine2, 200) || null,
+      city, cleanText(customer.county, 100) || null, postcode,
+      shippingMethodId, shippingMethod.label, shippingMethod.estimate, shippingFee,
+      subtotal, total, currency, "待确认", "pending",
+    ),
+    ...orderItems.map(({ item, product, unitPrice, lineTotal, imageUrl }) => env.DB.prepare(
+      `INSERT INTO order_items (
+        order_id, product_code, title, slug, product_url, image_url, size, color,
+        quantity, unit_price, line_total, currency
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    ).bind(
+      orderId, product.product_code, product.title, product.slug,
+      `${STOREFRONT_BASE_URL}/product/${encodeURIComponent(product.slug)}`, imageUrl,
+      item.size, item.color || null, item.quantity, unitPrice, lineTotal, currency,
+    )),
+  ];
+  await env.DB.batch(statements);
+  return jsonResponse(request, { order: { orderNumber, subtotal, shippingFee, total, currency, status: "pending" } }, 201);
+}
+
+async function handleAdminProducts(request: Request, env: WorkerEnv) {
+  const url = new URL(request.url);
+  const q = cleanText(url.searchParams.get("q"), 100);
+  const values: D1Value[] = [];
+  let where = "";
+  if (q) {
+    where = "WHERE product_code LIKE ? OR title LIKE ? OR brand LIKE ?";
+    const term = `%${q}%`;
+    values.push(term, term, term);
+  }
+  const limit = normaliseLimit(url.searchParams.get("limit"), 50, 100);
+  const { results = [] } = await env.DB.prepare(
+    `SELECT * FROM products ${where} ORDER BY updated_at DESC, id DESC LIMIT ?`,
+  ).bind(...values, limit).all<ProductRow>();
+  const images = await imagesForProducts(env.DB, results.map((product) => product.product_code));
+  const { results: subcategories = [] } = await env.DB.prepare(
+    "SELECT DISTINCT category, subcategory FROM products WHERE subcategory IS NOT NULL AND subcategory != '' ORDER BY category, subcategory",
+  ).all<{ category: string; subcategory: string }>();
+  return jsonResponse(request, {
+    products: results.map((product) => ({ ...mapProduct(product), images: images.get(product.product_code) ?? [] })),
+    categories: Array.from(ALLOWED_CATEGORIES),
+    subcategories,
+  });
+}
+
+async function handleAdminProductUpdate(request: Request, env: WorkerEnv, productCode: string) {
+  const body = await readBoundedJson(request);
+  if (!isRecord(body)) return jsonResponse(request, { error: "商品数据无效" }, 400);
+  const category = cleanText(body.category, 60);
+  const subcategory = cleanText(body.subcategory, 100);
+  const brand = cleanText(body.brand, 120);
+  if (!ALLOWED_CATEGORIES.has(category)) return jsonResponse(request, { error: "产品分类无效" }, 400);
+  if (subcategory) {
+    const existing = await env.DB.prepare(
+      "SELECT 1 AS ok FROM products WHERE category = ? AND subcategory = ? LIMIT 1",
+    ).bind(category, subcategory).first<{ ok: number }>();
+    if (!existing) return jsonResponse(request, { error: "子类目必须来自当前分类的现有数据" }, 400);
+  }
+  const result = await env.DB.prepare(
+    "UPDATE products SET category = ?, subcategory = ?, brand = ?, updated_at = CURRENT_TIMESTAMP WHERE product_code = ?",
+  ).bind(category, subcategory || null, brand, productCode).run();
+  if (!result.meta.changes) return jsonResponse(request, { error: "未找到商品" }, 404);
+  const updated = await env.DB.prepare("SELECT * FROM products WHERE product_code = ? LIMIT 1").bind(productCode).first<ProductRow>();
+  const images = await imagesForProducts(env.DB, [productCode]);
+  return jsonResponse(request, { product: updated ? { ...mapProduct(updated), images: images.get(productCode) ?? [] } : null });
+}
+
+async function handleAdminOrders(request: Request, env: WorkerEnv) {
+  const url = new URL(request.url);
+  const filters: string[] = [];
+  const values: D1Value[] = [];
+  const q = cleanText(url.searchParams.get("q"), 100);
+  const status = cleanText(url.searchParams.get("status"), 30) as OrderStatus;
+  if (q) {
+    filters.push("(order_number LIKE ? OR customer_name LIKE ? OR email LIKE ? OR phone LIKE ?)");
+    const term = `%${q}%`;
+    values.push(term, term, term, term);
+  }
+  if (status && ORDER_STATUSES.has(status)) { filters.push("status = ?"); values.push(status); }
+  const where = filters.length ? `WHERE ${filters.join(" AND ")}` : "";
+  const limit = normaliseLimit(url.searchParams.get("limit"), 100, 200);
+  const { results = [] } = await env.DB.prepare(
+    `SELECT * FROM orders ${where} ORDER BY created_at DESC LIMIT ?`,
+  ).bind(...values, limit).all<OrderRow>();
+  return jsonResponse(request, { orders: results });
+}
+
+async function readOrder(env: WorkerEnv, orderNumber: string) {
+  const order = await env.DB.prepare("SELECT * FROM orders WHERE order_number = ? LIMIT 1").bind(orderNumber).first<OrderRow>();
+  if (!order) return null;
+  const { results: items = [] } = await env.DB.prepare("SELECT * FROM order_items WHERE order_id = ? ORDER BY id").bind(order.id).all<OrderItemRow>();
+  return { ...order, items };
+}
+
+async function handleAdminOrderDetail(request: Request, env: WorkerEnv, orderNumber: string) {
+  const order = await readOrder(env, orderNumber);
+  return order ? jsonResponse(request, { order }) : jsonResponse(request, { error: "未找到订单" }, 404);
+}
+
+async function handleAdminOrderStatus(request: Request, env: WorkerEnv, orderNumber: string) {
+  const body = await readBoundedJson(request);
+  const status = isRecord(body) ? cleanText(body.status, 30) as OrderStatus : "pending";
+  if (!ORDER_STATUSES.has(status)) return jsonResponse(request, { error: "订单状态无效" }, 400);
+  const result = await env.DB.prepare(
+    "UPDATE orders SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE order_number = ?",
+  ).bind(status, orderNumber).run();
+  if (!result.meta.changes) return jsonResponse(request, { error: "未找到订单" }, 404);
+  return handleAdminOrderDetail(request, env, orderNumber);
+}
+
 export default {
-  async fetch(request: Request, env: Env): Promise<Response> {
-    if (request.method === "OPTIONS") {
-      return new Response(null, { status: 204, headers: corsHeaders(request) });
-    }
-
-    if (request.method !== "GET") {
-      return jsonResponse(request, { error: "Method not allowed" }, 405);
-    }
-
+  async fetch(request: Request, env: WorkerEnv): Promise<Response> {
+    if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: corsHeaders(request) });
     const url = new URL(request.url);
     const pathname = url.pathname.replace(/\/+$/, "") || "/";
-
     try {
-      if (pathname === "/health") {
-        return jsonResponse(request, { ok: true, service: SERVICE_NAME });
-      }
-
-      if (pathname === "/catalog") {
-        return handleCatalog(request, env);
-      }
-
-      if (pathname === "/filters") {
-        return handleFilters(request, env);
-      }
-
+      if (pathname === "/health" && request.method === "GET") return jsonResponse(request, { ok: true, service: SERVICE_NAME });
+      if (pathname === "/catalog" && request.method === "GET") return handleCatalog(request, env);
+      if (pathname === "/latest" && request.method === "GET") return handleCatalog(request, env);
+      if (pathname === "/filters" && request.method === "GET") return handleFilters(request, env);
+      if (pathname === "/orders" && request.method === "POST") return handleCreateOrder(request, env);
       const productMatch = pathname.match(/^\/product\/([^/]+)$/);
-      if (productMatch) {
-        return productByField(request, env, "slug", decodeURIComponent(productMatch[1]));
-      }
-
+      if (productMatch && request.method === "GET") return productByField(request, env, "slug", decodeURIComponent(productMatch[1]));
       const productCodeMatch = pathname.match(/^\/product-code\/([^/]+)$/);
-      if (productCodeMatch) {
-        return productByField(
-          request,
-          env,
-          "product_code",
-          decodeURIComponent(productCodeMatch[1]),
-        );
-      }
+      if (productCodeMatch && request.method === "GET") return productByField(request, env, "product_code", decodeURIComponent(productCodeMatch[1]));
 
+      if (pathname.startsWith("/admin/") && !(await verifyAdmin(request, env))) {
+        return jsonResponse(request, { error: "未授权" }, 401);
+      }
+      if (pathname === "/admin/products" && request.method === "GET") return handleAdminProducts(request, env);
+      const adminProductMatch = pathname.match(/^\/admin\/products\/([^/]+)$/);
+      if (adminProductMatch && request.method === "PATCH") return handleAdminProductUpdate(request, env, decodeURIComponent(adminProductMatch[1]));
+      if (pathname === "/admin/orders" && request.method === "GET") return handleAdminOrders(request, env);
+      const orderStatusMatch = pathname.match(/^\/admin\/orders\/([^/]+)\/status$/);
+      if (orderStatusMatch && request.method === "PATCH") return handleAdminOrderStatus(request, env, decodeURIComponent(orderStatusMatch[1]));
+      const orderMatch = pathname.match(/^\/admin\/orders\/([^/]+)$/);
+      if (orderMatch && request.method === "GET") return handleAdminOrderDetail(request, env, decodeURIComponent(orderMatch[1]));
       return jsonResponse(request, { error: "Not found" }, 404);
-    } catch {
+    } catch (error) {
+      console.error(JSON.stringify({ message: "request failed", path: pathname, error: error instanceof Error ? error.message : String(error) }));
       return jsonResponse(request, { error: "Internal server error" }, 500);
     }
   },
-};
+} satisfies ExportedHandler<WorkerEnv>;

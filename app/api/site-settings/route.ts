@@ -1,22 +1,15 @@
 import { NextResponse } from "next/server";
 import { readSiteSettings, sanitizeSiteSettings, writeSiteSettings } from "@/lib/siteSettings";
-
-function localAdminEnabled() {
-  return process.env.NODE_ENV !== "production" || process.env.ENABLE_LOCAL_HOMEPAGE_ADMIN === "true";
-}
+import { isAdminAuthenticated } from "@/lib/adminAuth";
 
 export async function GET() {
-  if (!localAdminEnabled()) {
-    return NextResponse.json({ error: "disabled" }, { status: 403 });
-  }
+  if (!(await isAdminAuthenticated())) return NextResponse.json({ error: "未登录" }, { status: 401 });
 
   return NextResponse.json(readSiteSettings());
 }
 
 export async function POST(request: Request) {
-  if (!localAdminEnabled()) {
-    return NextResponse.json({ error: "disabled" }, { status: 403 });
-  }
+  if (!(await isAdminAuthenticated())) return NextResponse.json({ error: "未登录" }, { status: 401 });
 
   try {
     const settings = sanitizeSiteSettings(await request.json());

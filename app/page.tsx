@@ -4,15 +4,15 @@ import { ProductCard } from "@/components/ProductCard";
 import { products } from "@/data/products";
 import { fetchCatalogProducts } from "@/lib/catalogApi";
 import { readSiteSettings } from "@/lib/siteSettings";
-import type { Product } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
 export default async function Home() {
   const settings = readSiteSettings();
   const { homepage, links } = settings;
+  const { categoryImages, homeChannelImages, homeEditImage, homeHeroImage } = homepage;
   const catalogProducts = await fetchCatalogProducts({ limit: 24 });
-  const displayProducts = catalogProducts?.length ? mergeProducts(catalogProducts, products) : products;
+  const displayProducts = catalogProducts ?? products;
   const newIn = displayProducts.filter((product) => product.newIn).slice(0, 10);
   const categoryTones = ["forest", "navy", "stone", "charcoal"];
   const homeCategoryCards = [
@@ -64,14 +64,15 @@ export default async function Home() {
             </div>
           </div>
           <div
-            className={homepage.heroMainImageUrl ? "hero-img has-image" : "hero-img"}
+            className={homeHeroImage.imageUrl ? "hero-img has-image" : "hero-img"}
           >
-            {homepage.heroMainImageUrl ? (
+            {homeHeroImage.imageUrl ? (
               <img
                 className="home-image"
-                src={homepage.heroMainImageUrl}
-                alt="CNFans UK apparel edit"
-                style={imageStyle(homepage.heroMainImageFit, homepage.heroMainImagePosition)}
+                src={homeHeroImage.imageUrl}
+                alt={homeHeroImage.label || "CNFans UK apparel edit"}
+                data-home-visual="homeHeroImage"
+                style={imageStyle(homeHeroImage.imageFit, homeHeroImage.imagePosition)}
               />
             ) : null}
             <div className="hero-collage-main">
@@ -106,13 +107,19 @@ export default async function Home() {
           </div>
           <div className="cat-rail">
             {homeCategoryCards.map((card, index) => {
-              const imageSlot = homepage.categories[index];
+              const imageSlot = categoryImages[index];
               return (
               <Link className="cat-card" href={card.href} key={card.href}>
                 <div className="frame">
                   <div className={`cat-fill tone-${categoryTones[index] || "stone"}`}>
                     {imageSlot?.imageUrl ? (
-                      <img className="home-image" src={imageSlot.imageUrl} alt={card.title} style={imageStyle(imageSlot.imageFit, imageSlot.imagePosition)} />
+                      <img
+                        className="home-image"
+                        src={imageSlot.imageUrl}
+                        alt={imageSlot.label || card.title}
+                        data-home-visual={`categoryImages.${index}`}
+                        style={imageStyle(imageSlot.imageFit, imageSlot.imagePosition)}
+                      />
                     ) : null}
                   </div>
                 </div>
@@ -148,14 +155,15 @@ export default async function Home() {
         <div className="wrap">
           <div className="feat-grid">
             <div
-              className={homepage.apparelEdit.imageUrl ? "feat-img has-image" : "feat-img"}
+              className={homeEditImage.imageUrl ? "feat-img has-image" : "feat-img"}
             >
-              {homepage.apparelEdit.imageUrl ? (
+              {homeEditImage.imageUrl ? (
                 <img
                   className="home-image"
-                  src={homepage.apparelEdit.imageUrl}
-                  alt="Lookbook styling"
-                  style={imageStyle(homepage.apparelEdit.imageFit, homepage.apparelEdit.imagePosition)}
+                  src={homeEditImage.imageUrl}
+                  alt={homeEditImage.label || "Lookbook styling"}
+                  data-home-visual="homeEditImage"
+                  style={imageStyle(homeEditImage.imageFit, homeEditImage.imagePosition)}
                 />
               ) : null}
               <span className="ph-label">Lookbook · styling</span>
@@ -180,7 +188,7 @@ export default async function Home() {
           <p>New arrivals, outfit updates and product drops are shared through our official channels.</p>
           </div>
           <div className="ig-grid" aria-label="Latest drops grid">
-            {homepage.latestDrops.map((drop, index) => (
+            {homeChannelImages.map((drop, index) => (
               <div className="ig-tile" key={index} aria-label={drop.label}>
                 <span className={`ig-fill ig${index + 1}`}>
                   {drop.imageUrl ? (
@@ -188,6 +196,7 @@ export default async function Home() {
                       className="home-image"
                       src={drop.imageUrl}
                       alt={drop.label || `Latest fit ${index + 1}`}
+                      data-home-visual={`homeChannelImages.${index}`}
                       style={imageStyle(drop.imageFit, drop.imagePosition)}
                     />
                   ) : null}
@@ -237,11 +246,6 @@ export default async function Home() {
       </section>
     </>
   );
-}
-
-function mergeProducts(primary: Product[], fallback: Product[]) {
-  const seen = new Set(primary.map((product) => product.slug));
-  return [...primary, ...fallback.filter((product) => !seen.has(product.slug))];
 }
 
 function WhatsAppIcon() {

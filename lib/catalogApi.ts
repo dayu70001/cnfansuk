@@ -6,6 +6,8 @@ export function catalogApiUrl(path: string): string {
 }
 
 type CatalogImage = {
+  imageUrl?: string | null;
+  imageKey?: string | null;
   image_key?: string | null;
   image_url?: string | null;
   position?: number | null;
@@ -27,7 +29,13 @@ type CatalogProduct = {
   description?: string | null;
   category?: string | null;
   subcategory?: string | null;
+  brand?: string | null;
+  priceGbp?: number | string | null;
+  priceEur?: number | string | null;
+  priceUsd?: number | string | null;
   price_gbp?: number | string | null;
+  price_eur?: number | string | null;
+  price_usd?: number | string | null;
   status?: string | null;
   sort_order?: number | null;
   images?: CatalogImage[] | null;
@@ -36,6 +44,12 @@ type CatalogProduct = {
 
 type CatalogResponse = {
   products?: CatalogProduct[];
+  pagination?: {
+    limit?: number;
+    offset?: number;
+    page?: number;
+    total?: number;
+  };
 };
 
 type ProductResponse = {
@@ -45,16 +59,21 @@ type ProductResponse = {
 export type CatalogFilters = {
   categories: string[];
   subcategories: string[];
+  brands: string[];
   counts: {
     categories: Array<{ category: string; count: number }>;
     subcategories: Array<{ subcategory: string; count: number }>;
+    brands: Array<{ brand: string; count: number }>;
   };
 };
 
 type CatalogQuery = {
   category?: string;
   subcategory?: string;
+  brand?: string;
   q?: string;
+  sort?: string;
+  page?: number;
   limit?: number;
   offset?: number;
 };
@@ -63,6 +82,17 @@ export async function fetchCatalogProducts(query: CatalogQuery = {}): Promise<Pr
   const response = await requestCatalog<CatalogResponse>("/catalog", query);
   if (!response?.products) return response ? [] : null;
   return response.products.map(mapCatalogProduct);
+}
+
+export async function fetchCatalogPage(query: CatalogQuery = {}): Promise<{ products: Product[]; total: number; page: number; limit: number } | null> {
+  const response = await requestCatalog<CatalogResponse>("/catalog", query);
+  if (!response?.products) return response ? { products: [], total: 0, page: query.page || 1, limit: query.limit || 24 } : null;
+  return {
+    products: response.products.map(mapCatalogProduct),
+    total: Number(response.pagination?.total ?? response.products.length),
+    page: Number(response.pagination?.page ?? query.page ?? 1),
+    limit: Number(response.pagination?.limit ?? query.limit ?? 24),
+  };
 }
 
 export async function fetchCatalogProductBySlug(slug: string): Promise<Product | null> {
@@ -108,8 +138,11 @@ function mapCatalogProduct(product: CatalogProduct): Product {
   const category = toSlug(product.category) || "uncategorised";
   const style = toSlug(product.subcategory) || category;
   const images = (product.images || [])
-    .map((image) => cleanText(image.image_url) || cleanText(image.image_key))
+    .map((image) => cleanText(image.imageUrl) || cleanText(image.image_url) || imageFromKey(image.imageKey || image.image_key))
     .filter((image): image is string => Boolean(image));
+  const priceGBP = toPrice(product.priceGbp ?? product.price_gbp);
+  const priceEUR = toPrice(product.priceEur ?? product.price_eur) || priceGBP * 9 / 8;
+  const priceUSD = toPrice(product.priceUsd ?? product.price_usd) || priceGBP * 9 / 7;
 
   return {
     id: productCode,
@@ -117,10 +150,12 @@ function mapCatalogProduct(product: CatalogProduct): Product {
     name: title,
     category,
     style,
-    brand: "CNFans UK",
-    priceGBP: toPrice(product.price_gbp),
-    images: images.length ? images : ["placeholder"],
-    colors: ["Default"],
+    brand: cleanText(product.brand) || "CNFans UK",
+    priceGBP,
+    priceEUR,
+    priceUSD,
+    images,
+    colors: [],
     sizes: getSizes(product.options),
     shortDescription: cleanText(product.subtitle) || cleanText(product.description) || title,
     description: cleanText(product.description) || cleanText(product.subtitle) || title,
@@ -134,9 +169,8 @@ function getSizes(options: CatalogOption[] | null | undefined) {
     .filter((option) => cleanText(option.option_name).toLowerCase() === "size")
     .sort((a, b) => Number(a.position || 0) - Number(b.position || 0))
     .map((option) => cleanText(option.option_value))
-    .filter((value): value is string => Boolean(value));
-
-  return sizes.length ? Array.from(new Set(sizes)) : ["S", "M", "L", "XL"];
+    .filter(Boolean);
+  return Array.from(new Set(sizes.length ? sizes : ["M", "L", "XL", "XXL"]));
 }
 
 function cleanText(value: unknown): string {
@@ -154,4 +188,11 @@ function toSlug(value: unknown): string {
     .replace(/&/g, "and")
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-|-$/g, "");
+}
+
+function imageFromKey(value: unknown): string {
+  const key = cleanText(value);
+  if (!key) return "";
+  if (/^https?:\/\//i.test(key)) return key;
+  return `https://img.cnfans.co.uk/${key.replace(/^\/+/, "")}`;
 }

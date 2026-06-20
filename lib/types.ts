@@ -13,6 +13,8 @@ export type Product = {
   style: string;
   brand: string;
   priceGBP: number;
+  priceEUR?: number;
+  priceUSD?: number;
   images: string[];
   colors: string[];
   sizes: string[];
@@ -24,10 +26,16 @@ export type Product = {
 
 export type CartItem = {
   productId: string;
+  productCode?: string;
   slug: string;
   name: string;
+  title?: string;
+  productUrl?: string;
   priceGBP: number;
-  color: string;
+  priceEUR?: number;
+  priceUSD?: number;
+  image?: string;
+  color?: string;
   size: string;
   quantity: number;
 };
@@ -37,8 +45,11 @@ export type CustomerDetails = {
   phone: string;
   email?: string;
   country: string;
+  countryCode: string;
+  countryName: string;
   address: string;
   city: string;
+  county?: string;
   postcode: string;
   preferredContact: "WhatsApp" | "Telegram";
   notes?: string;

@@ -21,10 +21,10 @@ export function HomepageAdminClient({
   initialSettings: SiteSettings;
 }) {
   const [settings, setSettings] = useState(initialSettings);
-  const [status, setStatus] = useState("Ready");
+  const [status, setStatus] = useState("就绪");
 
   async function saveSettings(nextSettings = settings) {
-    setStatus("Saving...");
+    setStatus("正在保存…");
     const response = await fetch("/api/site-settings", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -32,12 +32,12 @@ export function HomepageAdminClient({
     });
 
     if (!response.ok) {
-      setStatus("Could not save settings.");
+      setStatus("设置保存失败。");
       return;
     }
 
     setSettings(await response.json());
-    setStatus("Saved. Refresh the homepage preview to see changes.");
+    setStatus("已保存，请刷新首页预览查看效果。");
   }
 
   function updateLink(key: keyof SiteSettings["links"], value: string) {
@@ -47,19 +47,22 @@ export function HomepageAdminClient({
     }));
   }
 
-  function updateHomepage(key: keyof SiteSettings["homepage"], value: string) {
-    setSettings((current) => ({
-      ...current,
-      homepage: { ...current.homepage, [key]: value },
-    }));
-  }
-
-  function updateCategory(index: number, key: keyof SiteSettings["homepage"]["categories"][number], value: string) {
+  function updateHomeHeroImage(key: keyof SiteSettings["homepage"]["homeHeroImage"], value: string) {
     setSettings((current) => ({
       ...current,
       homepage: {
         ...current.homepage,
-        categories: current.homepage.categories.map((item, itemIndex) =>
+        homeHeroImage: { ...current.homepage.homeHeroImage, [key]: value },
+      },
+    }));
+  }
+
+  function updateCategoryImage(index: number, key: keyof SiteSettings["homepage"]["categoryImages"][number], value: string) {
+    setSettings((current) => ({
+      ...current,
+      homepage: {
+        ...current.homepage,
+        categoryImages: current.homepage.categoryImages.map((item, itemIndex) =>
           itemIndex === index ? { ...item, [key]: value } : item,
         ),
       },
@@ -76,12 +79,22 @@ export function HomepageAdminClient({
     }));
   }
 
-  function updateDrop(index: number, key: keyof SiteSettings["homepage"]["latestDrops"][number], value: string) {
+  function updateHomeEditImage(key: keyof SiteSettings["homepage"]["homeEditImage"], value: string) {
     setSettings((current) => ({
       ...current,
       homepage: {
         ...current.homepage,
-        latestDrops: current.homepage.latestDrops.map((item, itemIndex) =>
+        homeEditImage: { ...current.homepage.homeEditImage, [key]: value },
+      },
+    }));
+  }
+
+  function updateChannelImage(index: number, key: keyof SiteSettings["homepage"]["homeChannelImages"][number], value: string) {
+    setSettings((current) => ({
+      ...current,
+      homepage: {
+        ...current.homepage,
+        homeChannelImages: current.homepage.homeChannelImages.map((item, itemIndex) =>
           itemIndex === index ? { ...item, [key]: value } : item,
         ),
       },
@@ -92,13 +105,13 @@ export function HomepageAdminClient({
     <main className="homepage-admin">
       <header className="homepage-admin-head">
         <div>
-          <p className="eyebrow">Local settings</p>
-          <h1>CNFans UK Homepage Admin</h1>
-          <p>Local preview settings only. This does not publish or deploy anything.</p>
+          <p className="eyebrow">管理后台</p>
+          <h1>CNFans UK 首页设置</h1>
+          <p>编辑首页链接、图片与文案。</p>
         </div>
         <div className="homepage-admin-actions">
           <button className="btn btn-solid" type="button" onClick={() => saveSettings()}>
-            Save settings
+            保存设置
           </button>
           <button
             className="btn"
@@ -108,94 +121,91 @@ export function HomepageAdminClient({
               saveSettings(defaults);
             }}
           >
-            Reset to defaults
+            恢复默认设置
           </button>
           <a className="link-arrow" href="/" target="_blank" rel="noreferrer">
-            Open homepage preview <span>→</span>
+            打开首页预览 <span>→</span>
           </a>
           <span className="admin-status">{status}</span>
         </div>
       </header>
 
-      <AdminSection title="Links">
+      <AdminSection title="链接设置">
         <div className="admin-form-grid">
-          <Field label="WhatsApp Channel / Group URL" value={settings.links.whatsappChannelUrl} onChange={(value) => updateLink("whatsappChannelUrl", value)} />
-          <Field label="Telegram Channel / Group URL" value={settings.links.telegramChannelUrl} onChange={(value) => updateLink("telegramChannelUrl", value)} />
-          <Field label="Instagram URL" value={settings.links.instagramUrl} onChange={(value) => updateLink("instagramUrl", value)} />
-          <Field label="Facebook URL" value={settings.links.facebookUrl} onChange={(value) => updateLink("facebookUrl", value)} />
-          <Field label="Personal WhatsApp URL" value={settings.links.personalWhatsappUrl} onChange={(value) => updateLink("personalWhatsappUrl", value)} />
-          <Field label="Personal WhatsApp Number" value={settings.links.personalWhatsappNumber} onChange={(value) => updateLink("personalWhatsappNumber", value)} />
-          <Field label="Personal Telegram URL" value={settings.links.personalTelegramUrl} onChange={(value) => updateLink("personalTelegramUrl", value)} />
-          <Field label="Personal Telegram Username" value={settings.links.personalTelegramUsername} onChange={(value) => updateLink("personalTelegramUsername", value)} />
+          <Field label="WhatsApp 频道 / 群组链接" value={settings.links.whatsappChannelUrl} onChange={(value) => updateLink("whatsappChannelUrl", value)} />
+          <Field label="Telegram 频道 / 群组链接" value={settings.links.telegramChannelUrl} onChange={(value) => updateLink("telegramChannelUrl", value)} />
+          <Field label="Instagram 链接" value={settings.links.instagramUrl} onChange={(value) => updateLink("instagramUrl", value)} />
+          <Field label="Facebook 链接" value={settings.links.facebookUrl} onChange={(value) => updateLink("facebookUrl", value)} />
+          <Field label="个人 WhatsApp 链接" value={settings.links.personalWhatsappUrl} onChange={(value) => updateLink("personalWhatsappUrl", value)} />
+          <Field label="个人 WhatsApp 号码" value={settings.links.personalWhatsappNumber} onChange={(value) => updateLink("personalWhatsappNumber", value)} />
+          <Field label="个人 Telegram 链接" value={settings.links.personalTelegramUrl} onChange={(value) => updateLink("personalTelegramUrl", value)} />
+          <Field label="个人 Telegram 用户名" value={settings.links.personalTelegramUsername} onChange={(value) => updateLink("personalTelegramUsername", value)} />
         </div>
       </AdminSection>
 
-      <AdminSection title="Hero">
+      <AdminSection title="首页主视觉">
         <div className="admin-form-grid">
-          <Field label="Hero main image URL" value={settings.homepage.heroMainImageUrl} onChange={(value) => updateHomepage("heroMainImageUrl", value)} />
-          <FitField label="Image fit" value={settings.homepage.heroMainImageFit} onChange={(value) => updateHomepage("heroMainImageFit", value)} />
+          <Field label="主图链接" value={settings.homepage.homeHeroImage.imageUrl} onChange={(value) => updateHomeHeroImage("imageUrl", value)} />
+          <FitField label="图片适应方式" value={settings.homepage.homeHeroImage.imageFit} onChange={(value) => updateHomeHeroImage("imageFit", value)} />
           <Field
-            label="Image position"
-            value={settings.homepage.heroMainImagePosition}
+            label="图片位置"
+            value={settings.homepage.homeHeroImage.imagePosition}
             placeholder={positionPlaceholder}
-            onChange={(value) => updateHomepage("heroMainImagePosition", value)}
+            onChange={(value) => updateHomeHeroImage("imagePosition", value)}
           />
         </div>
       </AdminSection>
 
-      <AdminSection title="Shop by Category">
+      <AdminSection title="按分类购物">
         <div className="admin-repeat-grid">
-          {settings.homepage.categories.map((category, index) => (
-            <article className="admin-edit-card" key={category.key}>
-              <h3>{category.title || category.key}</h3>
-              <Field label="Title" value={category.title} onChange={(value) => updateCategory(index, "title", value)} />
-              <Field label="Subtitle" value={category.subtitle} onChange={(value) => updateCategory(index, "subtitle", value)} />
-              <Field label="Image URL" value={category.imageUrl} onChange={(value) => updateCategory(index, "imageUrl", value)} />
-              <FitField label="Image fit" value={category.imageFit} onChange={(value) => updateCategory(index, "imageFit", value)} />
+          {settings.homepage.categoryImages.map((category, index) => (
+            <article className="admin-edit-card" key={index}>
+              <h3>{category.label || `分类 ${index + 1}`}</h3>
+              <Field label="图片链接" value={category.imageUrl} onChange={(value) => updateCategoryImage(index, "imageUrl", value)} />
+              <FitField label="图片适应方式" value={category.imageFit} onChange={(value) => updateCategoryImage(index, "imageFit", value)} />
               <Field
-                label="Image position"
+                label="图片位置"
                 value={category.imagePosition}
                 placeholder={positionPlaceholder}
-                onChange={(value) => updateCategory(index, "imagePosition", value)}
+                onChange={(value) => updateCategoryImage(index, "imagePosition", value)}
               />
-              <Field label="Href" value={category.href} onChange={(value) => updateCategory(index, "href", value)} />
+              <Field label="显示名称" value={category.label || ""} onChange={(value) => updateCategoryImage(index, "label", value)} />
             </article>
           ))}
         </div>
       </AdminSection>
 
-      <AdminSection title="Clean layers / Apparel Edit">
+      <AdminSection title="服装精选区域">
         <div className="admin-form-grid">
-          <Field label="Title" value={settings.homepage.apparelEdit.title} onChange={(value) => updateApparelEdit("title", value)} />
-          <Field label="Subtitle" value={settings.homepage.apparelEdit.subtitle} onChange={(value) => updateApparelEdit("subtitle", value)} />
-          <Field label="Left image URL" value={settings.homepage.apparelEdit.imageUrl} onChange={(value) => updateApparelEdit("imageUrl", value)} />
-          <FitField label="Image fit" value={settings.homepage.apparelEdit.imageFit} onChange={(value) => updateApparelEdit("imageFit", value)} />
+          <Field label="标题" value={settings.homepage.apparelEdit.title} onChange={(value) => updateApparelEdit("title", value)} />
+          <Field label="副标题" value={settings.homepage.apparelEdit.subtitle} onChange={(value) => updateApparelEdit("subtitle", value)} />
+          <Field label="左侧图片链接" value={settings.homepage.homeEditImage.imageUrl} onChange={(value) => updateHomeEditImage("imageUrl", value)} />
+          <FitField label="图片适应方式" value={settings.homepage.homeEditImage.imageFit} onChange={(value) => updateHomeEditImage("imageFit", value)} />
           <Field
-            label="Image position"
-            value={settings.homepage.apparelEdit.imagePosition}
+            label="图片位置"
+            value={settings.homepage.homeEditImage.imagePosition}
             placeholder={positionPlaceholder}
-            onChange={(value) => updateApparelEdit("imagePosition", value)}
+            onChange={(value) => updateHomeEditImage("imagePosition", value)}
           />
-          <Field label="Button text" value={settings.homepage.apparelEdit.buttonText} onChange={(value) => updateApparelEdit("buttonText", value)} />
-          <Field label="Button href" value={settings.homepage.apparelEdit.buttonHref} onChange={(value) => updateApparelEdit("buttonHref", value)} />
+          <Field label="按钮文字" value={settings.homepage.apparelEdit.buttonText} onChange={(value) => updateApparelEdit("buttonText", value)} />
+          <Field label="按钮链接" value={settings.homepage.apparelEdit.buttonHref} onChange={(value) => updateApparelEdit("buttonHref", value)} />
         </div>
       </AdminSection>
 
-      <AdminSection title="Latest fits & drops">
+      <AdminSection title="最新穿搭与上新">
         <div className="admin-repeat-grid">
-          {settings.homepage.latestDrops.map((drop, index) => (
+          {settings.homepage.homeChannelImages.map((drop, index) => (
             <article className="admin-edit-card" key={index}>
-              <h3>Slot {index + 1}</h3>
-              <Field label="Image URL" value={drop.imageUrl} onChange={(value) => updateDrop(index, "imageUrl", value)} />
-              <FitField label="Image fit" value={drop.imageFit} onChange={(value) => updateDrop(index, "imageFit", value)} />
+              <h3>位置 {index + 1}</h3>
+              <Field label="图片链接" value={drop.imageUrl} onChange={(value) => updateChannelImage(index, "imageUrl", value)} />
+              <FitField label="图片适应方式" value={drop.imageFit} onChange={(value) => updateChannelImage(index, "imageFit", value)} />
               <Field
-                label="Image position"
+                label="图片位置"
                 value={drop.imagePosition}
                 placeholder={positionPlaceholder}
-                onChange={(value) => updateDrop(index, "imagePosition", value)}
+                onChange={(value) => updateChannelImage(index, "imagePosition", value)}
               />
-              <Field label="Href" value={drop.href} onChange={(value) => updateDrop(index, "href", value)} />
-              <Field label="Label" value={drop.label || ""} onChange={(value) => updateDrop(index, "label", value)} />
+              <Field label="显示名称" value={drop.label || ""} onChange={(value) => updateChannelImage(index, "label", value)} />
             </article>
           ))}
         </div>
@@ -227,10 +237,10 @@ function FitField({ label, onChange, value }: FieldProps) {
     <label className="admin-field">
       <span>{label}</span>
       <select value={value} onChange={(event) => onChange(event.target.value)}>
-        <option value="cover">cover</option>
-        <option value="contain">contain</option>
+        <option value="cover">铺满画面</option>
+        <option value="contain">显示完整图片</option>
       </select>
-      <small>cover fills the frame; contain shows the full image.</small>
+      <small>cover 会铺满画面；contain 会显示完整图片。</small>
     </label>
   );
 }

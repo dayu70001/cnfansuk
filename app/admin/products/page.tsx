@@ -1,33 +1,17 @@
-import { notFound } from "next/navigation";
-import { products } from "@/data/products";
-import { formatMoney } from "@/lib/formatMoney";
+import { ProductAdminPanel } from "@/components/ProductAdminPanel";
+import { requireAdmin } from "@/lib/adminAuth";
 
-export default function AdminProductsPage() {
-  if (process.env.NODE_ENV === "production") {
-    notFound();
-  }
+export default async function AdminProductsPage() {
+  await requireAdmin();
 
   return (
     <section className="page-shell">
       <div className="page-heading">
-        <p className="eyebrow">Admin</p>
-        <h1>Products</h1>
-        <p>Mock product list prepared for future management tools.</p>
+        <p className="eyebrow">管理后台</p>
+        <h1>产品分类管理</h1>
+        <p>按商品编号、标题或品牌搜索，修改后将直接保存到 D1。</p>
       </div>
-      <div className="admin-product-table">
-        {products.map((product) => (
-          <article key={product.id}>
-            <div className="mini-thumb placeholder-art" />
-            <div>
-              <h2>{product.name}</h2>
-              <p>{product.category}</p>
-            </div>
-            <strong>{formatMoney(product.priceGBP)}</strong>
-            <span>{product.colors.length} colours</span>
-            <span>{product.sizes.length} sizes</span>
-          </article>
-        ))}
-      </div>
+      <ProductAdminPanel />
     </section>
   );
 }

@@ -1,26 +1,26 @@
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { requireAdmin } from "@/lib/adminAuth";
+import { AdminLogoutButton } from "@/components/AdminLogoutButton";
 
-export default function AdminPage() {
-  if (process.env.NODE_ENV === "production") {
-    notFound();
-  }
+export default async function AdminPage() {
+  await requireAdmin();
 
   return (
     <section className="page-shell">
       <div className="page-heading">
-        <p className="eyebrow">Admin</p>
-        <h1>CNFans UK Admin</h1>
-        <p>Local mock admin for orders and product visibility.</p>
+        <p className="eyebrow">管理后台</p>
+        <h1>CNFans UK 管理后台</h1>
+        <p>管理产品分类、品牌和客户订单。</p>
+        <AdminLogoutButton />
       </div>
       <div className="admin-cards">
         <Link href="/admin/orders">
-          <h2>Orders</h2>
-          <p>View localStorage mock orders, update status and copy order details.</p>
+          <h2>订单管理</h2>
+          <p>查看 D1 订单、商品明细并更新订单状态。</p>
         </Link>
         <Link href="/admin/products">
-          <h2>Products</h2>
-          <p>Review mock product data and prepare future product management.</p>
+          <h2>产品管理</h2>
+          <p>搜索商品并修改分类、子类目与品牌。</p>
         </Link>
       </div>
     </section>

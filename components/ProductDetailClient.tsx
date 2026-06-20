@@ -3,35 +3,45 @@
 import { type MouseEvent, type UIEvent, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { formatMoney } from "@/lib/formatMoney";
+import { getProductPrice } from "@/lib/productPrice";
+import { useCurrency } from "@/lib/useCurrency";
 import type { CartItem, Product } from "@/lib/types";
 import { useCart } from "./CartProvider";
 
-const galleryLabels = ["Front", "Back", "Detail", "Fabric", "Fit", "Styling", "Close-up"];
+const galleryLabels = ["Front", "Back", "Detail", "Fabric", "Fit", "Styling", "Close-up", "Inside", "Extra"];
 
 type AccordionKey = "description" | "fit" | "delivery";
 
 export function ProductDetailClient({ product }: { product: Product }) {
   const router = useRouter();
   const { addItem } = useCart();
+  const { currency } = useCurrency();
   const [size, setSize] = useState("");
   const [quantity, setQuantity] = useState(1);
   const [sizeError, setSizeError] = useState(false);
   const [openSection, setOpenSection] = useState<AccordionKey | null>("description");
   const [activeIndex, setActiveIndex] = useState(0);
-  const defaultColor = product.colors[0] || "Default";
-  const galleryItems = useMemo(() => Array.from({ length: Math.max(product.images.length, 7) }), [product.images.length]);
+  const defaultColor = product.colors.find((item) => item?.trim());
+  const galleryItems = useMemo(() => product.images.filter((item) => item && item !== "placeholder").slice(0, 9), [product.images]);
+  const currentPrice = getProductPrice(product, currency);
 
   const cartItem = useMemo<CartItem>(
     () => ({
       productId: product.id,
+      productCode: product.id,
       slug: product.slug,
       name: product.name,
+      title: product.name,
+      productUrl: `/product/${product.slug}`,
       priceGBP: product.priceGBP,
+      priceEUR: product.priceEUR,
+      priceUSD: product.priceUSD,
+      image: galleryItems[0],
       color: defaultColor,
       size,
       quantity,
     }),
-    [defaultColor, product.id, product.name, product.priceGBP, product.slug, quantity, size],
+    [defaultColor, galleryItems, product.id, product.name, product.priceEUR, product.priceGBP, product.priceUSD, product.slug, quantity, size],
   );
 
   function addSelectedItem(openCart = true) {
@@ -64,12 +74,12 @@ export function ProductDetailClient({ product }: { product: Product }) {
 
   function showPrevious(event: MouseEvent<HTMLButtonElement>) {
     event.stopPropagation();
-    setActiveIndex((index) => (index === 0 ? galleryItems.length - 1 : index - 1));
+    setActiveIndex((index) => (index === 0 ? Math.max(galleryItems.length - 1, 0) : index - 1));
   }
 
   function showNext(event: MouseEvent<HTMLButtonElement>) {
     event.stopPropagation();
-    setActiveIndex((index) => (index + 1) % galleryItems.length);
+    setActiveIndex((index) => (index + 1) % Math.max(galleryItems.length, 1));
   }
 
   function updateMobileIndex(event: UIEvent<HTMLDivElement>) {
@@ -86,11 +96,16 @@ export function ProductDetailClient({ product }: { product: Product }) {
         <div className="pdp-main-frame">
           <div className="pdp-main-viewport">
             <div className="pdp-main-track" style={{ transform: `translateX(-${activeIndex * 100}%)` }} onScroll={updateMobileIndex}>
-              {galleryItems.map((_, index) => (
+              {galleryItems.length ? galleryItems.map((image, index) => (
                 <div className={`pdp-image pdp-image-${(index % 7) + 1}`} key={index}>
+                  <img src={image} alt={`${product.name} ${galleryLabels[index] || `Detail ${index + 1}`}`} onError={(event) => event.currentTarget.classList.add("image-error")} />
                   <span>{galleryLabels[index] || `Detail ${index + 1}`}</span>
                 </div>
-              ))}
+              )) : (
+                <div className="pdp-image pdp-image-empty">
+                  <span>Image unavailable</span>
+                </div>
+              )}
             </div>
           </div>
           <button className="pdp-gallery-arrow previous" type="button" onClick={showPrevious} aria-label="Previous image">
@@ -100,11 +115,11 @@ export function ProductDetailClient({ product }: { product: Product }) {
             ›
           </button>
           <span className="pdp-count">
-            {activeIndex + 1} / {galleryItems.length}
+            {Math.min(activeIndex + 1, Math.max(galleryItems.length, 1))} / {Math.max(galleryItems.length, 1)}
           </span>
         </div>
         <div className="pdp-thumbs" aria-label="Select product image">
-          {galleryItems.map((_, index) => (
+          {galleryItems.map((image, index) => (
             <button
               className={index === activeIndex ? "pdp-thumb selected" : "pdp-thumb"}
               key={index}
@@ -113,12 +128,14 @@ export function ProductDetailClient({ product }: { product: Product }) {
               aria-label={`Show image ${index + 1}`}
               aria-current={index === activeIndex ? "true" : undefined}
             >
-              <span className={`pdp-image pdp-image-${(index % 7) + 1}`} />
+              <span className={`pdp-image pdp-image-${(index % 7) + 1}`}>
+                <img src={image} alt="" onError={(event) => event.currentTarget.classList.add("image-error")} />
+              </span>
             </button>
           ))}
         </div>
         <div className="pdp-dots" aria-hidden="true">
-          {galleryItems.map((_, index) => (
+          {Array.from({ length: Math.max(galleryItems.length, 1) }).map((_, index) => (
             <span className={index === activeIndex ? "active" : ""} key={index} />
           ))}
         </div>
@@ -127,7 +144,7 @@ export function ProductDetailClient({ product }: { product: Product }) {
       <aside className="pdp-info">
         <p className="eyebrow">{product.category.replace("-", " ")}</p>
         <h1>{product.name}</h1>
-        <p className="pdp-price">{formatMoney(product.priceGBP)}</p>
+        <p className="pdp-price">{formatMoney(currentPrice, currency)}</p>
 
         <div className={sizeError ? "pdp-option size-error" : "pdp-option"}>
           <div className="pdp-size-head">
@@ -195,7 +212,7 @@ export function ProductDetailClient({ product }: { product: Product }) {
       </aside>
 
       <div className="pdp-mobile-bar">
-        <span>{formatMoney(product.priceGBP)}</span>
+        <span>{formatMoney(currentPrice, currency)}</span>
         <button className="btn btn-solid" type="button" onClick={handleAddToCart}>
           Add to cart
         </button>

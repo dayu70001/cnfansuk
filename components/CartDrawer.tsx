@@ -1,13 +1,19 @@
 "use client";
 
 import Link from "next/link";
-import { getCartSubtotal } from "@/lib/cart";
+import { getCartItemPrice, getCartSubtotal } from "@/lib/cart";
 import { formatMoney } from "@/lib/formatMoney";
+import { DEFAULT_SHIPPING_METHOD_ID, getShippingPrice, hasFreeShipping } from "@/lib/shipping";
+import { useCurrency } from "@/lib/useCurrency";
 import { useCart } from "./CartProvider";
 
 export function CartDrawer() {
   const { items, isOpen, closeCart, updateQuantity, removeItem } = useCart();
-  const subtotal = getCartSubtotal(items);
+  const { currency } = useCurrency();
+  const subtotal = getCartSubtotal(items, currency);
+  const subtotalGbp = getCartSubtotal(items, "GBP");
+  const shipping = getShippingPrice(DEFAULT_SHIPPING_METHOD_ID, subtotalGbp, currency);
+  const total = subtotal + shipping;
 
   return (
     <>
@@ -31,15 +37,14 @@ export function CartDrawer() {
             <div className="cart-items">
               {items.map((item) => (
                 <div className="cart-line" key={`${item.productId}-${item.color}-${item.size}`}>
-                  <Link href={`/product/${item.slug}`} className="cart-thumb placeholder-art" onClick={closeCart}>
+                  <Link href={`/product/${item.slug}`} className={item.image ? "cart-thumb placeholder-art has-cart-image" : "cart-thumb placeholder-art"} onClick={closeCart}>
+                    {item.image ? <img src={item.image} alt={item.name} onError={(event) => event.currentTarget.classList.add("image-error")} /> : null}
                     <span />
                   </Link>
                   <div>
                     <h3>{item.name}</h3>
-                    <p>
-                      {item.color} · Size {item.size}
-                    </p>
-                    <p>{formatMoney(item.priceGBP)}</p>
+                    <p>{[item.color, `Size ${item.size}`].filter(Boolean).join(" · ")}</p>
+                    <p>{formatMoney(getCartItemPrice(item, currency), currency)}</p>
                     <div className="quantity-row">
                       <button type="button" onClick={() => updateQuantity(item, item.quantity - 1)}>
                         −
@@ -55,14 +60,23 @@ export function CartDrawer() {
                       </button>
                     </div>
                   </div>
-                  <strong>{formatMoney(item.priceGBP * item.quantity)}</strong>
+                  <strong>{formatMoney(getCartItemPrice(item, currency) * item.quantity, currency)}</strong>
                 </div>
               ))}
             </div>
             <div className="cart-summary">
               <div>
                 <span>Subtotal</span>
-                <strong>{formatMoney(subtotal)}</strong>
+                <strong>{formatMoney(subtotal, currency)}</strong>
+              </div>
+              <div>
+                <span>Shipping</span>
+                <strong>{formatMoney(shipping, currency)}</strong>
+              </div>
+              {hasFreeShipping(subtotalGbp) ? <p className="free-shipping-applied">Free shipping applied</p> : null}
+              <div>
+                <span>Total</span>
+                <strong>{formatMoney(total, currency)}</strong>
               </div>
               <Link className="primary-button full" href="/checkout" onClick={closeCart}>
                 Checkout

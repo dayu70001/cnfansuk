@@ -1,130 +1,199 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import { formatMoney } from "@/lib/formatMoney";
-import { orderStatuses, readOrders, saveOrders } from "@/lib/orders";
-import type { Order, OrderStatus } from "@/lib/types";
-import { CopyOrderButton } from "./CopyOrderButton";
+import type { CurrencyCode } from "@/lib/currency";
+
+type AdminOrderStatus = "pending" | "confirmed" | "paid" | "processing" | "shipped" | "completed" | "cancelled";
+type AdminOrderItem = {
+  id: number;
+  product_code: string;
+  title: string;
+  slug: string;
+  product_url: string;
+  image_url: string | null;
+  size: string;
+  color: string | null;
+  quantity: number;
+  unit_price: number;
+  line_total: number;
+  currency: CurrencyCode;
+};
+type AdminOrder = {
+  id: string;
+  order_number: string;
+  created_at: string;
+  customer_name: string;
+  email: string;
+  phone: string;
+  preferred_contact: string | null;
+  whatsapp: string | null;
+  telegram: string | null;
+  country_code: string;
+  country_name: string;
+  address_line1: string;
+  address_line2: string | null;
+  city: string;
+  county: string | null;
+  postcode: string;
+  shipping_method_label: string;
+  shipping_estimate: string;
+  shipping_fee: number;
+  subtotal: number;
+  total: number;
+  currency: CurrencyCode;
+  payment_method: string;
+  status: AdminOrderStatus;
+  items?: AdminOrderItem[];
+};
+
+const statusLabels: Record<AdminOrderStatus, string> = {
+  pending: "待处理",
+  confirmed: "已确认",
+  paid: "已付款",
+  processing: "处理中",
+  shipped: "已发货",
+  completed: "已完成",
+  cancelled: "已取消",
+};
+const statuses = Object.keys(statusLabels) as AdminOrderStatus[];
+
+async function requestOrders(search: string, status: string) {
+  const params = new URLSearchParams({ q: search.trim(), status, limit: "200" });
+  const response = await fetch(`/api/admin/orders?${params}`, { cache: "no-store" });
+  const result = await response.json().catch(() => ({})) as { orders?: AdminOrder[]; error?: string };
+  return { response, result };
+}
+
+async function requestOrderDetail(orderNumber: string) {
+  const response = await fetch(`/api/admin/orders/${encodeURIComponent(orderNumber)}`, { cache: "no-store" });
+  const result = await response.json().catch(() => ({})) as { order?: AdminOrder; error?: string };
+  return { response, result };
+}
 
 export function AdminOrderPanel() {
-  const [orders, setOrders] = useState<Order[]>([]);
+  const [orders, setOrders] = useState<AdminOrder[]>([]);
+  const [selected, setSelected] = useState<AdminOrder | null>(null);
   const [query, setQuery] = useState("");
-  const [selectedOrderNo, setSelectedOrderNo] = useState("");
+  const [status, setStatus] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [message, setMessage] = useState("");
 
-  useEffect(() => {
-    const stored = readOrders();
-    setOrders(stored);
-    setSelectedOrderNo(stored[0]?.orderNo || "");
-  }, []);
-
-  const filteredOrders = useMemo(
-    () => orders.filter((order) => order.orderNo.toLowerCase().includes(query.toLowerCase().trim())),
-    [orders, query],
-  );
-  const selected = orders.find((order) => order.orderNo === selectedOrderNo) || filteredOrders[0];
-
-  function updateStatus(orderNo: string, status: OrderStatus) {
-    const next = orders.map((order) => (order.orderNo === orderNo ? { ...order, status } : order));
-    setOrders(next);
-    saveOrders(next);
+  async function loadOrders(search = query, nextStatus = status) {
+    setLoading(true);
+    const { response, result } = await requestOrders(search, nextStatus);
+    if (!response.ok) {
+      setMessage(result.error || "读取订单失败。");
+      setLoading(false);
+      return;
+    }
+    const nextOrders = result.orders || [];
+    setOrders(nextOrders);
+    setLoading(false);
+    if (nextOrders.length > 0) await loadOrderDetail(nextOrders[0].order_number);
+    else setSelected(null);
   }
 
-  if (orders.length === 0) {
-    return (
-      <section className="admin-shell">
-        <div className="empty-state">
-          <h2>No mock orders yet</h2>
-          <p>Submit an order through checkout and it will appear here from localStorage.</p>
-        </div>
-      </section>
-    );
+  async function loadOrderDetail(orderNumber: string) {
+    setMessage("");
+    const { response, result } = await requestOrderDetail(orderNumber);
+    if (!response.ok || !result.order) {
+      setMessage(result.error || "读取订单详情失败。");
+      return;
+    }
+    setSelected(result.order);
+  }
+
+  useEffect(() => {
+    let active = true;
+    void requestOrders("", "").then(async ({ response, result }) => {
+      if (!active) return;
+      if (!response.ok) {
+        setMessage(result.error || "读取订单失败。");
+        setLoading(false);
+        return;
+      }
+      const nextOrders = result.orders || [];
+      setOrders(nextOrders);
+      setLoading(false);
+      if (nextOrders.length > 0) {
+        const detail = await requestOrderDetail(nextOrders[0].order_number);
+        if (active && detail.response.ok && detail.result.order) setSelected(detail.result.order);
+      }
+    });
+    return () => { active = false; };
+  }, []);
+
+  async function updateStatus(nextStatus: AdminOrderStatus) {
+    if (!selected) return;
+    const response = await fetch(`/api/admin/orders/${encodeURIComponent(selected.order_number)}/status`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status: nextStatus }),
+    });
+    const result = await response.json().catch(() => ({})) as { order?: AdminOrder; error?: string };
+    if (!response.ok || !result.order) {
+      setMessage(result.error || "状态保存失败。");
+      return;
+    }
+    setSelected(result.order);
+    setOrders((current) => current.map((order) => order.order_number === result.order?.order_number ? { ...order, status: result.order.status } : order));
+    setMessage("订单状态已保存。 ");
+  }
+
+  function submitSearch(event: FormEvent) {
+    event.preventDefault();
+    void loadOrders();
   }
 
   return (
-    <section className="admin-shell">
+    <section className="admin-shell admin-orders-shell">
       <div className="admin-list">
-        <input
-          aria-label="Search by order number"
-          placeholder="Search order number"
-          value={query}
-          onChange={(event) => setQuery(event.target.value)}
-        />
-        {filteredOrders.map((order) => (
-          <button
-            className={order.orderNo === selected?.orderNo ? "order-row active" : "order-row"}
-            type="button"
-            key={order.orderNo}
-            onClick={() => setSelectedOrderNo(order.orderNo)}
-          >
-            <strong>#{order.orderNo}</strong>
-            <span>{order.customer.fullName}</span>
-            <span>{formatMoney(order.total)}</span>
-            <small>{order.status}</small>
+        <form className="admin-order-search" onSubmit={submitSearch}>
+          <input aria-label="搜索订单" placeholder="订单号、姓名、邮箱或电话" value={query} onChange={(event) => setQuery(event.target.value)} />
+          <select aria-label="订单状态" value={status} onChange={(event) => { setStatus(event.target.value); void loadOrders(query, event.target.value); }}>
+            <option value="">全部状态</option>
+            {statuses.map((item) => <option value={item} key={item}>{statusLabels[item]}</option>)}
+          </select>
+          <button className="btn btn-solid" type="submit">搜索</button>
+        </form>
+        {loading ? <p>正在读取订单…</p> : null}
+        {!loading && orders.length === 0 ? <p>暂时没有订单。</p> : null}
+        {orders.map((order) => (
+          <button className={order.order_number === selected?.order_number ? "order-row active" : "order-row"} type="button" key={order.order_number} onClick={() => void loadOrderDetail(order.order_number)}>
+            <strong>{order.order_number}</strong>
+            <span>{order.customer_name}</span>
+            <span>{formatMoney(order.total, order.currency)}</span>
+            <small>{statusLabels[order.status]}</small>
           </button>
         ))}
       </div>
-      {selected ? (
-        <div className="admin-detail">
-          <div className="split-heading">
-            <div>
-              <p className="eyebrow">Order detail</p>
-              <h2>#{selected.orderNo}</h2>
+      <div className="admin-detail">
+        {message ? <p className="admin-status">{message}</p> : null}
+        {selected ? (
+          <>
+            <div className="split-heading"><div><p className="eyebrow">订单详情</p><h2>{selected.order_number}</h2><p>{new Date(selected.created_at).toLocaleString("zh-CN")}</p></div></div>
+            <label className="admin-field"><span>订单状态</span><select value={selected.status} onChange={(event) => void updateStatus(event.target.value as AdminOrderStatus)}>
+              {statuses.map((item) => <option value={item} key={item}>{statusLabels[item]}</option>)}
+            </select></label>
+            <div className="detail-grid">
+              <div><h3>客户信息</h3><p>{selected.customer_name}</p><p>{selected.email}</p><p>{selected.phone}</p><p>首选联系：{selected.preferred_contact || "未填写"}</p><p>WhatsApp：{selected.whatsapp || "未填写"}</p><p>Telegram：{selected.telegram || "未填写"}</p></div>
+              <div><h3>收货地址</h3><p>{[selected.address_line1, selected.address_line2, selected.city, selected.county, selected.postcode, selected.country_name].filter(Boolean).join("，")}</p><p>国家代码：{selected.country_code}</p></div>
+              <div><h3>配送与付款</h3><p>{selected.shipping_method_label}</p><p>{selected.shipping_estimate}</p><p>付款方式：{selected.payment_method}</p><p>币种：{selected.currency}</p></div>
             </div>
-            <CopyOrderButton order={selected} />
-          </div>
-          <label>
-            Status
-            <select
-              value={selected.status}
-              onChange={(event) => updateStatus(selected.orderNo, event.target.value as OrderStatus)}
-            >
-              {orderStatuses.map((status) => (
-                <option key={status}>{status}</option>
+            <div className="admin-order-items">
+              {(selected.items || []).map((item) => (
+                <article key={item.id}>
+                  <a className="admin-order-item-image" href={`/product/${item.slug}`} target="_blank" rel="noreferrer">{item.image_url ? <img src={item.image_url} alt={item.title} /> : <span>暂无图片</span>}</a>
+                  <div><h3>{item.title}</h3><p>商品编号：{item.product_code}</p><p>{[item.color, `尺码：${item.size}`, `数量：${item.quantity}`].filter(Boolean).join(" · ")}</p><a href={`/product/${item.slug}`} target="_blank" rel="noreferrer">打开前台商品页 →</a></div>
+                  <div><p>单价：{formatMoney(item.unit_price, selected.currency)}</p><strong>小计：{formatMoney(item.line_total, selected.currency)}</strong></div>
+                </article>
               ))}
-            </select>
-          </label>
-          <div className="detail-grid">
-            <div>
-              <h3>Customer</h3>
-              <p>{selected.customer.fullName}</p>
-              <p>{selected.customer.phone}</p>
-              <p>{selected.customer.email || "Email not provided"}</p>
-              <p>{selected.customer.preferredContact}</p>
             </div>
-            <div>
-              <h3>Delivery Address</h3>
-              <p>{selected.customer.address}</p>
-              <p>{selected.customer.city}</p>
-              <p>{selected.customer.postcode}</p>
-              <p>{selected.customer.country}</p>
-            </div>
-          </div>
-          <div className="order-items">
-            {selected.items.map((item) => (
-              <div key={`${item.productId}-${item.color}-${item.size}`}>
-                <span>
-                  {item.name} · {item.color} · Size {item.size} · Qty {item.quantity}
-                </span>
-                <strong>{formatMoney(item.priceGBP * item.quantity)}</strong>
-              </div>
-            ))}
-          </div>
-          <div className="totals">
-            <div>
-              <span>Subtotal</span>
-              <strong>{formatMoney(selected.subtotal)}</strong>
-            </div>
-            <div>
-              <span>Shipping</span>
-              <strong>{formatMoney(selected.shipping)}</strong>
-            </div>
-            <div>
-              <span>Total</span>
-              <strong>{formatMoney(selected.total)}</strong>
-            </div>
-          </div>
-        </div>
-      ) : null}
+            <div className="totals"><div><span>商品小计</span><strong>{formatMoney(selected.subtotal, selected.currency)}</strong></div><div><span>配送费</span><strong>{formatMoney(selected.shipping_fee, selected.currency)}</strong></div><div><span>订单总额</span><strong>{formatMoney(selected.total, selected.currency)}</strong></div></div>
+          </>
+        ) : <p>请选择订单查看详情。</p>}
+      </div>
     </section>
   );
 }

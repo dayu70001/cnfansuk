@@ -1,11 +1,9 @@
-import { notFound } from "next/navigation";
+import { requireAdmin } from "@/lib/adminAuth";
 import { defaultSiteSettings, readSiteSettings } from "@/lib/siteSettings";
 import { HomepageAdminClient } from "./HomepageAdminClient";
 
-export default function HomepageAdminPage() {
-  if (process.env.NODE_ENV === "production") {
-    notFound();
-  }
+export default async function HomepageAdminPage() {
+  await requireAdmin();
 
   return <HomepageAdminClient defaults={defaultSiteSettings} initialSettings={readSiteSettings()} />;
 }

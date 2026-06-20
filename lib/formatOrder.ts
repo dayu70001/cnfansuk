@@ -5,7 +5,7 @@ export function formatOrderForCopy(order: Order) {
   const items = order.items
     .map(
       (item, index) =>
-        `${index + 1}. ${item.name} - ${item.color} - Size ${item.size} - Qty ${item.quantity} - ${formatMoney(item.priceGBP)}`,
+        `${index + 1}. ${[item.name, item.color, `Size ${item.size}`, `Qty ${item.quantity}`].filter(Boolean).join(" - ")} - ${formatMoney(item.priceGBP)}`,
     )
     .join("\n");
 

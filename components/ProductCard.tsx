@@ -3,18 +3,23 @@
 import Link from "next/link";
 import { Product } from "@/lib/types";
 import { formatMoney } from "@/lib/formatMoney";
+import { getProductPrice } from "@/lib/productPrice";
+import { useCurrency } from "@/lib/useCurrency";
 import { useCart } from "./CartProvider";
 
 export function ProductCard({ product }: { product: Product }) {
   const { addItem } = useCart();
-  const color = product.colors[0];
+  const { currency } = useCurrency();
+  const color = product.colors.find((item) => item?.trim());
   const size = product.sizes[0];
-  const swatches = product.colors.slice(0, 3);
+  const swatches = product.colors.filter((item) => item?.trim()).slice(0, 3);
+  const image = product.images.find((item) => item && item !== "placeholder");
 
   return (
     <article className="product">
       <Link href={`/product/${product.slug}`} className="shot" aria-label={product.name}>
-        <span className="fill product-preview">
+        <span className={image ? "fill product-preview has-product-image" : "fill product-preview"}>
+          {image ? <img src={image} alt={product.name} loading="lazy" onError={(event) => event.currentTarget.classList.add("image-error")} /> : null}
           <span className="product-placeholder-mark">CNFans UK</span>
           <span className="product-placeholder-sub">Product preview</span>
         </span>
@@ -25,9 +30,15 @@ export function ProductCard({ product }: { product: Product }) {
             event.preventDefault();
             addItem({
               productId: product.id,
+              productCode: product.id,
               slug: product.slug,
               name: product.name,
+              title: product.name,
+              productUrl: `/product/${product.slug}`,
               priceGBP: product.priceGBP,
+              priceEUR: product.priceEUR,
+              priceUSD: product.priceUSD,
+              image,
               color,
               size,
               quantity: 1,
@@ -41,13 +52,15 @@ export function ProductCard({ product }: { product: Product }) {
         <Link className="pname" href={`/product/${product.slug}`}>
           {product.name}
         </Link>
-        <span className="price">{formatMoney(product.priceGBP)}</span>
+        <span className="price">{formatMoney(getProductPrice(product, currency), currency)}</span>
       </div>
-      <div className="swatches" aria-label={`${product.name} colours`}>
-        {swatches.map((item) => (
-          <span className={`swatch swatch-${item.toLowerCase().replaceAll(" ", "-")}`} key={item} />
-        ))}
-      </div>
+      {swatches.length > 0 ? (
+        <div className="swatches" aria-label={`${product.name} colours`}>
+          {swatches.map((item) => (
+            <span className={`swatch swatch-${item.toLowerCase().replaceAll(" ", "-")}`} key={item} />
+          ))}
+        </div>
+      ) : null}
     </article>
   );
 }

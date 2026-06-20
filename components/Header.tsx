@@ -1,8 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { getCartCount } from "@/lib/cart";
+import { currencies, currencySymbols } from "@/lib/currency";
+import { useCurrency } from "@/lib/useCurrency";
 import { useCart } from "./CartProvider";
 
 const navItems = [
@@ -24,13 +26,9 @@ const supportItems = [
 export function Header() {
   const { items, openCart } = useCart();
   const [menuOpen, setMenuOpen] = useState(false);
-  const [currency, setCurrency] = useState("£");
+  const { currency, setCurrency } = useCurrency();
   const [currencyOpen, setCurrencyOpen] = useState(false);
   const count = getCartCount(items);
-
-  useEffect(() => {
-    setCurrency(localStorage.getItem("cnfans_currency") || "£");
-  }, []);
 
   return (
     <header className="site-header">
@@ -54,11 +52,11 @@ export function Header() {
         <div className="nav-right">
           <div className="currency">
             <button className="currency-toggle" type="button" onClick={() => setCurrencyOpen((value) => !value)}>
-              {currency} <span>▾</span>
+              {currencySymbols[currency]} <span>▾</span>
             </button>
             {currencyOpen ? (
               <div className="currency-menu">
-                {["£", "€", "$"]
+                {currencies
                   .filter((value) => value !== currency)
                   .map((value) => (
                     <button
@@ -66,11 +64,10 @@ export function Header() {
                       type="button"
                       onClick={() => {
                         setCurrency(value);
-                        localStorage.setItem("cnfans_currency", value);
                         setCurrencyOpen(false);
                       }}
                     >
-                      {value}
+                      {currencySymbols[value]}
                     </button>
                   ))}
               </div>

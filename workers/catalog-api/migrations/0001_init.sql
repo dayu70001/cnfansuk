@@ -7,6 +7,7 @@ CREATE TABLE IF NOT EXISTS products (
   description TEXT,
   category TEXT NOT NULL,
   subcategory TEXT,
+  brand TEXT NOT NULL DEFAULT '',
   price_gbp REAL NOT NULL,
   compare_at_price_gbp REAL,
   currency TEXT NOT NULL DEFAULT 'GBP',
@@ -41,4 +42,3 @@ CREATE INDEX IF NOT EXISTS idx_products_slug ON products(slug);
 CREATE INDEX IF NOT EXISTS idx_products_product_code ON products(product_code);
 CREATE INDEX IF NOT EXISTS idx_product_images_product_code ON product_images(product_code);
 CREATE INDEX IF NOT EXISTS idx_product_options_product_code ON product_options(product_code);
-

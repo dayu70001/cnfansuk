@@ -6,11 +6,15 @@ import { getProductsByCategory, products } from "@/data/products";
 import { fetchCatalogProducts } from "@/lib/catalogApi";
 import type { Product } from "@/lib/types";
 
+export const dynamic = "force-dynamic";
+
 type CategorySearchParams = {
   q?: string;
   brand?: string;
+  subcategory?: string;
   style?: string;
   sort?: string;
+  page?: string;
 };
 
 type StyleOption = {
@@ -18,35 +22,57 @@ type StyleOption = {
   label: string;
 };
 
+type NormalizedFilters = {
+  q: string;
+  brand: string;
+  subcategory: string;
+  sort: string;
+  page: string;
+};
+
 const styleOptionsByCategory: Record<string, { allLabel: string; options: StyleOption[] }> = {
   outerwear: {
     allLabel: "All Outerwear",
     options: [
       { value: "jackets", label: "Jackets" },
+      { value: "hooded-jackets", label: "Hooded Jackets" },
+      { value: "varsity-jackets", label: "Varsity Jackets" },
+      { value: "puffer-jackets", label: "Puffer Jackets" },
+      { value: "vests", label: "Vests" },
       { value: "coats", label: "Coats" },
     ],
   },
   tops: {
     allLabel: "All Tops",
     options: [
-      { value: "hoodies-sweatshirts", label: "Hoodies & Sweatshirts" },
       { value: "t-shirts", label: "T-Shirts" },
+      { value: "hoodies", label: "Hoodies" },
+      { value: "sweatshirts", label: "Sweatshirts" },
+      { value: "zip-hoodies", label: "Zip Hoodies" },
       { value: "shirts", label: "Shirts" },
+      { value: "knitwear", label: "Knitwear" },
     ],
   },
   bottoms: {
     allLabel: "All Bottoms",
     options: [
-      { value: "jeans-denim", label: "Jeans & Denim" },
       { value: "trousers", label: "Trousers" },
+      { value: "joggers", label: "Joggers" },
+      { value: "cargo-pants", label: "Cargo Pants" },
+      { value: "jeans", label: "Jeans" },
       { value: "shorts", label: "Shorts" },
+      { value: "skirts", label: "Skirts" },
     ],
   },
   "co-ords-sets": {
     allLabel: "All Sets",
     options: [
       { value: "tracksuits", label: "Tracksuits" },
+      { value: "hoodie-sets", label: "Hoodie Sets" },
+      { value: "t-shirt-shorts-sets", label: "T-Shirt & Shorts Sets" },
+      { value: "knit-sets", label: "Knit Sets" },
       { value: "casual-sets", label: "Casual Sets" },
+      { value: "jacket-pants-sets", label: "Jacket & Pants Sets" },
     ],
   },
 };
@@ -84,27 +110,32 @@ export default async function CategoryPage({
 
   const q = cleanParam(query.q);
   const brand = cleanParam(query.brand);
-  const style = cleanParam(query.style);
+  const subcategory = cleanParam(query.subcategory) || cleanParam(query.style);
   const sort = cleanParam(query.sort) || "newest";
+  const page = cleanPage(query.page);
   const filterCategory = legacyCategoryMap[slug] || slug;
   const localProducts = getProductsByCategory(slug);
-  const catalogProducts = await fetchCatalogProducts({ q, limit: 100 });
+  const catalogQuery = slug === "new-in" ? {} : { category: filterCategory };
+  const [catalogProducts, optionProducts] = await Promise.all([
+    fetchCatalogProducts({ ...catalogQuery, q, brand, subcategory, sort, page, limit: 100 }),
+    fetchCatalogProducts({ ...catalogQuery, limit: 100 }),
+  ]);
   const matchingCatalogProducts =
     catalogProducts?.filter((product) => (slug === "new-in" ? product.newIn : product.category === filterCategory)) || [];
-  const baseProducts = matchingCatalogProducts.length ? mergeProducts(matchingCatalogProducts, localProducts) : localProducts;
-  const brandOptions = getBrandOptions(baseProducts);
+  const baseProducts = catalogProducts === null ? localProducts : matchingCatalogProducts;
+  const filterOptionProducts = optionProducts === null ? localProducts : optionProducts;
+  const brandOptions = getBrandOptions(filterOptionProducts);
   const styleGroup = styleOptionsByCategory[filterCategory];
   const categoryProducts = sortProducts(
     baseProducts.filter((product) => {
-      const productBrandSlug = slugify(product.brand || "CNFans UK");
       const matchesSearch = q ? `${product.name} ${product.shortDescription} ${product.description}`.toLowerCase().includes(q.toLowerCase()) : true;
-      const matchesBrand = brand ? productBrandSlug === brand : true;
-      const matchesStyle = style ? product.style === style : true;
+      const matchesBrand = brand ? product.brand.toLowerCase() === brand.toLowerCase() : true;
+      const matchesStyle = subcategory ? product.style === subcategory : true;
       return matchesSearch && matchesBrand && matchesStyle;
     }),
     sort,
   );
-  const hasFilters = Boolean(q || brand || style || (sort && sort !== "newest"));
+  const hasFilters = Boolean(q || brand || subcategory || (sort && sort !== "newest") || page > 1);
   const productCountLabel = `${categoryProducts.length} ${categoryProducts.length === 1 ? "style" : "styles"}`;
 
   return (
@@ -124,7 +155,7 @@ export default async function CategoryPage({
 
       <form className="category-search-row" action={`/category/${slug}`}>
         {brand ? <input type="hidden" name="brand" value={brand} /> : null}
-        {style ? <input type="hidden" name="style" value={style} /> : null}
+        {subcategory ? <input type="hidden" name="subcategory" value={subcategory} /> : null}
         {sort && sort !== "newest" ? <input type="hidden" name="sort" value={sort} /> : null}
         <input className="category-search-input" type="search" name="q" defaultValue={q} placeholder={`Search ${category.name.toLowerCase()}...`} />
         <button className="category-search-button" type="submit">
@@ -142,23 +173,23 @@ export default async function CategoryPage({
           label={`Brand: ${brandOptions.find((option) => option.value === brand)?.label || "All"}`}
           options={[{ value: "", label: "All Brands" }, ...brandOptions]}
           slug={slug}
-          current={{ q, brand, style, sort }}
+          current={{ q, brand, subcategory, sort, page: String(page) }}
           param="brand"
         />
         {styleGroup ? (
           <FilterMenu
-            label={`Style: ${styleGroup.options.find((option) => option.value === style)?.label || "All"}`}
+            label={`Style: ${styleGroup.options.find((option) => option.value === subcategory)?.label || "All"}`}
             options={[{ value: "", label: styleGroup.allLabel }, ...styleGroup.options]}
             slug={slug}
-            current={{ q, brand, style, sort }}
-            param="style"
+            current={{ q, brand, subcategory, sort, page: String(page) }}
+            param="subcategory"
           />
         ) : null}
         <FilterMenu
           label={`Sort: ${sortOptions.find((option) => option.value === sort)?.label || "Newest"}`}
           options={sortOptions}
           slug={slug}
-          current={{ q, brand, style, sort }}
+          current={{ q, brand, subcategory, sort, page: String(page) }}
           param="sort"
         />
       </div>
@@ -170,7 +201,7 @@ export default async function CategoryPage({
           ))}
         </div>
       ) : (
-        <p className="category-empty">No products found. Try clearing the filters.</p>
+        <p className="category-empty">No products found for this filter.</p>
       )}
     </section>
   );
@@ -183,20 +214,25 @@ function FilterMenu({
   param,
   slug,
 }: {
-  current: Required<CategorySearchParams>;
+  current: NormalizedFilters;
   label: string;
   options: StyleOption[];
-  param: keyof CategorySearchParams;
+  param: keyof NormalizedFilters;
   slug: string;
 }) {
   return (
     <details className="category-filter-menu">
-      <summary>{label} ▾</summary>
+      <summary>{label}</summary>
       <div>
         {options.map((option) => (
-          <Link href={buildCategoryHref(slug, { ...current, [param]: option.value })} key={option.value || "all"}>
+          <a
+            className={current[param] === option.value ? "active" : ""}
+            href={buildCategoryHref(slug, { ...current, [param]: option.value, page: "1" })}
+            key={option.value || "all"}
+            aria-current={current[param] === option.value ? "true" : undefined}
+          >
             {option.label}
-          </Link>
+          </a>
         ))}
       </div>
     </details>
@@ -207,19 +243,16 @@ function cleanParam(value: string | undefined) {
   return typeof value === "string" ? value.trim() : "";
 }
 
-function slugify(value: string) {
-  return value
-    .toLowerCase()
-    .replace(/&/g, "and")
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-|-$/g, "");
+function cleanPage(value: string | undefined) {
+  const page = Number.parseInt(value || "1", 10);
+  return Number.isFinite(page) ? Math.max(page, 1) : 1;
 }
 
 function getBrandOptions(items: Product[]) {
   const brands = new Map<string, string>();
   items.forEach((product) => {
-    const label = product.brand || "CNFans UK";
-    brands.set(slugify(label), label);
+    const label = product.brand.trim();
+    if (label && label !== "CNFans UK") brands.set(label, label);
   });
   return Array.from(brands, ([value, label]) => ({ value, label })).sort((a, b) => a.label.localeCompare(b.label));
 }
@@ -238,12 +271,7 @@ function sortProducts(items: Product[], sort: string) {
   return nextItems.sort((a, b) => Number(b.newIn) - Number(a.newIn) || products.indexOf(a) - products.indexOf(b));
 }
 
-function mergeProducts(primary: Product[], fallback: Product[]) {
-  const seen = new Set(primary.map((product) => product.slug));
-  return [...primary, ...fallback.filter((product) => !seen.has(product.slug))];
-}
-
-function buildCategoryHref(slug: string, params: Required<CategorySearchParams>) {
+function buildCategoryHref(slug: string, params: NormalizedFilters) {
   const search = new URLSearchParams();
   if (params.q) {
     search.set("q", params.q);
@@ -251,11 +279,14 @@ function buildCategoryHref(slug: string, params: Required<CategorySearchParams>)
   if (params.brand) {
     search.set("brand", params.brand);
   }
-  if (params.style) {
-    search.set("style", params.style);
+  if (params.subcategory) {
+    search.set("subcategory", params.subcategory);
   }
   if (params.sort && params.sort !== "newest") {
     search.set("sort", params.sort);
+  }
+  if (params.page && params.page !== "1") {
+    search.set("page", params.page);
   }
   const query = search.toString();
   return query ? `/category/${slug}?${query}` : `/category/${slug}`;

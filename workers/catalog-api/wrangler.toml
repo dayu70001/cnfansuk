@@ -1,7 +1,11 @@
 name = "cnfansuk-catalog-api"
 main = "src/index.ts"
 compatibility_date = "2026-06-14"
+compatibility_flags = ["nodejs_compat"]
 workers_dev = true
+
+[observability]
+enabled = true
 
 [[d1_databases]]
 binding = "DB"
@@ -11,4 +15,3 @@ database_id = "dad22dde-56d0-4ac9-a797-6e402fb6e19b"
 [[r2_buckets]]
 binding = "PRODUCT_IMAGES"
 bucket_name = "cnfansuk-products"
-
