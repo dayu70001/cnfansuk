@@ -186,27 +186,27 @@ export function AdminOrderPanel() {
         {selected && !detailLoading ? (
           <>
             <header className="admin-order-detail-head">
-              <div><p className="eyebrow">订单详情</p><h2>{selected.order_number}</h2><p>下单时间：{formatOrderDate(selected.created_at)}</p></div>
+              <h2>订单详情：{selected.order_number}</h2>
+              <p>下单时间：{formatOrderDate(selected.created_at)}</p>
               <label className="admin-order-status-field"><span>订单状态</span><select value={selected.status} onChange={(event) => void updateStatus(event.target.value as AdminOrderStatus)}>
                 {statuses.map((item) => <option value={item} key={item}>{statusLabels[item]}</option>)}
               </select></label>
             </header>
 
             <section className="admin-order-detail-section">
-              <h3>客户与收货资料</h3>
+              <h3>客户资料</h3>
               <dl className="admin-order-info-list">
-                <div><dt>邮箱</dt><dd>{selected.email}</dd></div>
-                <div><dt>收货人</dt><dd>{selected.customer_name}</dd></div>
-                <div><dt>电话</dt><dd>{selected.phone}</dd></div>
-                <div className="admin-order-address"><dt>地址</dt><dd>{[selected.address_line1, selected.address_line2, selected.city, selected.county, selected.postcode, selected.country_name].filter(Boolean).join("，")}</dd></div>
+                <div><dt>收货人邮箱</dt><dd>{selected.email}</dd></div>
+                <div><dt>收货人姓名</dt><dd>{selected.customer_name}</dd></div>
+                <div><dt>收货人地址</dt><dd>{[selected.address_line1, selected.address_line2, selected.city, selected.county, selected.postcode, selected.country_name].filter(Boolean).join("，")}</dd></div>
+                <div><dt>收货人电话</dt><dd>{selected.phone}</dd></div>
               </dl>
             </section>
 
             <section className="admin-order-detail-section">
               <h3>配送与付款</h3>
-              <dl className="admin-order-info-list">
+              <dl className="admin-order-payment-list">
                 <div><dt>配送方式</dt><dd>{selected.shipping_method_label}</dd></div>
-                <div><dt>预计时效</dt><dd>{selected.shipping_estimate}</dd></div>
                 <div><dt>付款方式</dt><dd>{selected.payment_method || "待确认"}</dd></div>
                 <div><dt>币种</dt><dd>{selected.currency}</dd></div>
               </dl>
@@ -214,16 +214,14 @@ export function AdminOrderPanel() {
 
             <section className="admin-order-detail-section admin-order-products">
               <h3>商品明细</h3>
-              <div className="admin-order-items-head" aria-hidden="true"><span>商品</span><span>尺码</span><span>数量</span><span>单价</span><span>小计</span></div>
             <div className="admin-order-items">
               {(selected.items || []).map((item) => (
                 <article key={item.id}>
                   <a className="admin-order-item-image" href={`/product/${item.slug}`} target="_blank" rel="noreferrer">{item.image_url ? <img src={item.image_url} alt={item.title} /> : <span>暂无图片</span>}</a>
-                  <div className="admin-order-item-copy"><h4>{item.title}</h4><p>商品编号：{item.product_code}</p>{item.color ? <p>颜色：{item.color}</p> : null}<a href={`/product/${item.slug}`} target="_blank" rel="noreferrer">打开商品 →</a></div>
-                  <div className="admin-order-item-value"><small>尺码</small><span>{item.size}</span></div>
-                  <div className="admin-order-item-value"><small>数量</small><span>{item.quantity}</span></div>
-                  <div className="admin-order-item-value"><small>单价</small><span>{formatMoney(item.unit_price, selected.currency)}</span></div>
-                  <div className="admin-order-item-value admin-order-item-total"><small>小计</small><strong>{formatMoney(item.line_total, selected.currency)}</strong></div>
+                  <div className="admin-order-item-copy">
+                    <div className="admin-order-item-main"><h4>{item.title}</h4><strong>{formatMoney(item.line_total, selected.currency)}</strong></div>
+                    <div className="admin-order-item-options"><span>尺码：{item.size}</span><span>数量：{item.quantity}</span>{item.color ? <span>颜色：{item.color}</span> : null}</div>
+                  </div>
                 </article>
               ))}
             </div>
