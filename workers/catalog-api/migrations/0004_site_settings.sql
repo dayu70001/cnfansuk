@@ -1,0 +1,6 @@
+CREATE TABLE IF NOT EXISTS site_settings (
+  settings_key TEXT PRIMARY KEY,
+  settings_json TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);

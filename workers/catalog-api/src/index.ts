@@ -99,6 +99,12 @@ const ALLOWED_ORIGINS = new Set([
   "http://localhost:4000",
 ]);
 const ALLOWED_CATEGORIES = new Set(["outerwear", "tops", "bottoms", "co-ords-sets"]);
+const ALLOWED_SUBCATEGORIES: Record<string, Set<string>> = {
+  outerwear: new Set(["jackets", "hooded-jackets", "varsity-jackets", "puffer-jackets", "vests", "coats"]),
+  tops: new Set(["t-shirts", "hoodies", "sweatshirts", "zip-hoodies", "shirts", "knitwear"]),
+  bottoms: new Set(["trousers", "joggers", "cargo-pants", "jeans", "shorts", "skirts"]),
+  "co-ords-sets": new Set(["tracksuits", "hoodie-sets", "t-shirt-shorts-sets", "knit-sets", "casual-sets", "jacket-pants-sets"]),
+};
 const ORDER_STATUSES = new Set<OrderStatus>(["pending", "confirmed", "paid", "processing", "shipped", "completed", "cancelled"]);
 const CURRENCIES = new Set<CurrencyCode>(["GBP", "EUR", "USD"]);
 const SHIPPING_METHODS = {
@@ -250,6 +256,30 @@ async function handleFilters(request: Request, env: WorkerEnv) {
   });
 }
 
+async function handleSiteSettings(request: Request, env: WorkerEnv) {
+  const row = await env.DB.prepare(
+    "SELECT settings_json FROM site_settings WHERE settings_key = ? LIMIT 1",
+  ).bind("storefront").first<{ settings_json: string }>();
+  if (!row) return jsonResponse(request, { settings: null });
+  try {
+    return jsonResponse(request, { settings: JSON.parse(row.settings_json) });
+  } catch {
+    return jsonResponse(request, { settings: null });
+  }
+}
+
+async function handleAdminSiteSettings(request: Request, env: WorkerEnv) {
+  const body = await readBoundedJson(request);
+  if (!isRecord(body)) return jsonResponse(request, { error: "首页设置数据无效" }, 400);
+  const settingsJson = JSON.stringify(body);
+  if (settingsJson.length > 60_000) return jsonResponse(request, { error: "首页设置内容过大" }, 413);
+  await env.DB.prepare(
+    `INSERT INTO site_settings (settings_key, settings_json) VALUES (?, ?)
+     ON CONFLICT(settings_key) DO UPDATE SET settings_json = excluded.settings_json, updated_at = CURRENT_TIMESTAMP`,
+  ).bind("storefront", settingsJson).run();
+  return handleSiteSettings(request, env);
+}
+
 async function verifyAdmin(request: Request, env: WorkerEnv): Promise<boolean> {
   const provided = request.headers.get("Authorization")?.replace(/^Bearer\s+/i, "") || "";
   const expected = env.ADMIN_TOKEN || "";
@@ -386,9 +416,9 @@ async function handleAdminProducts(request: Request, env: WorkerEnv) {
   const url = new URL(request.url);
   const q = cleanText(url.searchParams.get("q"), 100);
   const values: D1Value[] = [];
-  let where = "";
+  let where = "WHERE 1 = 0";
   if (q) {
-    where = "WHERE product_code LIKE ? OR title LIKE ? OR brand LIKE ?";
+    where = "WHERE product_code LIKE ? COLLATE NOCASE OR title LIKE ? COLLATE NOCASE OR brand LIKE ? COLLATE NOCASE";
     const term = `%${q}%`;
     values.push(term, term, term);
   }
@@ -397,9 +427,9 @@ async function handleAdminProducts(request: Request, env: WorkerEnv) {
     `SELECT * FROM products ${where} ORDER BY updated_at DESC, id DESC LIMIT ?`,
   ).bind(...values, limit).all<ProductRow>();
   const images = await imagesForProducts(env.DB, results.map((product) => product.product_code));
-  const { results: subcategories = [] } = await env.DB.prepare(
-    "SELECT DISTINCT category, subcategory FROM products WHERE subcategory IS NOT NULL AND subcategory != '' ORDER BY category, subcategory",
-  ).all<{ category: string; subcategory: string }>();
+  const subcategories = Object.entries(ALLOWED_SUBCATEGORIES).flatMap(([category, values]) =>
+    Array.from(values, (subcategory) => ({ category, subcategory })),
+  );
   return jsonResponse(request, {
     products: results.map((product) => ({ ...mapProduct(product), images: images.get(product.product_code) ?? [] })),
     categories: Array.from(ALLOWED_CATEGORIES),
@@ -413,16 +443,15 @@ async function handleAdminProductUpdate(request: Request, env: WorkerEnv, produc
   const category = cleanText(body.category, 60);
   const subcategory = cleanText(body.subcategory, 100);
   const brand = cleanText(body.brand, 120);
+  const title = cleanText(body.title, 240);
+  if (!title) return jsonResponse(request, { error: "商品标题不能为空" }, 400);
   if (!ALLOWED_CATEGORIES.has(category)) return jsonResponse(request, { error: "产品分类无效" }, 400);
-  if (subcategory) {
-    const existing = await env.DB.prepare(
-      "SELECT 1 AS ok FROM products WHERE category = ? AND subcategory = ? LIMIT 1",
-    ).bind(category, subcategory).first<{ ok: number }>();
-    if (!existing) return jsonResponse(request, { error: "子类目必须来自当前分类的现有数据" }, 400);
+  if (subcategory && !ALLOWED_SUBCATEGORIES[category]?.has(subcategory)) {
+    return jsonResponse(request, { error: "子类目与当前产品分类不匹配" }, 400);
   }
   const result = await env.DB.prepare(
-    "UPDATE products SET category = ?, subcategory = ?, brand = ?, updated_at = CURRENT_TIMESTAMP WHERE product_code = ?",
-  ).bind(category, subcategory || null, brand, productCode).run();
+    "UPDATE products SET title = ?, category = ?, subcategory = ?, brand = ?, updated_at = CURRENT_TIMESTAMP WHERE product_code = ?",
+  ).bind(title, category, subcategory || null, brand, productCode).run();
   if (!result.meta.changes) return jsonResponse(request, { error: "未找到商品" }, 404);
   const updated = await env.DB.prepare("SELECT * FROM products WHERE product_code = ? LIMIT 1").bind(productCode).first<ProductRow>();
   const images = await imagesForProducts(env.DB, [productCode]);
@@ -482,6 +511,7 @@ export default {
       if (pathname === "/catalog" && request.method === "GET") return handleCatalog(request, env);
       if (pathname === "/latest" && request.method === "GET") return handleCatalog(request, env);
       if (pathname === "/filters" && request.method === "GET") return handleFilters(request, env);
+      if (pathname === "/site-settings" && request.method === "GET") return handleSiteSettings(request, env);
       if (pathname === "/orders" && request.method === "POST") return handleCreateOrder(request, env);
       const productMatch = pathname.match(/^\/product\/([^/]+)$/);
       if (productMatch && request.method === "GET") return productByField(request, env, "slug", decodeURIComponent(productMatch[1]));
@@ -492,6 +522,7 @@ export default {
         return jsonResponse(request, { error: "未授权" }, 401);
       }
       if (pathname === "/admin/products" && request.method === "GET") return handleAdminProducts(request, env);
+      if (pathname === "/admin/site-settings" && request.method === "PUT") return handleAdminSiteSettings(request, env);
       const adminProductMatch = pathname.match(/^\/admin\/products\/([^/]+)$/);
       if (adminProductMatch && request.method === "PATCH") return handleAdminProductUpdate(request, env, decodeURIComponent(adminProductMatch[1]));
       if (pathname === "/admin/orders" && request.method === "GET") return handleAdminOrders(request, env);

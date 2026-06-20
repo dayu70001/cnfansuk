@@ -10,7 +10,7 @@ export default async function AdminPage() {
       <div className="page-heading">
         <p className="eyebrow">管理后台</p>
         <h1>CNFans UK 管理后台</h1>
-        <p>管理产品分类、品牌和客户订单。</p>
+        <p>管理产品、首页内容和客户订单。</p>
         <AdminLogoutButton />
       </div>
       <div className="admin-cards">
@@ -20,7 +20,11 @@ export default async function AdminPage() {
         </Link>
         <Link href="/admin/products">
           <h2>产品管理</h2>
-          <p>搜索商品并修改分类、子类目与品牌。</p>
+          <p>搜索商品并修改标题、分类、子类目与品牌。</p>
+        </Link>
+        <Link href="/admin/homepage">
+          <h2>首页设置</h2>
+          <p>修改首页图片、文案和社交链接，保存后同步到线上。</p>
         </Link>
       </div>
     </section>

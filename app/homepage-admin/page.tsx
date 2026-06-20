@@ -1,9 +1,5 @@
-import { requireAdmin } from "@/lib/adminAuth";
-import { defaultSiteSettings, readSiteSettings } from "@/lib/siteSettings";
-import { HomepageAdminClient } from "./HomepageAdminClient";
+import { redirect } from "next/navigation";
 
-export default async function HomepageAdminPage() {
-  await requireAdmin();
-
-  return <HomepageAdminClient defaults={defaultSiteSettings} initialSettings={readSiteSettings()} />;
+export default function HomepageAdminPage() {
+  redirect("/admin/homepage");
 }

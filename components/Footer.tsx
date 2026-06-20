@@ -1,8 +1,8 @@
 import Link from "next/link";
-import { readSiteSettings } from "@/lib/siteSettings";
+import { fetchSiteSettings } from "@/lib/siteSettings";
 
-export function Footer() {
-  const { links } = readSiteSettings();
+export async function Footer() {
+  const { links } = await fetchSiteSettings();
   const shopLinks = [
     { href: "/category/new-in", label: "New In" },
     { href: "/category/outerwear", label: "Outerwear" },

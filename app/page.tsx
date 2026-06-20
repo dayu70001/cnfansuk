@@ -3,12 +3,12 @@ import type { CSSProperties } from "react";
 import { ProductCard } from "@/components/ProductCard";
 import { products } from "@/data/products";
 import { fetchCatalogProducts } from "@/lib/catalogApi";
-import { readSiteSettings } from "@/lib/siteSettings";
+import { fetchSiteSettings } from "@/lib/siteSettings";
 
 export const dynamic = "force-dynamic";
 
 export default async function Home() {
-  const settings = readSiteSettings();
+  const settings = await fetchSiteSettings();
   const { homepage, links } = settings;
   const { categoryImages, homeChannelImages, homeEditImage, homeHeroImage } = homepage;
   const catalogProducts = await fetchCatalogProducts({ limit: 24 });
