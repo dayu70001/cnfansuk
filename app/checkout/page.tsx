@@ -12,6 +12,7 @@ import {
   getShippingMethod,
   getShippingPrice,
   hasFreeShipping,
+  isFreeShippingApplied,
   shippingMethods,
   type ShippingMethodId,
 } from "@/lib/shipping";
@@ -520,7 +521,7 @@ function MethodStep({
   onBack: () => void;
   onContinue: () => void;
 }) {
-  const freeShipping = hasFreeShipping(subtotalGbp);
+  const freeShipping = isFreeShippingApplied(selectedMethodId, subtotalGbp);
 
   return (
     <div className="checkout-step-panel">
@@ -743,7 +744,7 @@ function OrderSummary({
           <span>Shipping</span>
           <strong>{formatMoney(shippingPrice, currency)}</strong>
         </div>
-        {hasFreeShipping(subtotalGbp) ? <p className="free-shipping-applied">Free shipping applied</p> : null}
+        {shippingPrice === 0 && hasFreeShipping(subtotalGbp) ? <p className="free-shipping-applied">Free shipping applied</p> : null}
         <div>
           <span>Total</span>
           <strong>{formatMoney(total, currency)}</strong>

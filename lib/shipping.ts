@@ -21,11 +21,15 @@ export function hasFreeShipping(subtotalGbp: number) {
   return subtotalGbp >= FREE_SHIPPING_THRESHOLD_GBP;
 }
 
+export function isFreeShippingApplied(methodId: ShippingMethodId, subtotalGbp: number) {
+  return hasFreeShipping(subtotalGbp) && methodId !== "fedex-priority";
+}
+
 export function getShippingPrice(
   methodId: ShippingMethodId,
   subtotalGbp: number,
   currency: CurrencyCode,
 ) {
-  if (hasFreeShipping(subtotalGbp)) return 0;
+  if (isFreeShippingApplied(methodId, subtotalGbp)) return 0;
   return convertGbpFallback(getShippingMethod(methodId).priceGbp, currency);
 }

@@ -376,11 +376,12 @@ async function handleCreateOrder(request: Request, env: WorkerEnv): Promise<Resp
     subtotalGbp += Number(product.price_gbp) * item.quantity;
     return { item, product, unitPrice, lineTotal, imageUrl: images.get(item.productCode)?.[0]?.imageUrl || null };
   });
-  const shippingFee = subtotalGbp >= 120 ? 0 : convertGbp(shippingMethod.priceGbp, currency);
+  const shippingFee = subtotalGbp >= 120 && shippingMethodId !== "fedex-priority"
+    ? 0
+    : convertGbp(shippingMethod.priceGbp, currency);
   const total = subtotal + shippingFee;
   const orderId = crypto.randomUUID();
-  const date = new Date().toISOString().slice(0, 10).replaceAll("-", "");
-  const orderNumber = `CNF-UK-${date}-${crypto.randomUUID().replaceAll("-", "").slice(0, 8).toUpperCase()}`;
+  const orderNumber = `CNF-UK-${crypto.randomUUID().replaceAll("-", "").slice(0, 8).toUpperCase()}`;
   const statements = [
     env.DB.prepare(
       `INSERT INTO orders (
