@@ -26,9 +26,6 @@ type AdminOrder = {
   customer_name: string;
   email: string;
   phone: string;
-  preferred_contact: string | null;
-  whatsapp: string | null;
-  telegram: string | null;
   country_code: string;
   country_name: string;
   address_line1: string;
@@ -58,6 +55,12 @@ const statusLabels: Record<AdminOrderStatus, string> = {
 };
 const statuses = Object.keys(statusLabels) as AdminOrderStatus[];
 
+function formatOrderDate(value: string) {
+  return new Date(value).toLocaleString("zh-CN", {
+    year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit",
+  });
+}
+
 async function requestOrders(search: string, status: string) {
   const params = new URLSearchParams({ q: search.trim(), status, limit: "200" });
   const response = await fetch(`/api/admin/orders?${params}`, { cache: "no-store" });
@@ -77,6 +80,7 @@ export function AdminOrderPanel() {
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState("");
   const [loading, setLoading] = useState(true);
+  const [detailLoading, setDetailLoading] = useState(false);
   const [message, setMessage] = useState("");
 
   async function loadOrders(search = query, nextStatus = status) {
@@ -95,13 +99,16 @@ export function AdminOrderPanel() {
   }
 
   async function loadOrderDetail(orderNumber: string) {
+    setDetailLoading(true);
     setMessage("");
     const { response, result } = await requestOrderDetail(orderNumber);
     if (!response.ok || !result.order) {
       setMessage(result.error || "读取订单详情失败。");
+      setDetailLoading(false);
       return;
     }
     setSelected(result.order);
+    setDetailLoading(false);
   }
 
   useEffect(() => {
@@ -160,39 +167,75 @@ export function AdminOrderPanel() {
         {loading ? <p>正在读取订单…</p> : null}
         {!loading && orders.length === 0 ? <p>暂时没有订单。</p> : null}
         {orders.map((order) => (
-          <button className={order.order_number === selected?.order_number ? "order-row active" : "order-row"} type="button" key={order.order_number} onClick={() => void loadOrderDetail(order.order_number)}>
-            <strong>{order.order_number}</strong>
-            <span>{order.customer_name}</span>
-            <span>{formatMoney(order.total, order.currency)}</span>
-            <small>{statusLabels[order.status]}</small>
+          <button
+            className={order.order_number === selected?.order_number ? "order-row active" : "order-row"}
+            type="button"
+            key={order.order_number}
+            aria-pressed={order.order_number === selected?.order_number}
+            onClick={() => void loadOrderDetail(order.order_number)}
+          >
+            <span className="order-row-top"><strong>{order.order_number}</strong><small className={`order-status order-status-${order.status}`}>{statusLabels[order.status]}</small></span>
+            <span className="order-row-customer">{order.customer_name}</span>
+            <span className="order-row-bottom"><small>{formatOrderDate(order.created_at)}</small><strong>{formatMoney(order.total, order.currency)}</strong></span>
           </button>
         ))}
       </div>
       <div className="admin-detail">
         {message ? <p className="admin-status">{message}</p> : null}
-        {selected ? (
+        {detailLoading ? <p className="admin-detail-loading">正在读取订单详情…</p> : null}
+        {selected && !detailLoading ? (
           <>
-            <div className="split-heading"><div><p className="eyebrow">订单详情</p><h2>{selected.order_number}</h2><p>{new Date(selected.created_at).toLocaleString("zh-CN")}</p></div></div>
-            <label className="admin-field"><span>订单状态</span><select value={selected.status} onChange={(event) => void updateStatus(event.target.value as AdminOrderStatus)}>
-              {statuses.map((item) => <option value={item} key={item}>{statusLabels[item]}</option>)}
-            </select></label>
-            <div className="detail-grid">
-              <div><h3>客户信息</h3><p>{selected.customer_name}</p><p>{selected.email}</p><p>{selected.phone}</p><p>首选联系：{selected.preferred_contact || "未填写"}</p><p>WhatsApp：{selected.whatsapp || "未填写"}</p><p>Telegram：{selected.telegram || "未填写"}</p></div>
-              <div><h3>收货地址</h3><p>{[selected.address_line1, selected.address_line2, selected.city, selected.county, selected.postcode, selected.country_name].filter(Boolean).join("，")}</p><p>国家代码：{selected.country_code}</p></div>
-              <div><h3>配送与付款</h3><p>{selected.shipping_method_label}</p><p>{selected.shipping_estimate}</p><p>付款方式：{selected.payment_method}</p><p>币种：{selected.currency}</p></div>
-            </div>
+            <header className="admin-order-detail-head">
+              <div><p className="eyebrow">订单详情</p><h2>{selected.order_number}</h2><p>下单时间：{formatOrderDate(selected.created_at)}</p></div>
+              <label className="admin-order-status-field"><span>订单状态</span><select value={selected.status} onChange={(event) => void updateStatus(event.target.value as AdminOrderStatus)}>
+                {statuses.map((item) => <option value={item} key={item}>{statusLabels[item]}</option>)}
+              </select></label>
+            </header>
+
+            <section className="admin-order-detail-section">
+              <h3>客户与收货资料</h3>
+              <dl className="admin-order-info-list">
+                <div><dt>邮箱</dt><dd>{selected.email}</dd></div>
+                <div><dt>收货人</dt><dd>{selected.customer_name}</dd></div>
+                <div><dt>电话</dt><dd>{selected.phone}</dd></div>
+                <div className="admin-order-address"><dt>地址</dt><dd>{[selected.address_line1, selected.address_line2, selected.city, selected.county, selected.postcode, selected.country_name].filter(Boolean).join("，")}</dd></div>
+              </dl>
+            </section>
+
+            <section className="admin-order-detail-section">
+              <h3>配送与付款</h3>
+              <dl className="admin-order-info-list">
+                <div><dt>配送方式</dt><dd>{selected.shipping_method_label}</dd></div>
+                <div><dt>预计时效</dt><dd>{selected.shipping_estimate}</dd></div>
+                <div><dt>付款方式</dt><dd>{selected.payment_method || "待确认"}</dd></div>
+                <div><dt>币种</dt><dd>{selected.currency}</dd></div>
+              </dl>
+            </section>
+
+            <section className="admin-order-detail-section admin-order-products">
+              <h3>商品明细</h3>
+              <div className="admin-order-items-head" aria-hidden="true"><span>商品</span><span>尺码</span><span>数量</span><span>单价</span><span>小计</span></div>
             <div className="admin-order-items">
               {(selected.items || []).map((item) => (
                 <article key={item.id}>
                   <a className="admin-order-item-image" href={`/product/${item.slug}`} target="_blank" rel="noreferrer">{item.image_url ? <img src={item.image_url} alt={item.title} /> : <span>暂无图片</span>}</a>
-                  <div><h3>{item.title}</h3><p>商品编号：{item.product_code}</p><p>{[item.color, `尺码：${item.size}`, `数量：${item.quantity}`].filter(Boolean).join(" · ")}</p><a href={`/product/${item.slug}`} target="_blank" rel="noreferrer">打开前台商品页 →</a></div>
-                  <div><p>单价：{formatMoney(item.unit_price, selected.currency)}</p><strong>小计：{formatMoney(item.line_total, selected.currency)}</strong></div>
+                  <div className="admin-order-item-copy"><h4>{item.title}</h4><p>商品编号：{item.product_code}</p>{item.color ? <p>颜色：{item.color}</p> : null}<a href={`/product/${item.slug}`} target="_blank" rel="noreferrer">打开商品 →</a></div>
+                  <div className="admin-order-item-value"><small>尺码</small><span>{item.size}</span></div>
+                  <div className="admin-order-item-value"><small>数量</small><span>{item.quantity}</span></div>
+                  <div className="admin-order-item-value"><small>单价</small><span>{formatMoney(item.unit_price, selected.currency)}</span></div>
+                  <div className="admin-order-item-value admin-order-item-total"><small>小计</small><strong>{formatMoney(item.line_total, selected.currency)}</strong></div>
                 </article>
               ))}
             </div>
-            <div className="totals"><div><span>商品小计</span><strong>{formatMoney(selected.subtotal, selected.currency)}</strong></div><div><span>配送费</span><strong>{formatMoney(selected.shipping_fee, selected.currency)}</strong></div><div><span>订单总额</span><strong>{formatMoney(selected.total, selected.currency)}</strong></div></div>
+            </section>
+
+            <section className="admin-order-totals" aria-label="订单金额">
+              <div><span>商品小计</span><strong>{formatMoney(selected.subtotal, selected.currency)}</strong></div>
+              <div><span>配送费用</span><strong>{formatMoney(selected.shipping_fee, selected.currency)}</strong></div>
+              <div className="admin-order-grand-total"><span>订单总额</span><strong>{formatMoney(selected.total, selected.currency)}</strong></div>
+            </section>
           </>
-        ) : <p>请选择订单查看详情。</p>}
+        ) : !detailLoading ? <p>点击左侧订单查看详情。</p> : null}
       </div>
     </section>
   );
