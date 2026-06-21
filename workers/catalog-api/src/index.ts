@@ -124,7 +124,7 @@ const PAYMENT_METHODS = {
 function corsHeaders(request: Request): HeadersInit {
   const origin = request.headers.get("Origin");
   const headers: Record<string, string> = {
-    "Access-Control-Allow-Methods": "GET, POST, PATCH, OPTIONS",
+    "Access-Control-Allow-Methods": "GET, POST, PATCH, DELETE, OPTIONS",
     "Access-Control-Allow-Headers": "Authorization, Content-Type",
     "Access-Control-Max-Age": "86400",
     Vary: "Origin",
@@ -519,6 +519,21 @@ async function handleAdminOrderStatus(request: Request, env: WorkerEnv, orderNum
   return handleAdminOrderDetail(request, env, orderNumber);
 }
 
+async function handleAdminOrderDelete(request: Request, env: WorkerEnv, orderNumber: string) {
+  const existing = await env.DB.prepare(
+    "SELECT id FROM orders WHERE order_number = ? LIMIT 1",
+  ).bind(orderNumber).first<{ id: string }>();
+  if (!existing) return jsonResponse(request, { error: "未找到订单" }, 404);
+
+  const results = await env.DB.batch([
+    env.DB.prepare("DELETE FROM order_items WHERE order_id = ?").bind(existing.id),
+    env.DB.prepare("DELETE FROM orders WHERE id = ?").bind(existing.id),
+  ]);
+  const deleted = results[1]?.meta.changes ?? 0;
+  if (!deleted) return jsonResponse(request, { error: "订单删除失败" }, 500);
+  return jsonResponse(request, { ok: true, orderNumber });
+}
+
 export default {
   async fetch(request: Request, env: WorkerEnv): Promise<Response> {
     if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: corsHeaders(request) });
@@ -548,6 +563,7 @@ export default {
       if (orderStatusMatch && request.method === "PATCH") return handleAdminOrderStatus(request, env, decodeURIComponent(orderStatusMatch[1]));
       const orderMatch = pathname.match(/^\/admin\/orders\/([^/]+)$/);
       if (orderMatch && request.method === "GET") return handleAdminOrderDetail(request, env, decodeURIComponent(orderMatch[1]));
+      if (orderMatch && request.method === "DELETE") return handleAdminOrderDelete(request, env, decodeURIComponent(orderMatch[1]));
       return jsonResponse(request, { error: "Not found" }, 404);
     } catch (error) {
       console.error(JSON.stringify({ message: "request failed", path: pathname, error: error instanceof Error ? error.message : String(error) }));

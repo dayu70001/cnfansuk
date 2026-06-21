@@ -84,6 +84,7 @@ export function AdminOrderPanel() {
   const [status, setStatus] = useState("");
   const [loading, setLoading] = useState(true);
   const [detailLoading, setDetailLoading] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [message, setMessage] = useState("");
 
   async function loadOrders(search = query, nextStatus = status) {
@@ -151,6 +152,29 @@ export function AdminOrderPanel() {
     setMessage("订单状态已保存。 ");
   }
 
+  async function deleteOrder() {
+    if (!selected || deleting) return;
+    const orderNumber = selected.order_number;
+    if (!window.confirm(`确定永久删除订单 ${orderNumber}？删除后无法恢复。`)) return;
+
+    setDeleting(true);
+    setMessage("");
+    const response = await fetch(`/api/admin/orders/${encodeURIComponent(orderNumber)}`, { method: "DELETE" });
+    const result = await response.json().catch(() => ({})) as { ok?: boolean; error?: string };
+    if (!response.ok || !result.ok) {
+      setMessage(result.error || "订单删除失败。");
+      setDeleting(false);
+      return;
+    }
+
+    const remaining = orders.filter((order) => order.order_number !== orderNumber);
+    setOrders(remaining);
+    setSelected(null);
+    if (remaining.length > 0) await loadOrderDetail(remaining[0].order_number);
+    setMessage(`订单 ${orderNumber} 已删除。`);
+    setDeleting(false);
+  }
+
   function submitSearch(event: FormEvent) {
     event.preventDefault();
     void loadOrders();
@@ -191,9 +215,14 @@ export function AdminOrderPanel() {
             <header className="admin-order-detail-head">
               <h2>订单详情：{selected.order_number}</h2>
               <p>下单时间：{formatOrderDate(selected.created_at)}</p>
-              <label className="admin-order-status-field"><span>订单状态</span><select value={selected.status} onChange={(event) => void updateStatus(event.target.value as AdminOrderStatus)}>
-                {statuses.map((item) => <option value={item} key={item}>{statusLabels[item]}</option>)}
-              </select></label>
+              <div className="admin-order-head-actions">
+                <label className="admin-order-status-field"><span>订单状态</span><select value={selected.status} disabled={deleting} onChange={(event) => void updateStatus(event.target.value as AdminOrderStatus)}>
+                  {statuses.map((item) => <option value={item} key={item}>{statusLabels[item]}</option>)}
+                </select></label>
+                <button className="admin-order-delete-button" type="button" disabled={deleting} onClick={() => void deleteOrder()}>
+                  {deleting ? "正在删除…" : "删除订单"}
+                </button>
+              </div>
             </header>
 
             <section className="admin-order-detail-section">

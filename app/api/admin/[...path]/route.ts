@@ -46,3 +46,7 @@ export async function GET(request: Request, context: RouteContext) {
 export async function PATCH(request: Request, context: RouteContext) {
   return proxyAdminRequest(request, context);
 }
+
+export async function DELETE(request: Request, context: RouteContext) {
+  return proxyAdminRequest(request, context);
+}

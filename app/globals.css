@@ -3111,10 +3111,31 @@ select {
 
 .admin-order-status-field {
   display: flex;
-  grid-column: 1 / -1;
   width: fit-content;
   align-items: center;
   gap: 10px;
+}
+
+.admin-order-head-actions {
+  display: flex;
+  grid-column: 1 / -1;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.admin-order-delete-button {
+  border: 1px solid #c75a50;
+  background: transparent;
+  color: #a33a32;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 700;
+  padding: 9px 14px;
+}
+
+.admin-order-delete-button:hover:not(:disabled) {
+  background: #fff1ef;
 }
 
 .admin-order-status-field span {
@@ -3295,6 +3316,11 @@ select {
 
   .admin-order-status-field {
     width: 100%;
+  }
+
+  .admin-order-head-actions {
+    align-items: stretch;
+    flex-direction: column;
   }
 
   .admin-order-info-list {
