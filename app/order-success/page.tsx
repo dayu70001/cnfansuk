@@ -17,7 +17,8 @@ export default async function OrderSuccessPage({
       </div>
       <p className="eyebrow">Order received</p>
       <h1>
-        Thank you — we&apos;ve received your order.
+        <span>Thank you!</span>
+        <span>We&apos;ve received your order.</span>
       </h1>
       <p className="success-copy">We&apos;ll confirm your sizing and order details, then let you know how to complete payment.</p>
 

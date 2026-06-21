@@ -10,7 +10,7 @@
     "personalTelegramUsername": "@kunkunyu0"
   },
   "homepage": {
-    "heroMainImageUrl": "https://taplink.st/p/2/2/4/0/70226615.jpg?6",
+    "heroMainImageUrl": "https://taplink.st/p/d/a/8/5/70249982.jpg?0",
     "heroMainImageFit": "cover",
     "heroMainImagePosition": "center center",
     "categories": [
@@ -54,7 +54,7 @@
     "apparelEdit": {
       "title": "Clean layers,\neveryday pieces.",
       "subtitle": "Clean layers, relaxed fits and everyday pieces — colours that sit easily together and shapes built to be worn on repeat.",
-      "imageUrl": "https://taplink.st/p/2/2/4/0/70226615.jpg?5",
+      "imageUrl": "https://taplink.st/p/c/3/2/7/70249984.jpg?0",
       "imageFit": "cover",
       "imagePosition": "center center",
       "buttonText": "Shop the edit",
@@ -76,32 +76,108 @@
         "imagePosition": "center center"
       },
       {
-        "imageUrl": "https://taplink.st/p/e/1/b/9/70226771.jpg?1",
+        "imageUrl": "https://taplink.st/p/3/d/f/4/70249985.jpg?0",
         "href": "/category/new-in",
         "label": "Latest fit 3",
         "imageFit": "cover",
         "imagePosition": "center center"
       },
       {
-        "imageUrl": "https://taplink.st/p/a/1/8/8/70226769.jpg?1",
+        "imageUrl": "https://taplink.st/p/1/7/7/e/70249986.jpg?0",
         "href": "/category/new-in",
         "label": "Latest fit 4",
         "imageFit": "cover",
         "imagePosition": "center center"
       },
       {
-        "imageUrl": "https://taplink.st/p/e/2/4/9/70226617.jpg?2",
+        "imageUrl": "https://taplink.st/p/7/d/e/5/70249987.jpg?0",
         "href": "/category/new-in",
         "label": "Latest fit 5",
         "imageFit": "cover",
         "imagePosition": "center center"
       },
       {
-        "imageUrl": "https://taplink.st/p/2/2/4/0/70226615.jpg?4",
+        "imageUrl": "https://taplink.st/p/f/3/d/7/70249988.jpg?0",
         "href": "/category/new-in",
         "label": "Latest fit 6",
         "imageFit": "cover",
         "imagePosition": "center center"
+      }
+    ],
+    "homeHeroImage": {
+      "imageUrl": "https://taplink.st/p/d/a/8/5/70249982.jpg?0",
+      "imageFit": "cover",
+      "imagePosition": "center center",
+      "label": "CNFans UK apparel edit"
+    },
+    "homeEditImage": {
+      "imageUrl": "https://taplink.st/p/c/3/2/7/70249984.jpg?0",
+      "imageFit": "cover",
+      "imagePosition": "center center",
+      "label": "Lookbook styling"
+    },
+    "homeChannelImages": [
+      {
+        "imageUrl": "https://taplink.st/p/f/9/3/e/70226926.jpg?0",
+        "imageFit": "cover",
+        "imagePosition": "center center",
+        "label": "Latest fit 1"
+      },
+      {
+        "imageUrl": "https://taplink.st/p/c/b/c/d/70226923.jpg?0",
+        "imageFit": "cover",
+        "imagePosition": "center center",
+        "label": "Latest fit 2"
+      },
+      {
+        "imageUrl": "https://taplink.st/p/3/d/f/4/70249985.jpg?0",
+        "imageFit": "cover",
+        "imagePosition": "center center",
+        "label": "Latest fit 3"
+      },
+      {
+        "imageUrl": "https://taplink.st/p/1/7/7/e/70249986.jpg?0",
+        "imageFit": "cover",
+        "imagePosition": "center center",
+        "label": "Latest fit 4"
+      },
+      {
+        "imageUrl": "https://taplink.st/p/7/d/e/5/70249987.jpg?0",
+        "imageFit": "cover",
+        "imagePosition": "center center",
+        "label": "Latest fit 5"
+      },
+      {
+        "imageUrl": "https://taplink.st/p/f/3/d/7/70249988.jpg?0",
+        "imageFit": "cover",
+        "imagePosition": "center center",
+        "label": "Latest fit 6"
+      }
+    ],
+    "categoryImages": [
+      {
+        "imageUrl": "https://taplink.st/p/e/2/4/9/70226617.jpg?3",
+        "imageFit": "cover",
+        "imagePosition": "70% center",
+        "label": "Outerwear"
+      },
+      {
+        "imageUrl": "https://taplink.st/p/2/2/4/0/70226615.jpg?9",
+        "imageFit": "cover",
+        "imagePosition": "center center",
+        "label": "Tops"
+      },
+      {
+        "imageUrl": "https://taplink.st/p/a/1/8/8/70226769.jpg?2",
+        "imageFit": "cover",
+        "imagePosition": "60% center",
+        "label": "Bottoms"
+      },
+      {
+        "imageUrl": "https://taplink.st/p/e/1/b/9/70226771.jpg?2",
+        "imageFit": "cover",
+        "imagePosition": "center bottom",
+        "label": "Co-ords & Sets"
       }
     ]
   }

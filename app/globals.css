@@ -2761,6 +2761,10 @@ select {
   line-height: 1.12;
 }
 
+.success-wrap h1 span {
+  display: block;
+}
+
 .success-copy {
   margin: 0 auto 22px;
   color: var(--ink-soft);
