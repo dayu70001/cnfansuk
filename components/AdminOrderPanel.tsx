@@ -40,6 +40,9 @@ type AdminOrder = {
   total: number;
   currency: CurrencyCode;
   payment_method: string;
+  payment_fee: number;
+  payment_fee_rate: number;
+  final_total: number;
   status: AdminOrderStatus;
   items?: AdminOrderItem[];
 };
@@ -208,6 +211,7 @@ export function AdminOrderPanel() {
               <dl className="admin-order-payment-list">
                 <div><dt>配送方式</dt><dd>{selected.shipping_method_label}</dd></div>
                 <div><dt>付款方式</dt><dd>{selected.payment_method || "待确认"}</dd></div>
+                {selected.payment_fee > 0 ? <div><dt>PayPal fee</dt><dd>{formatMoney(selected.payment_fee, selected.currency)}</dd></div> : null}
                 <div><dt>币种</dt><dd>{selected.currency}</dd></div>
               </dl>
             </section>
@@ -230,6 +234,7 @@ export function AdminOrderPanel() {
             <section className="admin-order-totals" aria-label="订单金额">
               <div><span>商品小计</span><strong>{formatMoney(selected.subtotal, selected.currency)}</strong></div>
               <div><span>配送费用</span><strong>{formatMoney(selected.shipping_fee, selected.currency)}</strong></div>
+              {selected.payment_fee > 0 ? <div><span>PayPal fee</span><strong>{formatMoney(selected.payment_fee, selected.currency)}</strong></div> : null}
               <div className="admin-order-grand-total"><span>订单总额</span><strong>{formatMoney(selected.total, selected.currency)}</strong></div>
             </section>
           </>

@@ -67,6 +67,9 @@ type OrderRow = {
   total: number;
   currency: "GBP" | "EUR" | "USD";
   payment_method: string;
+  payment_fee: number;
+  payment_fee_rate: number;
+  final_total: number;
   status: OrderStatus;
 };
 
@@ -111,6 +114,11 @@ const SHIPPING_METHODS = {
   "royal-mail-tracked": { label: "Royal Mail Tracked", estimate: "7–12 business days", priceGbp: 5 },
   "dhl-express": { label: "DHL Express", estimate: "7–12 business days", priceGbp: 5 },
   "fedex-priority": { label: "FedEx Priority", estimate: "5–9 business days", priceGbp: 15 },
+} as const;
+const PAYMENT_METHODS = {
+  paypal: { label: "PayPal", feeRate: 0.05 },
+  "bank-transfer": { label: "Bank Transfer", feeRate: 0 },
+  "crypto-payment": { label: "Crypto Payment", feeRate: 0 },
 } as const;
 
 function corsHeaders(request: Request): HeadersInit {
@@ -329,6 +337,9 @@ async function handleCreateOrder(request: Request, env: WorkerEnv): Promise<Resp
   const shippingMethodId = cleanText(body.shippingMethodId, 40) as keyof typeof SHIPPING_METHODS;
   const shippingMethod = SHIPPING_METHODS[shippingMethodId];
   if (!shippingMethod) return jsonResponse(request, { error: "配送方式无效" }, 400);
+  const paymentMethodId = cleanText(body.paymentMethod, 40) as keyof typeof PAYMENT_METHODS;
+  const paymentMethod = PAYMENT_METHODS[paymentMethodId];
+  if (!paymentMethod) return jsonResponse(request, { error: "请选择有效的付款方式" }, 400);
   if (body.items.length < 1 || body.items.length > 50) return jsonResponse(request, { error: "商品数量无效" }, 400);
 
   const customer = body.customer;
@@ -379,7 +390,8 @@ async function handleCreateOrder(request: Request, env: WorkerEnv): Promise<Resp
   const shippingFee = subtotalGbp >= 120 && shippingMethodId !== "fedex-priority"
     ? 0
     : convertGbp(shippingMethod.priceGbp, currency);
-  const total = subtotal + shippingFee;
+  const paymentFee = Math.round((subtotal + shippingFee) * paymentMethod.feeRate * 100) / 100;
+  const finalTotal = Math.round((subtotal + shippingFee + paymentFee) * 100) / 100;
   const orderId = crypto.randomUUID();
   const orderNumber = `CNF-UK-${crypto.randomUUID().replaceAll("-", "").slice(0, 8).toUpperCase()}`;
   const statements = [
@@ -388,15 +400,15 @@ async function handleCreateOrder(request: Request, env: WorkerEnv): Promise<Resp
         id, order_number, customer_name, email, phone, preferred_contact, whatsapp, telegram,
         country_code, country_name, address_line1, address_line2, city, county, postcode,
         shipping_method_id, shipping_method_label, shipping_estimate, shipping_fee,
-        subtotal, total, currency, payment_method, status
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        subtotal, total, currency, payment_method, payment_fee, payment_fee_rate, final_total, status
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     ).bind(
       orderId, orderNumber, customerName, email, phone, cleanText(customer.preferredContact, 30),
       cleanText(customer.whatsapp, 100) || null, cleanText(customer.telegram, 100) || null,
       countryCode, countryName, addressLine1, cleanText(customer.addressLine2, 200) || null,
       city, cleanText(customer.county, 100) || null, postcode,
       shippingMethodId, shippingMethod.label, shippingMethod.estimate, shippingFee,
-      subtotal, total, currency, "待确认", "pending",
+      subtotal, finalTotal, currency, paymentMethod.label, paymentFee, paymentMethod.feeRate, finalTotal, "pending",
     ),
     ...orderItems.map(({ item, product, unitPrice, lineTotal, imageUrl }) => env.DB.prepare(
       `INSERT INTO order_items (
@@ -410,7 +422,12 @@ async function handleCreateOrder(request: Request, env: WorkerEnv): Promise<Resp
     )),
   ];
   await env.DB.batch(statements);
-  return jsonResponse(request, { order: { orderNumber, subtotal, shippingFee, total, currency, status: "pending" } }, 201);
+  return jsonResponse(request, {
+    order: {
+      orderNumber, subtotal, shippingFee, paymentMethod: paymentMethod.label,
+      paymentFee, paymentFeeRate: paymentMethod.feeRate, finalTotal, total: finalTotal, currency, status: "pending",
+    },
+  }, 201);
 }
 
 async function handleAdminProducts(request: Request, env: WorkerEnv) {

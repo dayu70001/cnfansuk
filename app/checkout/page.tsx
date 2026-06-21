@@ -7,6 +7,7 @@ import { useCart } from "@/components/CartProvider";
 import { getCartItemPrice, getCartSubtotal } from "@/lib/cart";
 import type { CurrencyCode } from "@/lib/currency";
 import { formatMoney } from "@/lib/formatMoney";
+import { getPaymentFee, getPaymentMethod, paymentMethods, type PaymentMethodId } from "@/lib/payment";
 import {
   DEFAULT_SHIPPING_METHOD_ID,
   getShippingMethod,
@@ -19,7 +20,7 @@ import {
 import { useCurrency } from "@/lib/useCurrency";
 import type { CartItem, CustomerDetails } from "@/lib/types";
 
-type CheckoutStep = "contact" | "shipping" | "method" | "review";
+type CheckoutStep = "contact" | "shipping" | "method" | "payment" | "review";
 
 type ContactForm = {
   email: string;
@@ -82,7 +83,8 @@ const countries = [
 const steps: { id: CheckoutStep; label: string }[] = [
   { id: "contact", label: "Contact" },
   { id: "shipping", label: "Shipping" },
-  { id: "method", label: "Method" },
+  { id: "method", label: "Delivery" },
+  { id: "payment", label: "Payment" },
   { id: "review", label: "Review" },
 ];
 
@@ -96,6 +98,7 @@ export default function CheckoutPage() {
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState("");
   const [shippingMethodId, setShippingMethodId] = useState<ShippingMethodId>(DEFAULT_SHIPPING_METHOD_ID);
+  const [paymentMethodId, setPaymentMethodId] = useState<PaymentMethodId | "">("");
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [contact, setContact] = useState<ContactForm>({ email: "" });
   const [shipping, setShipping] = useState<ShippingForm>({
@@ -114,7 +117,8 @@ export default function CheckoutPage() {
   const subtotal = useMemo(() => getCartSubtotal(items, currency), [currency, items]);
   const subtotalGbp = useMemo(() => getCartSubtotal(items, "GBP"), [items]);
   const shippingPrice = getShippingPrice(shippingMethodId, subtotalGbp, currency);
-  const total = subtotal + shippingPrice;
+  const paymentFee = getPaymentFee(paymentMethodId, subtotal + shippingPrice);
+  const total = subtotal + shippingPrice + paymentFee;
 
   function validateContact() {
     const nextErrors: Record<string, string> = {};
@@ -155,6 +159,10 @@ export default function CheckoutPage() {
     if (step === "shipping" && !validateShipping()) {
       return;
     }
+    if (step === "payment" && !paymentMethodId) {
+      setErrors({ paymentMethod: "Please select a payment method." });
+      return;
+    }
     const nextIndex = steps.findIndex((item) => item.id === nextStep);
     setStep(nextStep);
     setMaxStep((value) => Math.max(value, nextIndex));
@@ -170,7 +178,8 @@ export default function CheckoutPage() {
   }
 
   async function submitOrder() {
-    if (items.length === 0 || !validateContact() || !validateShipping()) {
+    if (items.length === 0 || !validateContact() || !validateShipping() || !paymentMethodId) {
+      if (!paymentMethodId) setErrors({ paymentMethod: "Please select a payment method." });
       return;
     }
 
@@ -215,7 +224,10 @@ export default function CheckoutPage() {
           })),
           shippingMethodId,
           currency,
-          paymentMethod: "待确认",
+          paymentMethod: paymentMethodId,
+          paymentFee,
+          paymentFeeRate: getPaymentMethod(paymentMethodId)?.feeRate || 0,
+          finalTotal: total,
         }),
       });
       const result = await response.json().catch(() => ({})) as { order?: { orderNumber?: string }; error?: string };
@@ -240,7 +252,7 @@ export default function CheckoutPage() {
 
       <StepIndicator currentStep={step} maxStep={maxStep} onSelect={goToCompleted} />
 
-      <MobileSummary items={items} subtotal={subtotal} subtotalGbp={subtotalGbp} shippingPrice={shippingPrice} total={total} currency={currency} open={summaryOpen} onToggle={() => setSummaryOpen(!summaryOpen)} />
+      <MobileSummary items={items} subtotal={subtotal} subtotalGbp={subtotalGbp} shippingPrice={shippingPrice} paymentMethodId={paymentMethodId} paymentFee={paymentFee} total={total} currency={currency} open={summaryOpen} onToggle={() => setSummaryOpen(!summaryOpen)} />
 
       <div className="checkout-layout">
         <div className="checkout-panel">
@@ -265,6 +277,16 @@ export default function CheckoutPage() {
               selectedMethodId={shippingMethodId}
               onSelect={setShippingMethodId}
               onBack={() => setStep("shipping")}
+              onContinue={() => continueTo("payment")}
+            />
+          ) : null}
+
+          {step === "payment" ? (
+            <PaymentStep
+              selectedMethodId={paymentMethodId}
+              error={errors.paymentMethod}
+              onSelect={(methodId) => { setPaymentMethodId(methodId); setErrors({}); }}
+              onBack={() => setStep("method")}
               onContinue={() => continueTo("review")}
             />
           ) : null}
@@ -280,16 +302,18 @@ export default function CheckoutPage() {
               total={total}
               currency={currency}
               shippingMethodId={shippingMethodId}
+              paymentMethodId={paymentMethodId}
+              paymentFee={paymentFee}
               submitting={submitting}
               submitError={submitError}
-              onBack={() => setStep("method")}
+              onBack={() => setStep("payment")}
               onSubmit={submitOrder}
             />
           ) : null}
         </div>
 
         <aside className="checkout-summary checkout-summary-desktop" aria-label="Order summary">
-          <OrderSummary items={items} subtotal={subtotal} subtotalGbp={subtotalGbp} shippingPrice={shippingPrice} total={total} currency={currency} />
+          <OrderSummary items={items} subtotal={subtotal} subtotalGbp={subtotalGbp} shippingPrice={shippingPrice} paymentMethodId={paymentMethodId} paymentFee={paymentFee} total={total} currency={currency} />
         </aside>
       </div>
     </section>
@@ -557,6 +581,52 @@ function MethodStep({
   );
 }
 
+function PaymentStep({
+  selectedMethodId,
+  error,
+  onSelect,
+  onBack,
+  onContinue,
+}: {
+  selectedMethodId: PaymentMethodId | "";
+  error?: string;
+  onSelect: (methodId: PaymentMethodId) => void;
+  onBack: () => void;
+  onContinue: () => void;
+}) {
+  return (
+    <div className="checkout-step-panel">
+      <h2>Payment method</h2>
+      <div className="ship-options">
+        {paymentMethods.map((method) => (
+          <label className={method.id === selectedMethodId ? "ship-option selected" : "ship-option"} key={method.id}>
+            <input
+              type="radio"
+              name="paymentMethod"
+              value={method.id}
+              checked={method.id === selectedMethodId}
+              onChange={() => onSelect(method.id)}
+            />
+            <span className="ship-option-copy">
+              <strong>{method.label}</strong>
+              <small>{method.description}</small>
+            </span>
+          </label>
+        ))}
+      </div>
+      {error ? <p className="checkout-submit-error">{error}</p> : null}
+      <div className="checkout-actions">
+        <button className="checkout-back" type="button" onClick={onBack}>
+          Return to delivery method
+        </button>
+        <button className="btn btn-solid" type="button" onClick={onContinue} disabled={!selectedMethodId}>
+          Continue to review
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function ReviewStep({
   contact,
   shipping,
@@ -567,6 +637,8 @@ function ReviewStep({
   total,
   currency,
   shippingMethodId,
+  paymentMethodId,
+  paymentFee,
   submitting,
   submitError,
   onBack,
@@ -581,12 +653,15 @@ function ReviewStep({
   total: number;
   currency: CurrencyCode;
   shippingMethodId: ShippingMethodId;
+  paymentMethodId: PaymentMethodId | "";
+  paymentFee: number;
   submitting: boolean;
   submitError: string;
   onBack: () => void;
   onSubmit: () => void;
 }) {
   const shippingMethod = getShippingMethod(shippingMethodId);
+  const paymentMethod = getPaymentMethod(paymentMethodId);
 
   return (
     <div className="checkout-step-panel">
@@ -609,8 +684,9 @@ function ReviewStep({
             .join(", ")}
         />
         <ReviewRow label="Method" value={`${shippingMethod.label} · ${shippingMethod.estimate} — ${formatMoney(shippingPrice, currency)}`} />
+        <ReviewRow label="Payment" value={paymentMethod?.label || ""} />
       </div>
-      <OrderSummary items={items} subtotal={subtotal} subtotalGbp={subtotalGbp} shippingPrice={shippingPrice} total={total} currency={currency} compact={false} />
+      <OrderSummary items={items} subtotal={subtotal} subtotalGbp={subtotalGbp} shippingPrice={shippingPrice} paymentMethodId={paymentMethodId} paymentFee={paymentFee} total={total} currency={currency} compact={false} />
       <div className="checkout-actions">
         <button className="checkout-back" type="button" onClick={onBack}>
           Return to method
@@ -620,7 +696,6 @@ function ReviewStep({
         </button>
       </div>
       {submitError ? <p className="checkout-submit-error">{submitError}</p> : null}
-      <p className="checkout-submit-note">We&apos;ll confirm sizing, order details and payment with you via WhatsApp or Telegram.</p>
     </div>
   );
 }
@@ -676,6 +751,8 @@ function MobileSummary({
   subtotal,
   subtotalGbp,
   shippingPrice,
+  paymentMethodId,
+  paymentFee,
   total,
   currency,
   open,
@@ -685,6 +762,8 @@ function MobileSummary({
   subtotal: number;
   subtotalGbp: number;
   shippingPrice: number;
+  paymentMethodId: PaymentMethodId | "";
+  paymentFee: number;
   total: number;
   currency: CurrencyCode;
   open: boolean;
@@ -696,7 +775,7 @@ function MobileSummary({
         <span>Order summary</span>
         <strong>{formatMoney(total, currency)}</strong>
       </button>
-      {open ? <OrderSummary items={items} subtotal={subtotal} subtotalGbp={subtotalGbp} shippingPrice={shippingPrice} total={total} currency={currency} /> : null}
+      {open ? <OrderSummary items={items} subtotal={subtotal} subtotalGbp={subtotalGbp} shippingPrice={shippingPrice} paymentMethodId={paymentMethodId} paymentFee={paymentFee} total={total} currency={currency} /> : null}
     </div>
   );
 }
@@ -706,6 +785,8 @@ function OrderSummary({
   subtotal,
   subtotalGbp,
   shippingPrice,
+  paymentMethodId,
+  paymentFee,
   total,
   currency,
   compact = false,
@@ -714,10 +795,13 @@ function OrderSummary({
   subtotal: number;
   subtotalGbp: number;
   shippingPrice: number;
+  paymentMethodId: PaymentMethodId | "";
+  paymentFee: number;
   total: number;
   currency: CurrencyCode;
   compact?: boolean;
 }) {
+  const paymentMethod = getPaymentMethod(paymentMethodId);
   return (
     <div className={compact ? "summary-panel compact" : "summary-panel"}>
       <h2>Order Summary</h2>
@@ -745,6 +829,18 @@ function OrderSummary({
           <strong>{formatMoney(shippingPrice, currency)}</strong>
         </div>
         {shippingPrice === 0 && hasFreeShipping(subtotalGbp) ? <p className="free-shipping-applied">Free shipping applied</p> : null}
+        {paymentMethod ? (
+          <div>
+            <span>Payment Method</span>
+            <strong>{paymentMethod.label}</strong>
+          </div>
+        ) : null}
+        {paymentMethod?.id === "paypal" ? (
+          <div>
+            <span>PayPal fee</span>
+            <strong>{formatMoney(paymentFee, currency)}</strong>
+          </div>
+        ) : null}
         <div>
           <span>Total</span>
           <strong>{formatMoney(total, currency)}</strong>
