@@ -10,6 +10,7 @@ type CartContextValue = {
   isOpen: boolean;
   openCart: () => void;
   closeCart: () => void;
+  toggleCart: () => void;
   addItem: (item: CartItem, options?: { openCart?: boolean }) => void;
   updateQuantity: (item: CartItem, quantity: number) => void;
   removeItem: (item: CartItem) => void;
@@ -34,12 +35,18 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     writeStorage(CART_STORAGE_KEY, JSON.stringify(items));
   }, [items]);
 
+  useEffect(() => {
+    document.documentElement.classList.toggle("cart-open", isOpen);
+    return () => document.documentElement.classList.remove("cart-open");
+  }, [isOpen]);
+
   const value = useMemo<CartContextValue>(
     () => ({
       items,
       isOpen,
       openCart: () => setIsOpen(true),
       closeCart: () => setIsOpen(false),
+      toggleCart: () => setIsOpen((current) => !current),
       addItem: (item, options = { openCart: true }) => {
         setItems((current) => {
           const existing = current.find((cartItem) => sameCartItem(cartItem, item));

@@ -29,7 +29,10 @@ html {
 
 html,
 body {
+  width: 100%;
+  max-width: 100%;
   min-height: 100%;
+  overflow-x: hidden;
 }
 
 body {
@@ -38,7 +41,7 @@ body {
   font-family: var(--sans);
   font-size: 16px;
   line-height: 1.6;
-  overflow-x: clip;
+  overflow-x: hidden;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
 }
@@ -65,7 +68,16 @@ a {
 }
 
 main {
+  width: 100%;
+  max-width: 100%;
   min-height: 70vh;
+  overflow-x: clip;
+}
+
+html.cart-open,
+html.cart-open body {
+  overflow: hidden;
+  overscroll-behavior: none;
 }
 
 .wrap {
@@ -2711,9 +2723,10 @@ select {
 }
 
 .success-wrap {
+  width: 100%;
   max-width: 560px;
   margin: 0 auto;
-  padding: 80px 24px;
+  padding: 46px 24px 64px;
   text-align: center;
 }
 
@@ -2723,7 +2736,7 @@ select {
   height: 56px;
   align-items: center;
   justify-content: center;
-  margin: 0 auto 28px;
+  margin: 0 auto 20px;
   border: 1.5px solid var(--ink);
   border-radius: 50%;
   color: var(--ink);
@@ -2746,6 +2759,7 @@ select {
 
 .ticket {
   position: relative;
+  width: 100%;
   max-width: 380px;
   margin: 0 auto 14px;
   overflow: visible;
@@ -2775,11 +2789,16 @@ select {
 }
 
 .order-no {
+  max-width: 100%;
   margin-top: 6px;
   color: var(--ink);
   font-family: var(--serif);
-  font-size: 30px;
-  letter-spacing: 0.01em;
+  font-size: clamp(16px, 4.6vw, 22px);
+  letter-spacing: 0;
+  line-height: 1.25;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .ticket-tear {
@@ -3586,7 +3605,8 @@ select {
   right: 0;
   z-index: 90;
   display: flex;
-  width: min(420px, 100vw);
+  width: min(420px, 100%);
+  max-width: 100%;
   height: 100dvh;
   flex-direction: column;
   background: var(--paper);
@@ -3627,10 +3647,18 @@ select {
 
 .cart-line {
   display: grid;
-  grid-template-columns: 72px 1fr auto;
+  grid-template-columns: 72px minmax(0, 1fr) auto;
   gap: 12px;
   padding: 14px 0;
   border-bottom: 1px solid var(--line);
+}
+
+.cart-line > div {
+  min-width: 0;
+}
+
+.cart-line h3 {
+  overflow-wrap: anywhere;
 }
 
 .cart-line h3 {
@@ -4849,6 +4877,26 @@ a:focus-visible {
   .field select,
   .checkout-address-autofill input {
     min-height: 46px;
+  }
+
+  input,
+  select,
+  textarea,
+  .field input,
+  .field select,
+  .checkout-address-autofill input {
+    font-size: 16px !important;
+  }
+
+  .checkout,
+  .checkout-flow,
+  .checkout-layout,
+  .checkout-panel,
+  .checkout-step-panel,
+  .checkout-summary-mobile {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
   }
 
   .checkout-actions,

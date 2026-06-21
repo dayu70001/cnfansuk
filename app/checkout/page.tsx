@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { useCart } from "@/components/CartProvider";
@@ -119,6 +119,21 @@ export default function CheckoutPage() {
   const shippingPrice = getShippingPrice(shippingMethodId, subtotalGbp, currency);
   const paymentFee = getPaymentFee(paymentMethodId, subtotal + shippingPrice);
   const total = subtotal + shippingPrice + paymentFee;
+
+  useEffect(() => {
+    if (document.activeElement instanceof HTMLElement) {
+      document.activeElement.blur();
+    }
+
+    document.documentElement.scrollTop = 0;
+    document.body.scrollTop = 0;
+    const frame = window.requestAnimationFrame(() => {
+      document.documentElement.scrollTop = 0;
+      document.body.scrollTop = 0;
+    });
+
+    return () => window.cancelAnimationFrame(frame);
+  }, [step]);
 
   function validateContact() {
     const nextErrors: Record<string, string> = {};
@@ -427,7 +442,7 @@ function ShippingStep({
       countryCode,
       countryName,
     });
-    setAddressQuery(properties.address_line1 || properties.name || addressQuery);
+    setAddressQuery("");
     setAutofillUnavailable(false);
   }
 
@@ -466,7 +481,7 @@ function ShippingStep({
               <input
                 id="checkout-address-search"
                 autoComplete="address-line1"
-                placeholder="Start typing your address"
+                placeholder="Search address"
                 value={addressQuery}
                 onChange={(event) => {
                   setAddressQuery(event.target.value);

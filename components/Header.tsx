@@ -24,7 +24,7 @@ const supportItems = [
 ];
 
 export function Header() {
-  const { items, openCart } = useCart();
+  const { items, isOpen, toggleCart } = useCart();
   const [menuOpen, setMenuOpen] = useState(false);
   const { currency, setCurrency } = useCurrency();
   const [currencyOpen, setCurrencyOpen] = useState(false);
@@ -73,7 +73,7 @@ export function Header() {
               </div>
             ) : null}
           </div>
-          <button className="icon-btn" type="button" onClick={openCart} aria-label="Cart">
+          <button className="icon-btn" type="button" onClick={toggleCart} aria-label="Cart" aria-expanded={isOpen}>
             <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
               <path d="M6 7h12l-1 13H7L6 7Z" />
               <path d="M9 7a3 3 0 0 1 6 0" />

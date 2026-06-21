@@ -23,7 +23,7 @@ export default async function OrderSuccessPage({
 
       <div className="ticket">
         <span className="eyebrow">Order Number</span>
-        <p className="order-no">#{order}</p>
+        <p className="order-no" title={`#${order}`}>#{order}</p>
         <div className="ticket-tear" />
         <div className="ticket-note">Keep this for your records</div>
       </div>
