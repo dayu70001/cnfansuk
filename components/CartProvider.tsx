@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { CART_STORAGE_KEY, sameCartItem } from "@/lib/cart";
 import { readStorage, writeStorage } from "@/lib/storage";
 import type { CartItem } from "@/lib/types";
@@ -22,6 +22,7 @@ const CartContext = createContext<CartContextValue | null>(null);
 export function CartProvider({ children }: { children: React.ReactNode }) {
   const [items, setItems] = useState<CartItem[]>([]);
   const [isOpen, setIsOpen] = useState(false);
+  const lockedScrollY = useRef(0);
 
   useEffect(() => {
     try {
@@ -36,8 +37,32 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   }, [items]);
 
   useEffect(() => {
-    document.documentElement.classList.toggle("cart-open", isOpen);
-    return () => document.documentElement.classList.remove("cart-open");
+    if (!isOpen) {
+      document.documentElement.classList.remove("cart-open");
+      return () => document.documentElement.classList.remove("cart-open");
+    }
+
+    lockedScrollY.current = window.scrollY;
+    document.documentElement.classList.add("cart-open");
+    document.body.style.position = "fixed";
+    document.body.style.top = `-${lockedScrollY.current}px`;
+    document.body.style.right = "0";
+    document.body.style.left = "0";
+    document.body.style.width = "100%";
+
+    return () => {
+      document.documentElement.classList.remove("cart-open");
+      document.body.style.removeProperty("position");
+      document.body.style.removeProperty("top");
+      document.body.style.removeProperty("right");
+      document.body.style.removeProperty("left");
+      document.body.style.removeProperty("width");
+
+      const previousScrollBehavior = document.documentElement.style.scrollBehavior;
+      document.documentElement.style.scrollBehavior = "auto";
+      window.scrollTo(0, lockedScrollY.current);
+      document.documentElement.style.scrollBehavior = previousScrollBehavior;
+    };
   }, [isOpen]);
 
   const value = useMemo<CartContextValue>(

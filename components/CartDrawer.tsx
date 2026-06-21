@@ -37,8 +37,11 @@ export function CartDrawer() {
                     {item.image ? <img src={item.image} alt={item.name} onError={(event) => event.currentTarget.classList.add("image-error")} /> : null}
                     <span />
                   </Link>
-                  <div>
-                    <h3>{item.name}</h3>
+                  <div className="cart-line-copy">
+                    <div className="cart-line-heading">
+                      <h3>{item.name}</h3>
+                      <strong>{formatMoney(getCartItemPrice(item, currency) * item.quantity, currency)}</strong>
+                    </div>
                     <p>{[item.color, `Size ${item.size}`].filter(Boolean).join(" · ")}</p>
                     <p>{formatMoney(getCartItemPrice(item, currency), currency)}</p>
                     <div className="quantity-row">
@@ -56,7 +59,6 @@ export function CartDrawer() {
                       </button>
                     </div>
                   </div>
-                  <strong>{formatMoney(getCartItemPrice(item, currency) * item.quantity, currency)}</strong>
                 </div>
               ))}
             </div>
