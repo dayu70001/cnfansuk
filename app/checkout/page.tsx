@@ -574,7 +574,7 @@ function MethodStep({
           Return to shipping
         </button>
         <button className="btn btn-solid" type="button" onClick={onContinue}>
-          Continue to review
+          Continue to payment
         </button>
       </div>
     </div>
