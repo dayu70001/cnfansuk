@@ -4,6 +4,7 @@ import { CartDrawer } from "@/components/CartDrawer";
 import { CartProvider } from "@/components/CartProvider";
 import { Footer } from "@/components/Footer";
 import { Header } from "@/components/Header";
+import { SITE_NAME, SITE_URL } from "@/lib/site";
 import "./globals.css";
 
 const hankenGrotesk = Hanken_Grotesk({
@@ -22,8 +23,22 @@ const newsreader = Newsreader({
 });
 
 export const metadata: Metadata = {
-  title: "CNFans UK Clothing",
-  description: "Everyday apparel, curated for clean daily style.",
+  metadataBase: new URL(SITE_URL),
+  title: {
+    default: `${SITE_NAME} | Everyday Apparel, Hoodies, Jackets & Sets`,
+    template: `%s | ${SITE_NAME}`,
+  },
+  description:
+    "Shop everyday apparel from CNFans UK, including hoodies, jackets, trousers, tops and matching sets. Source-direct clothing with UK and Europe delivery support.",
+  applicationName: SITE_NAME,
+  openGraph: {
+    type: "website",
+    siteName: SITE_NAME,
+    url: SITE_URL,
+  },
+  twitter: {
+    card: "summary_large_image",
+  },
 };
 
 export const viewport: Viewport = {

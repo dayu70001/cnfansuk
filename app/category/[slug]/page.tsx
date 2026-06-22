@@ -1,12 +1,74 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import type { Metadata } from "next";
 import { ProductCard } from "@/components/ProductCard";
+import { JsonLd } from "@/components/JsonLd";
 import { getCategory } from "@/data/categories";
 import { getProductsByCategory, products } from "@/data/products";
 import { fetchCatalogProducts } from "@/lib/catalogApi";
+import { SITE_NAME, SITE_URL } from "@/lib/site";
 import type { Product } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
+
+const CATEGORY_META: Record<string, { title: string; description: string }> = {
+  "new-in": {
+    title: "New In | Latest Apparel Drops | CNFans UK",
+    description:
+      "Shop the latest CNFans UK arrivals, including hoodies, jackets, trousers, tops and matching sets for everyday wear.",
+  },
+  outerwear: {
+    title: "Outerwear | Jackets, Coats & Layering Pieces | CNFans UK",
+    description:
+      "Shop CNFans UK outerwear, including jackets, hooded jackets, puffer jackets, vests and coats for everyday layering.",
+  },
+  tops: {
+    title: "Tops | T-Shirts, Hoodies, Shirts & Knitwear | CNFans UK",
+    description:
+      "Shop CNFans UK tops, including T-shirts, hoodies, sweatshirts, zip hoodies, shirts and knitwear.",
+  },
+  bottoms: {
+    title: "Bottoms | Trousers, Joggers, Jeans & Shorts | CNFans UK",
+    description:
+      "Shop CNFans UK bottoms, including trousers, joggers, cargo pants, jeans, shorts and skirts.",
+  },
+  "co-ords-sets": {
+    title: "Co-ords & Sets | Tracksuits & Matching Sets | CNFans UK",
+    description:
+      "Shop CNFans UK co-ords and sets, including tracksuits, hoodie sets, T-shirt and shorts sets, knit sets and casual matching sets.",
+  },
+};
+
+type CategoryParams = { params: Promise<{ slug: string }>; searchParams: Promise<CategorySearchParams> };
+
+export async function generateMetadata({ params }: CategoryParams): Promise<Metadata> {
+  const { slug } = await params;
+  const meta = CATEGORY_META[slug];
+  if (!meta) {
+    return {
+      title: { absolute: `Category Not Found | ${SITE_NAME}` },
+      robots: { index: false, follow: false },
+    };
+  }
+  const canonical = `${SITE_URL}/category/${slug}`;
+  return {
+    title: { absolute: meta.title },
+    description: meta.description,
+    alternates: { canonical },
+    openGraph: {
+      title: meta.title,
+      description: meta.description,
+      url: canonical,
+      type: "website",
+      siteName: SITE_NAME,
+    },
+    twitter: {
+      card: "summary_large_image",
+      title: meta.title,
+      description: meta.description,
+    },
+  };
+}
 
 type CategorySearchParams = {
   q?: string;
@@ -46,6 +108,7 @@ const styleOptionsByCategory: Record<string, { allLabel: string; options: StyleO
     allLabel: "All Tops",
     options: [
       { value: "t-shirts", label: "T-Shirts" },
+      { value: "tank-tops", label: "Tank Tops" },
       { value: "hoodies", label: "Hoodies" },
       { value: "sweatshirts", label: "Sweatshirts" },
       { value: "zip-hoodies", label: "Zip Hoodies" },
@@ -138,8 +201,20 @@ export default async function CategoryPage({
   const hasFilters = Boolean(q || brand || subcategory || (sort && sort !== "newest") || page > 1);
   const productCountLabel = `${categoryProducts.length} ${categoryProducts.length === 1 ? "style" : "styles"}`;
 
+  const categoryCanonical = `${SITE_URL}/category/${slug}`;
+  const breadcrumbSchema = {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    itemListElement: [
+      { "@type": "ListItem", position: 1, name: "Home", item: SITE_URL },
+      { "@type": "ListItem", position: 2, name: category.name, item: categoryCanonical },
+    ],
+  };
+
   return (
-    <section className="category-page">
+    <>
+      <JsonLd data={breadcrumbSchema} />
+      <section className="category-page">
       <div className="category-hero">
         <div>
           <nav className="category-breadcrumb" aria-label="Breadcrumb">
@@ -204,6 +279,7 @@ export default async function CategoryPage({
         <p className="category-empty">No products found for this filter.</p>
       )}
     </section>
+    </>
   );
 }
 

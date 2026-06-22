@@ -1,11 +1,36 @@
 import Link from "next/link";
 import type { CSSProperties } from "react";
+import type { Metadata } from "next";
 import { ProductCard } from "@/components/ProductCard";
+import { JsonLd } from "@/components/JsonLd";
 import { products } from "@/data/products";
 import { fetchCatalogProducts } from "@/lib/catalogApi";
 import { fetchSiteSettings } from "@/lib/siteSettings";
+import { SITE_NAME, SITE_URL } from "@/lib/site";
 
 export const dynamic = "force-dynamic";
+
+const HOME_TITLE = `${SITE_NAME} | Everyday Apparel, Hoodies, Jackets & Sets`;
+const HOME_DESCRIPTION =
+  "Shop everyday apparel from CNFans UK, including hoodies, jackets, trousers, tops and matching sets. Source-direct clothing with UK and Europe delivery support.";
+
+export const metadata: Metadata = {
+  title: { absolute: HOME_TITLE },
+  description: HOME_DESCRIPTION,
+  alternates: { canonical: SITE_URL },
+  openGraph: {
+    title: HOME_TITLE,
+    description: HOME_DESCRIPTION,
+    url: SITE_URL,
+    siteName: SITE_NAME,
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: HOME_TITLE,
+    description: HOME_DESCRIPTION,
+  },
+};
 
 export default async function Home() {
   const settings = await fetchSiteSettings();
@@ -14,6 +39,29 @@ export default async function Home() {
   const catalogProducts = await fetchCatalogProducts({ limit: 24 });
   const displayProducts = catalogProducts ?? products;
   const newIn = displayProducts.filter((product) => product.newIn).slice(0, 10);
+
+  // Organization + WebSite structured data. sameAs only uses real public
+  // social links from site settings; placeholders are filtered out. No brand
+  // names are placed in Organization schema.
+  const sameAs = [
+    links.instagramUrl,
+    links.facebookUrl,
+    links.whatsappChannelUrl,
+    links.telegramChannelUrl,
+  ].filter((url) => url && !url.includes("PLACEHOLDER"));
+  const orgSchema = {
+    "@context": "https://schema.org",
+    "@type": "Organization",
+    name: SITE_NAME,
+    url: SITE_URL,
+    ...(sameAs.length ? { sameAs } : {}),
+  };
+  const websiteSchema = {
+    "@context": "https://schema.org",
+    "@type": "WebSite",
+    name: SITE_NAME,
+    url: SITE_URL,
+  };
   const categoryTones = ["forest", "navy", "stone", "charcoal"];
   const homeCategoryCards = [
     {
@@ -47,6 +95,8 @@ export default async function Home() {
 
   return (
     <>
+      <JsonLd data={orgSchema} />
+      <JsonLd data={websiteSchema} />
       <div className="wrap">
         <section className="hero">
           <div className="hero-text">
