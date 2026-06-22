@@ -147,6 +147,9 @@ const sortOptions = [
   { value: "price-high-low", label: "Price: High to Low" },
 ];
 
+// PC: 4 cols x 5 rows = 20; Mobile: 2 cols x 10 rows = 20.
+const PAGE_SIZE = 20;
+
 const legacyCategoryMap: Record<string, string> = {
   hoodies: "tops",
   "t-shirts": "tops",
@@ -201,6 +204,21 @@ export default async function CategoryPage({
   const hasFilters = Boolean(q || brand || subcategory || (sort && sort !== "newest") || page > 1);
   const productCountLabel = `${categoryProducts.length} ${categoryProducts.length === 1 ? "style" : "styles"}`;
 
+  // Pagination: applied AFTER filtering + sorting, on the full product list.
+  const totalCount = categoryProducts.length;
+  const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
+  const currentPage = Math.min(Math.max(page, 1), totalPages);
+  const pagedProducts = categoryProducts.slice(
+    (currentPage - 1) * PAGE_SIZE,
+    currentPage * PAGE_SIZE,
+  );
+  const rangeStart = totalCount === 0 ? 0 : (currentPage - 1) * PAGE_SIZE + 1;
+  const rangeEnd = Math.min(currentPage * PAGE_SIZE, totalCount);
+  const showingLabel =
+    totalPages > 1
+      ? `Showing ${rangeStart}–${rangeEnd} of ${totalCount}`
+      : `${totalCount} ${totalCount === 1 ? "style" : "styles"}`;
+
   const categoryCanonical = `${SITE_URL}/category/${slug}`;
   const breadcrumbSchema = {
     "@context": "https://schema.org",
@@ -225,7 +243,7 @@ export default async function CategoryPage({
           <h1>{category.name}</h1>
           <p>{category.description}</p>
         </div>
-        <span className="category-count">{productCountLabel}</span>
+        <span className="category-count">{showingLabel}</span>
       </div>
 
       <form className="category-search-row" action={`/category/${slug}`}>
@@ -269,17 +287,117 @@ export default async function CategoryPage({
         />
       </div>
 
-      {categoryProducts.length > 0 ? (
+      {pagedProducts.length > 0 ? (
         <div className="category-product-grid">
-          {categoryProducts.map((product) => (
+          {pagedProducts.map((product) => (
             <ProductCard key={product.id} product={product} />
           ))}
         </div>
       ) : (
         <p className="category-empty">No products found for this filter.</p>
       )}
+
+      {totalPages > 1 ? (
+        <Pagination
+          slug={slug}
+          currentPage={currentPage}
+          totalPages={totalPages}
+          baseParams={{ q, brand, subcategory, sort }}
+        />
+      ) : null}
     </section>
     </>
+  );
+}
+
+function buildPageHref(slug: string, page: number, baseParams: { q: string; brand: string; subcategory: string; sort: string }) {
+  const search = new URLSearchParams();
+  if (baseParams.q) search.set("q", baseParams.q);
+  if (baseParams.brand) search.set("brand", baseParams.brand);
+  if (baseParams.subcategory) search.set("subcategory", baseParams.subcategory);
+  if (baseParams.sort && baseParams.sort !== "newest") search.set("sort", baseParams.sort);
+  if (page > 1) search.set("page", String(page));
+  const query = search.toString();
+  return query ? `/category/${slug}?${query}` : `/category/${slug}`;
+}
+
+function buildPageRange(current: number, total: number): (number | "ellipsis")[] {
+  // Compact page range with ellipsis. Always include 1 and total.
+  if (total <= 7) {
+    return Array.from({ length: total }, (_, i) => i + 1);
+  }
+  const range: (number | "ellipsis")[] = [1];
+  const start = Math.max(2, current - 1);
+  const end = Math.min(total - 1, current + 1);
+  if (start > 2) range.push("ellipsis");
+  for (let i = start; i <= end; i++) range.push(i);
+  if (end < total - 1) range.push("ellipsis");
+  range.push(total);
+  return range;
+}
+
+function Pagination({
+  slug,
+  currentPage,
+  totalPages,
+  baseParams,
+}: {
+  slug: string;
+  currentPage: number;
+  totalPages: number;
+  baseParams: { q: string; brand: string; subcategory: string; sort: string };
+}) {
+  const pages = buildPageRange(currentPage, totalPages);
+  const prevHref = buildPageHref(slug, currentPage - 1, baseParams);
+  const nextHref = buildPageHref(slug, currentPage + 1, baseParams);
+
+  return (
+    <nav className="category-pagination" aria-label="Pagination">
+      <Link
+        className={`category-pagination-arrow${currentPage === 1 ? " is-disabled" : ""}`}
+        href={currentPage === 1 ? "#" : prevHref}
+        aria-label="Previous page"
+        aria-disabled={currentPage === 1}
+        tabIndex={currentPage === 1 ? -1 : 0}
+        onClick={currentPage === 1 ? (e) => e.preventDefault() : undefined}
+      >
+        Previous
+      </Link>
+      <ul className="category-pagination-pages">
+        {pages.map((page, index) => {
+          if (page === "ellipsis") {
+            return (
+              <li className="category-pagination-ellipsis" aria-hidden="true" key={`ellipsis-${index}`}>
+                …
+              </li>
+            );
+          }
+          const isCurrent = page === currentPage;
+          return (
+            <li key={page}>
+              <Link
+                className={`category-pagination-page${isCurrent ? " is-current" : ""}`}
+                href={buildPageHref(slug, page, baseParams)}
+                aria-current={isCurrent ? "page" : undefined}
+                aria-label={`Page ${page}`}
+              >
+                {page}
+              </Link>
+            </li>
+          );
+        })}
+      </ul>
+      <Link
+        className={`category-pagination-arrow${currentPage === totalPages ? " is-disabled" : ""}`}
+        href={currentPage === totalPages ? "#" : nextHref}
+        aria-label="Next page"
+        aria-disabled={currentPage === totalPages}
+        tabIndex={currentPage === totalPages ? -1 : 0}
+        onClick={currentPage === totalPages ? (e) => e.preventDefault() : undefined}
+      >
+        Next
+      </Link>
+    </nav>
   );
 }
 
