@@ -182,8 +182,11 @@ export default async function CategoryPage({
   const filterCategory = legacyCategoryMap[slug] || slug;
   const localProducts = getProductsByCategory(slug);
   const catalogQuery = slug === "new-in" ? {} : { category: filterCategory };
+  // Fetch the full first page (limit 100) for client-side filtering + sorting.
+  // The URL ?page is handled by our own pagination below; do NOT forward it to
+  // the catalog API, which would otherwise apply server-side offset pagination.
   const [catalogProducts, optionProducts] = await Promise.all([
-    fetchCatalogProducts({ ...catalogQuery, q, brand, subcategory, sort, page, limit: 100 }),
+    fetchCatalogProducts({ ...catalogQuery, q, brand, subcategory, sort, limit: 100 }),
     fetchCatalogProducts({ ...catalogQuery, limit: 100 }),
   ]);
   const matchingCatalogProducts =
