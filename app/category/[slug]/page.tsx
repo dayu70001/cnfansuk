@@ -192,6 +192,7 @@ export default async function CategoryPage({
   const filterOptionProducts = optionProducts === null ? localProducts : optionProducts;
   const brandOptions = getBrandOptions(filterOptionProducts);
   const styleGroup = styleOptionsByCategory[filterCategory];
+  const PAGE_SIZE = 20;
   const categoryProducts = sortProducts(
     baseProducts.filter((product) => {
       const matchesSearch = q ? `${product.name} ${product.shortDescription} ${product.description}`.toLowerCase().includes(q.toLowerCase()) : true;
@@ -201,6 +202,8 @@ export default async function CategoryPage({
     }),
     sort,
   );
+  const totalPages = Math.max(1, Math.ceil(categoryProducts.length / PAGE_SIZE));
+  const paginatedProducts = categoryProducts.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
   const hasFilters = Boolean(q || brand || subcategory || (sort && sort !== "newest") || page > 1);
   const productCountLabel = `${categoryProducts.length} ${categoryProducts.length === 1 ? "style" : "styles"}`;
 
@@ -272,15 +275,21 @@ export default async function CategoryPage({
         />
       </div>
 
-      {categoryProducts.length > 0 ? (
+      {paginatedProducts.length > 0 ? (
         <div className="category-product-grid">
-          {categoryProducts.map((product) => (
+          {paginatedProducts.map((product) => (
             <ProductCard key={product.id} product={product} />
           ))}
         </div>
       ) : (
         <p className="category-empty">No products found for this filter.</p>
       )}
+      <Pagination
+        slug={slug}
+        current={{ q, brand, subcategory, sort, page: String(page) }}
+        page={page}
+        totalPages={totalPages}
+      />
     </section>
     </>
   );
@@ -315,6 +324,45 @@ function FilterMenu({
         ))}
       </div>
     </details>
+  );
+}
+
+function Pagination({
+  slug,
+  current,
+  page,
+  totalPages,
+}: {
+  slug: string;
+  current: NormalizedFilters;
+  page: number;
+  totalPages: number;
+}) {
+  if (totalPages <= 1) return null;
+
+  const prevPage = page > 1 ? String(page - 1) : "1";
+  const nextPage = page < totalPages ? String(page + 1) : String(totalPages);
+
+  return (
+    <nav className="category-pagination" aria-label="Pagination">
+      {page <= 1 ? (
+        <span className="disabled">Previous</span>
+      ) : (
+        <a href={buildCategoryHref(slug, { ...current, page: prevPage })}>Previous</a>
+      )}
+      {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) =>
+        page === p ? (
+          <span key={p} className="active">{p}</span>
+        ) : (
+          <a key={p} href={buildCategoryHref(slug, { ...current, page: String(p) })}>{p}</a>
+        )
+      )}
+      {page >= totalPages ? (
+        <span className="disabled">Next</span>
+      ) : (
+        <a href={buildCategoryHref(slug, { ...current, page: nextPage })}>Next</a>
+      )}
+    </nav>
   );
 }
 
