@@ -1986,6 +1986,119 @@ footer {
   line-height: 1.6;
 }
 
+.tracking-result {
+  max-width: 760px;
+  margin: 28px auto 0;
+  padding-top: 24px;
+  border-top: 1px solid var(--line);
+}
+
+.tracking-result-empty {
+  text-align: center;
+  padding: 24px 0;
+}
+
+.tracking-result-title {
+  margin-bottom: 8px;
+  color: var(--ink);
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.tracking-result-text {
+  color: var(--ink-soft);
+  font-size: 14.5px;
+  line-height: 1.6;
+}
+
+.tracking-result-card {
+  padding: 20px 0;
+}
+
+.tracking-result-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 20px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--line);
+}
+
+.tracking-result-number {
+  font-family: var(--serif);
+  font-size: 20px;
+  font-weight: 500;
+  letter-spacing: -0.02em;
+}
+
+.tracking-result-status {
+  display: inline-block;
+  padding: 4px 12px;
+  border: 1px solid var(--line);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.tracking-result-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.tracking-result-item {
+  display: grid;
+  grid-template-columns: 140px 1fr;
+  gap: 16px;
+  padding: 14px 0;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.tracking-result-item:last-child {
+  border-bottom: none;
+}
+
+.tracking-result-date {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.tracking-result-content {
+  color: var(--ink-soft);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.tracking-result-location {
+  grid-column: 2;
+  color: var(--muted);
+  font-size: 12.5px;
+}
+
+@media (max-width: 860px) {
+  .tracking-result {
+    margin-top: 20px;
+  }
+
+  .tracking-result-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+
+  .tracking-result-item {
+    grid-template-columns: 1fr;
+    gap: 4px;
+  }
+
+  .tracking-result-location {
+    grid-column: auto;
+  }
+}
+
 .contact-page {
   width: min(940px, calc(100% - 32px));
 }
