@@ -1,35 +1,90 @@
 import { NextRequest, NextResponse } from "next/server";
 
-const TARGET_API = "http://120.78.152.35/api/re-toms/v1";
+const TARGET_URL = "http://zxdexpress.com/logistic.html";
 
-interface TrackApiResponse {
-  code: number;
-  message: string;
-  error: string[];
-  data?: Array<{
-    ask: number;
-    code: string;
-    message: string;
-    data: Array<{
-      track_date?: string;
-      track_content?: string;
-      track_location?: string;
-      [key: string]: unknown;
-    }>;
-  }>;
+interface TrackEvent {
+  date: string;
+  location: string;
+  content: string;
 }
 
-function buildPayload(number: string) {
-  const timestamp = Date.now();
+interface TrackResult {
+  ok: boolean;
+  trackingNumber?: string;
+  destination?: string;
+  latestStatus?: string;
+  latestTime?: string;
+  events?: TrackEvent[];
+  error?: string;
+}
+
+function parseLogisticHtml(html: string): TrackResult {
+  // Check if there are any results
+  if (
+    html.includes("暂无轨迹信息") ||
+    html.includes("没有找到") ||
+    html.includes("No tracking information")
+  ) {
+    return { ok: false, error: "No tracking information found." };
+  }
+
+  const pageContentMatch = html.match(/id="page-content"[\s\S]*?<\/div>\s*<\/div>\s*<\/div>/);
+  if (!pageContentMatch) {
+    return { ok: false, error: "No tracking information found." };
+  }
+
+  const content = pageContentMatch[0];
+
+  // Extract summary row from the first table
+  const summaryMatch = content.match(
+    /<td[^>]*class="td-bk"[^>]*>([^<]*)<\/td>\s*<td[^>]*class="td-bk"[^>]*>([^<]*)<\/td>\s*<td[^>]*class="td-bk"[^>]*>([^<]*)<\/td>\s*<td[^>]*class="td-bk"[^>]*>([^<]*)<\/td>/
+  );
+
+  let trackingNumber = "";
+  let destination = "";
+  let latestTime = "";
+  let latestStatus = "";
+
+  if (summaryMatch) {
+    trackingNumber = summaryMatch[1].trim();
+    destination = summaryMatch[2].trim();
+    latestTime = summaryMatch[3].trim();
+    latestStatus = summaryMatch[4].trim();
+  }
+
+  // Extract detail events from the second table only
+  // The second table has 3 columns (日期, 转运地点, 转运记录)
+  // while the first summary table has 4 columns.
+  const secondTableMatch = content.match(/<table class="out_order">[\s\S]*?<\/table>/g);
+  const events: TrackEvent[] = [];
+
+  if (secondTableMatch && secondTableMatch.length >= 2) {
+    const detailTable = secondTableMatch[1];
+    const eventRegex =
+      /<td[^>]*class="td-bk"[^>]*>([^<]*)<\/td>\s*<td[^>]*class="td-bk"[^>]*>([^<]*)<\/td>\s*<td[^>]*class="td-bk"[^>]*>([^<]*)<\/td>/g;
+
+    let match;
+    while ((match = eventRegex.exec(detailTable)) !== null) {
+      const date = match[1].trim();
+      const location = match[2].trim();
+      const record = match[3].trim();
+      // Skip header row
+      if (date === "日期" || date === "当地时间") continue;
+      events.push({ date, location, content: record });
+    }
+  }
+
+  if (!trackingNumber && events.length === 0) {
+    return { ok: false, error: "No tracking information found." };
+  }
+
   return {
-    method: "getTruckTrackInfo",
-    param: {
-      codes: number.trim(),
-      noUserCode: "1",
-    },
-    timestamp,
-    token: "test",
-    lang: "zh_CN",
+    ok: true,
+    trackingNumber,
+    destination,
+    latestStatus,
+    latestTime,
+    events,
   };
 }
 
@@ -44,14 +99,14 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const response = await fetch(TARGET_API, {
+    const response = await fetch(TARGET_URL, {
       method: "POST",
       headers: {
-        "Content-Type": "application/json",
-        Accept: "application/json, text/plain, */*",
-        Referer: "http://120.78.152.35/",
+        "Content-Type": "application/x-www-form-urlencoded",
+        Accept: "text/html,application/xhtml+xml",
+        Referer: "http://zxdexpress.com/logistic.html",
       },
-      body: JSON.stringify(buildPayload(number)),
+      body: new URLSearchParams({ numbers: number.trim() }).toString(),
     });
 
     if (!response.ok) {
@@ -61,47 +116,15 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const result = (await response.json()) as TrackApiResponse;
+    const html = await response.text();
+    const result = parseLogisticHtml(html);
 
-    if (result.code !== 200) {
-      return NextResponse.json(
-        { ok: false, error: result.message || "Query failed." },
-        { status: 502 }
-      );
+    if (!result.ok) {
+      return NextResponse.json(result, { status: 404 });
     }
 
-    const item = result.data?.[0];
-    if (!item) {
-      return NextResponse.json(
-        { ok: false, error: "No tracking information found." },
-        { status: 404 }
-      );
-    }
-
-    // Simple status mapping
-    const statusMap: Record<number, string> = {
-      0: "Not found",
-      1: "In transit",
-      2: "Delivered",
-      3: "Delivery failed",
-      4: "Returned",
-      5: "Picked up",
-    };
-
-    return NextResponse.json({
-      ok: true,
-      trackingNumber: item.code,
-      status: statusMap[item.ask] || "Unknown",
-      statusCode: item.ask,
-      message: item.message,
-      events:
-        item.data?.map((e) => ({
-          date: e.track_date || "",
-          content: e.track_content || "",
-          location: e.track_location || "",
-        })) || [],
-    });
-  } catch (error) {
+    return NextResponse.json(result);
+  } catch {
     return NextResponse.json(
       { ok: false, error: "Network error. Please try again later." },
       { status: 500 }
