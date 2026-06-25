@@ -1,3 +1,5 @@
+import { MetaPixelEventLink } from "@/components/MetaPixelEventLink";
+
 const emailPrep = [
   "Your order number, if you have one",
   "Product name or link",
@@ -16,7 +18,13 @@ export default function ContactPage() {
 
       <section className="contact-email">
         <span>Email support</span>
-        <a href="mailto:support@cnfans.co.uk">support@cnfans.co.uk</a>
+        <MetaPixelEventLink
+          href="mailto:support@cnfans.co.uk"
+          eventName="Contact"
+          eventParams={{ contact_channel: "email", source: "contact_page" }}
+        >
+          support@cnfans.co.uk
+        </MetaPixelEventLink>
         <p>We aim to respond as soon as possible. If your message is about an existing order, please include your order number.</p>
       </section>
 

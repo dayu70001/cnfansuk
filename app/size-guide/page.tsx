@@ -1,3 +1,5 @@
+import { MetaPixelEventLink } from "@/components/MetaPixelEventLink";
+
 const measureGroups = [
   {
     title: "Tops",
@@ -60,7 +62,13 @@ export default function SizeGuidePage() {
           <span>Need Help?</span>
           <p>If you are between sizes or unsure about the fit, email us with your height, weight, usual size, item name or link and preferred fit.</p>
         </div>
-        <a href="mailto:support@cnfans.co.uk">support@cnfans.co.uk</a>
+        <MetaPixelEventLink
+          href="mailto:support@cnfans.co.uk"
+          eventName="Contact"
+          eventParams={{ contact_channel: "email", source: "size_guide" }}
+        >
+          support@cnfans.co.uk
+        </MetaPixelEventLink>
       </section>
     </main>
   );

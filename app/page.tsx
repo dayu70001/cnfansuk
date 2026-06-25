@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { CSSProperties } from "react";
 import type { Metadata } from "next";
+import { MetaPixelEventLink } from "@/components/MetaPixelEventLink";
 import { ProductCard } from "@/components/ProductCard";
 import { JsonLd } from "@/components/JsonLd";
 import { products } from "@/data/products";
@@ -255,14 +256,28 @@ export default async function Home() {
             ))}
           </div>
           <div className="ig-cta">
-            <Link className="channel-link" href={links.whatsappChannelUrl} target="_blank" rel="noreferrer">
+            <MetaPixelEventLink
+              className="channel-link"
+              href={links.whatsappChannelUrl}
+              target="_blank"
+              rel="noreferrer"
+              eventName="Contact"
+              eventParams={{ contact_channel: "whatsapp", source: "homepage_channel" }}
+            >
               <WhatsAppIcon />
               WhatsApp Channel
-            </Link>
-            <Link className="channel-link" href={links.telegramChannelUrl} target="_blank" rel="noreferrer">
+            </MetaPixelEventLink>
+            <MetaPixelEventLink
+              className="channel-link"
+              href={links.telegramChannelUrl}
+              target="_blank"
+              rel="noreferrer"
+              eventName="Contact"
+              eventParams={{ contact_channel: "telegram", source: "homepage_channel" }}
+            >
               <TelegramIcon />
               Telegram Channel
-            </Link>
+            </MetaPixelEventLink>
           </div>
         </div>
       </section>

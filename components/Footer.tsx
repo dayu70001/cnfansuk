@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { MetaPixelEventLink } from "@/components/MetaPixelEventLink";
 import { fetchSiteSettings } from "@/lib/siteSettings";
 
 export async function Footer() {
@@ -49,18 +50,39 @@ export async function Footer() {
           <nav className="foot-col" aria-label="Support">
             <h4>Support</h4>
             {supportLinks.map((item) => (
-              <Link href={item.href} key={item.href}>
-                {item.label}
-              </Link>
+              item.label === "Contact" ? (
+                <MetaPixelEventLink href={item.href} key={item.href} eventName="Contact" eventParams={{ contact_channel: "contact_page", source: "footer" }}>
+                  {item.label}
+                </MetaPixelEventLink>
+              ) : (
+                <Link href={item.href} key={item.href}>
+                  {item.label}
+                </Link>
+              )
             ))}
           </nav>
           <nav className="foot-col" aria-label="Follow">
             <h4>Follow</h4>
             {channels.map((item) => (
-              <Link className="foot-icon-link" href={item.href} key={item.label} target="_blank" rel="noreferrer">
-                {item.icon}
-                {item.label}
-              </Link>
+              item.label === "WhatsApp" || item.label === "Telegram" ? (
+                <MetaPixelEventLink
+                  className="foot-icon-link"
+                  href={item.href}
+                  key={item.label}
+                  target="_blank"
+                  rel="noreferrer"
+                  eventName="Contact"
+                  eventParams={{ contact_channel: item.label.toLowerCase(), source: "footer" }}
+                >
+                  {item.icon}
+                  {item.label}
+                </MetaPixelEventLink>
+              ) : (
+                <Link className="foot-icon-link" href={item.href} key={item.label} target="_blank" rel="noreferrer">
+                  {item.icon}
+                  {item.label}
+                </Link>
+              )
             ))}
           </nav>
           <nav className="foot-col" aria-label="Company">

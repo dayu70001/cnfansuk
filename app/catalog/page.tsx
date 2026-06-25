@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { CatalogSearchForm } from "@/components/CatalogSearchForm";
 import { ProductCard } from "@/components/ProductCard";
 import { FilterDropdown, type DropdownOption } from "@/components/FilterDropdown";
 import { fetchCatalogFilters, fetchCatalogPage } from "@/lib/catalogApi";
@@ -138,21 +139,18 @@ export default async function CatalogPage({
         <span className="category-count">{catalog?.total ?? products.length} styles</span>
       </div>
 
-      <form className="category-search-row" action="/catalog">
-        {filters.category ? <input type="hidden" name="category" value={filters.category} /> : null}
-        {filters.subcategory ? <input type="hidden" name="subcategory" value={filters.subcategory} /> : null}
-        {filters.brand ? <input type="hidden" name="brand" value={filters.brand} /> : null}
-        {filters.sort && filters.sort !== "newest" ? <input type="hidden" name="sort" value={filters.sort} /> : null}
-        <input className="category-search-input" type="search" name="q" defaultValue={filters.q} placeholder="Search catalog..." />
-        <button className="category-search-button" type="submit">
-          Search
-        </button>
-        {hasFilters ? (
-          <Link className="category-clear-button" href="/catalog">
-            Clear
-          </Link>
-        ) : null}
-      </form>
+      <CatalogSearchForm
+        action="/catalog"
+        hiddenFields={[
+          filters.category ? { name: "category", value: filters.category } : null,
+          filters.subcategory ? { name: "subcategory", value: filters.subcategory } : null,
+          filters.brand ? { name: "brand", value: filters.brand } : null,
+          filters.sort && filters.sort !== "newest" ? { name: "sort", value: filters.sort } : null,
+        ].filter((field): field is { name: string; value: string } => Boolean(field))}
+        defaultQuery={filters.q}
+        placeholder="Search catalog..."
+        clearHref={hasFilters ? "/catalog" : undefined}
+      />
 
       <div className="category-filter-row" aria-label="Catalog filters">
         <FilterDropdown

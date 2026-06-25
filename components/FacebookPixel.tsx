@@ -1,23 +1,24 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import Script from "next/script";
 import { usePathname, useSearchParams } from "next/navigation";
+import { trackMetaEvent } from "@/lib/metaPixel";
 
 const PIXEL_ID = "1510906363753888";
-
-declare global {
-  interface Window {
-    fbq?: (...args: unknown[]) => void;
-  }
-}
 
 export function FacebookPixel() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  const hasTrackedInitialPageView = useRef(false);
 
   useEffect(() => {
-    window.fbq?.("track", "PageView");
+    if (!hasTrackedInitialPageView.current) {
+      hasTrackedInitialPageView.current = true;
+      return;
+    }
+
+    trackMetaEvent("PageView");
   }, [pathname, searchParams]);
 
   return (
@@ -36,6 +37,7 @@ export function FacebookPixel() {
             s.parentNode.insertBefore(t,s)}(window, document,'script',
             'https://connect.facebook.net/en_US/fbevents.js');
             fbq('init', '${PIXEL_ID}');
+            fbq('track', 'PageView');
           `,
         }}
       />

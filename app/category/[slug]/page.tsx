@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
+import { CatalogSearchForm } from "@/components/CatalogSearchForm";
 import { ProductCard } from "@/components/ProductCard";
 import { FilterDropdown, type DropdownOption } from "@/components/FilterDropdown";
 import { JsonLd } from "@/components/JsonLd";
@@ -229,20 +230,17 @@ export default async function CategoryPage({
         <span className="category-count">{productCountLabel}</span>
       </div>
 
-      <form className="category-search-row" action={`/category/${slug}`}>
-        {brand ? <input type="hidden" name="brand" value={brand} /> : null}
-        {subcategory ? <input type="hidden" name="subcategory" value={subcategory} /> : null}
-        {sort && sort !== "newest" ? <input type="hidden" name="sort" value={sort} /> : null}
-        <input className="category-search-input" type="search" name="q" defaultValue={q} placeholder={`Search ${category.name.toLowerCase()}...`} />
-        <button className="category-search-button" type="submit">
-          Search
-        </button>
-        {hasFilters ? (
-          <Link className="category-clear-button" href={`/category/${slug}`}>
-            Clear
-          </Link>
-        ) : null}
-      </form>
+      <CatalogSearchForm
+        action={`/category/${slug}`}
+        hiddenFields={[
+          brand ? { name: "brand", value: brand } : null,
+          subcategory ? { name: "subcategory", value: subcategory } : null,
+          sort && sort !== "newest" ? { name: "sort", value: sort } : null,
+        ].filter((field): field is { name: string; value: string } => Boolean(field))}
+        defaultQuery={q}
+        placeholder={`Search ${category.name.toLowerCase()}...`}
+        clearHref={hasFilters ? `/category/${slug}` : undefined}
+      />
 
       <div className="category-filter-row" aria-label="Category filters">
         <FilterDropdown

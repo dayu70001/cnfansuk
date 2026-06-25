@@ -4,6 +4,7 @@ import Link from "next/link";
 import { Product } from "@/lib/types";
 import { formatMoney } from "@/lib/formatMoney";
 import { getProductPrice } from "@/lib/productPrice";
+import { trackMetaEvent } from "@/lib/metaPixel";
 import { useCurrency } from "@/lib/useCurrency";
 import { useCart } from "./CartProvider";
 
@@ -14,6 +15,7 @@ export function ProductCard({ product }: { product: Product }) {
   const size = product.sizes[0];
   const swatches = product.colors.filter((item) => item?.trim()).slice(0, 3);
   const image = product.images.find((item) => item && item !== "placeholder");
+  const currentPrice = getProductPrice(product, currency);
 
   return (
     <article className="product">
@@ -43,6 +45,14 @@ export function ProductCard({ product }: { product: Product }) {
               size,
               quantity: 1,
             });
+            trackMetaEvent("InitiateCheckout", {
+              content_ids: [product.id],
+              content_name: product.name,
+              content_type: "product",
+              currency,
+              value: currentPrice,
+              num_items: 1,
+            });
           }}
         >
           Add to cart
@@ -52,7 +62,7 @@ export function ProductCard({ product }: { product: Product }) {
         <Link className="pname" href={`/product/${product.slug}`}>
           {product.name}
         </Link>
-        <span className="price">{formatMoney(getProductPrice(product, currency), currency)}</span>
+        <span className="price">{formatMoney(currentPrice, currency)}</span>
       </div>
       {swatches.length > 0 ? (
         <div className="swatches" aria-label={`${product.name} colours`}>

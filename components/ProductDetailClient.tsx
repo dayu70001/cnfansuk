@@ -1,9 +1,10 @@
 "use client";
 
-import { type MouseEvent, type UIEvent, useMemo, useState } from "react";
+import { type MouseEvent, type UIEvent, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { formatMoney } from "@/lib/formatMoney";
 import { getProductPrice } from "@/lib/productPrice";
+import { trackMetaEvent } from "@/lib/metaPixel";
 import { useCurrency } from "@/lib/useCurrency";
 import type { CartItem, Product } from "@/lib/types";
 import { useCart } from "./CartProvider";
@@ -24,6 +25,17 @@ export function ProductDetailClient({ product }: { product: Product }) {
   const defaultColor = product.colors.find((item) => item?.trim());
   const galleryItems = useMemo(() => product.images.filter((item) => item && item !== "placeholder").slice(0, 9), [product.images]);
   const currentPrice = getProductPrice(product, currency);
+
+  useEffect(() => {
+    trackMetaEvent("ViewContent", {
+      content_ids: [product.id],
+      content_name: product.name,
+      content_category: product.category,
+      content_type: "product",
+      currency: "GBP",
+      value: product.priceGBP,
+    });
+  }, [product.category, product.id, product.name, product.priceGBP, product.slug]);
 
   const cartItem = useMemo<CartItem>(
     () => ({
@@ -51,6 +63,14 @@ export function ProductDetailClient({ product }: { product: Product }) {
     }
 
     addItem(cartItem, { openCart });
+    trackMetaEvent("InitiateCheckout", {
+      content_ids: [product.id],
+      content_name: product.name,
+      content_type: "product",
+      currency,
+      value: currentPrice * quantity,
+      num_items: quantity,
+    });
     setSizeError(false);
     return true;
   }

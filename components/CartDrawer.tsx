@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { getCartItemPrice, getCartSubtotal } from "@/lib/cart";
 import { formatMoney } from "@/lib/formatMoney";
+import { trackMetaEvent } from "@/lib/metaPixel";
 import { useCurrency } from "@/lib/useCurrency";
 import { useCart } from "./CartProvider";
 
@@ -72,6 +73,13 @@ export function CartDrawer() {
                 href="/checkout"
                 scroll
                 onClick={() => {
+                  trackMetaEvent("InitiateCheckout", {
+                    content_ids: items.map((item) => item.productId),
+                    content_type: "product",
+                    currency,
+                    value: subtotal,
+                    num_items: items.reduce((sum, item) => sum + item.quantity, 0),
+                  });
                   closeCart();
                   window.scrollTo({ top: 0, left: 0, behavior: "auto" });
                 }}

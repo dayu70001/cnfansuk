@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { getCartCount } from "@/lib/cart";
 import { currencies, currencySymbols } from "@/lib/currency";
+import { trackMetaEvent } from "@/lib/metaPixel";
 import { useCurrency } from "@/lib/useCurrency";
 import { useCart } from "./CartProvider";
 
@@ -93,7 +94,16 @@ export function Header() {
           <div>
             <p>Support</p>
             {supportItems.map((item) => (
-              <Link key={item.href} href={item.href} onClick={() => setMenuOpen(false)}>
+              <Link
+                key={item.href}
+                href={item.href}
+                onClick={() => {
+                  if (item.label === "Contact") {
+                    trackMetaEvent("Contact", { contact_channel: "contact_page", source: "mobile_menu" });
+                  }
+                  setMenuOpen(false);
+                }}
+              >
                 {item.label}
               </Link>
             ))}
