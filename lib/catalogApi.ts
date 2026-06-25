@@ -1,8 +1,10 @@
 import type { Product } from "@/lib/types";
 
+const DEFAULT_CATALOG_API_BASE = "https://cnfansuk-catalog-api.dayu70001.workers.dev";
+
 export function catalogApiUrl(path: string): string {
   const normalisedPath = path.startsWith("/") ? path : `/${path}`;
-  return `${getCatalogApiBase().replace(/\/+$/, "")}${normalisedPath}`;
+  return `${getCatalogApiBase()}${normalisedPath}`;
 }
 
 type CatalogImage = {
@@ -159,7 +161,7 @@ async function requestCatalog<T>(path: string, query: CatalogQuery = {}): Promis
 }
 
 function getCatalogApiBase(): string {
-  return process.env.NEXT_PUBLIC_CATALOG_API_BASE || "";
+  return (process.env.NEXT_PUBLIC_CATALOG_API_BASE?.trim() || DEFAULT_CATALOG_API_BASE).replace(/\/+$/, "");
 }
 
 function mapCatalogProduct(product: CatalogProduct): Product {
