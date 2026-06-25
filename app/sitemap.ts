@@ -1,5 +1,5 @@
 import type { MetadataRoute } from "next";
-import { fetchCatalogProducts } from "@/lib/catalogApi";
+import { fetchSitemapProducts } from "@/lib/catalogApi";
 import { products as fallbackProducts } from "@/data/products";
 import { SITE_URL } from "@/lib/site";
 
@@ -38,9 +38,9 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   // Product pages from the live catalog (read-only GET). Fall back to the
   // static product list if the catalog API is unavailable. No D1 / Worker
   // writes occur here.
-  let catalogProducts: Awaited<ReturnType<typeof fetchCatalogProducts>> = null;
+  let catalogProducts: Awaited<ReturnType<typeof fetchSitemapProducts>> = null;
   try {
-    catalogProducts = await fetchCatalogProducts({ limit: 1000 });
+    catalogProducts = await fetchSitemapProducts();
   } catch {
     catalogProducts = null;
   }
@@ -49,9 +49,10 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   for (const product of productSource) {
     if (!product?.slug || seenSlugs.has(product.slug)) continue;
     seenSlugs.add(product.slug);
+    const lastModified = "lastModified" in product && product.lastModified ? new Date(product.lastModified) : now;
     entries.push({
       url: `${SITE_URL}/product/${product.slug}`,
-      lastModified: now,
+      lastModified,
       changeFrequency: "weekly",
       priority: 0.7,
     });

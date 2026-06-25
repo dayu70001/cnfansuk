@@ -1,5 +1,21 @@
 type WorkerEnv = Env & { ADMIN_TOKEN: string };
 type D1Value = string | number | boolean | null;
+type D1QueryResult<T = unknown> = {
+  results?: T[];
+  meta?: {
+    duration?: number;
+    rows_read?: number;
+    rows_written?: number;
+    changes?: number;
+  };
+};
+type D1QueryLogContext = {
+  endpoint: string;
+  label: string;
+  limit?: number;
+  offset?: number;
+};
+type CloudflareCacheStorage = CacheStorage & { default: Cache };
 
 type ProductRow = {
   id: number;
@@ -120,6 +136,11 @@ const PAYMENT_METHODS = {
   "bank-transfer": { label: "Bank Transfer", feeRate: 0 },
   "crypto-payment": { label: "Crypto Payment", feeRate: 0 },
 } as const;
+const DEFAULT_LIST_LIMIT = 20;
+const MAX_LIST_LIMIT = 50;
+const FILTER_CACHE_SECONDS = 1800;
+const PRODUCT_CACHE_SECONDS = 1800;
+const SITEMAP_CACHE_SECONDS = 3600;
 
 function corsHeaders(request: Request): HeadersInit {
   const origin = request.headers.get("Origin");
@@ -133,15 +154,15 @@ function corsHeaders(request: Request): HeadersInit {
   return headers;
 }
 
-function jsonResponse(request: Request, body: unknown, status = 200): Response {
-  return Response.json(body, { status, headers: corsHeaders(request) });
+function jsonResponse(request: Request, body: unknown, status = 200, headers: HeadersInit = {}): Response {
+  return Response.json(body, { status, headers: { ...corsHeaders(request), ...headers } });
 }
 
 function cleanText(value: unknown, maxLength = 500): string {
   return typeof value === "string" ? value.trim().slice(0, maxLength) : "";
 }
 
-function normaliseLimit(value: string | null, fallback = 24, maximum = 100): number {
+function normaliseLimit(value: string | null, fallback = DEFAULT_LIST_LIMIT, maximum = MAX_LIST_LIMIT): number {
   const limit = Number.parseInt(value ?? String(fallback), 10);
   if (Number.isNaN(limit)) return fallback;
   return Math.min(Math.max(limit, 1), maximum);
@@ -162,6 +183,69 @@ function orderByClause(sort: string): string {
   if (sort === "price-high-low") return "price_gbp DESC, created_at DESC, id DESC";
   if (sort === "popular") return "sort_order ASC, created_at DESC, id DESC";
   return "created_at DESC, id DESC";
+}
+
+function logD1Query(context: D1QueryLogContext, result: D1QueryResult | null, durationMs: number) {
+  const meta = result?.meta || {};
+  console.log(JSON.stringify({
+    event: "d1_query",
+    endpoint: context.endpoint,
+    label: context.label,
+    limit: context.limit ?? null,
+    offset: context.offset ?? null,
+    duration_ms: Math.round(durationMs),
+    rows_read: Number(meta.rows_read || 0),
+    rows_written: Number(meta.rows_written || 0),
+  }));
+}
+
+async function d1All<T>(
+  env: WorkerEnv,
+  context: D1QueryLogContext,
+  sql: string,
+  values: D1Value[] = [],
+): Promise<D1QueryResult<T>> {
+  const started = Date.now();
+  const result = await env.DB.prepare(sql).bind(...values).all<T>();
+  logD1Query(context, result, Date.now() - started);
+  return result;
+}
+
+async function d1First<T>(
+  env: WorkerEnv,
+  context: D1QueryLogContext,
+  sql: string,
+  values: D1Value[] = [],
+): Promise<T | null> {
+  const result = await d1All<T>(env, context, sql, values);
+  return result.results?.[0] || null;
+}
+
+async function d1Run(
+  env: WorkerEnv,
+  context: D1QueryLogContext,
+  sql: string,
+  values: D1Value[] = [],
+) {
+  const started = Date.now();
+  const result = await env.DB.prepare(sql).bind(...values).run();
+  logD1Query(context, result as D1QueryResult, Date.now() - started);
+  return result;
+}
+
+function addResponseHeaders(response: Response, headers: Record<string, string>) {
+  const nextHeaders = new Headers(response.headers);
+  for (const [key, value] of Object.entries(headers)) nextHeaders.set(key, value);
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers: nextHeaders,
+  });
+}
+
+function normaliseProductLookup(value: string, field: "slug" | "product_code") {
+  const text = cleanText(decodeURIComponent(value), 180);
+  return field === "product_code" ? text.toUpperCase() : text.toLowerCase();
 }
 
 function publicImageUrl(image: ProductImageRow): string {
@@ -187,12 +271,15 @@ function mapProduct(product: ProductRow) {
   };
 }
 
-async function imagesForProducts(db: D1Database, productCodes: string[]) {
+async function imagesForProducts(env: WorkerEnv, endpoint: string, productCodes: string[]) {
   if (productCodes.length === 0) return new Map<string, ReturnType<typeof mapImage>[]>();
   const placeholders = productCodes.map(() => "?").join(", ");
-  const { results = [] } = await db.prepare(
+  const { results = [] } = await d1All<ProductImageRow>(
+    env,
+    { endpoint, label: "product_images_by_codes", limit: productCodes.length },
     `SELECT * FROM product_images WHERE product_code IN (${placeholders}) ORDER BY product_code, position, id`,
-  ).bind(...productCodes).all<ProductImageRow>();
+    productCodes,
+  );
   const grouped = new Map<string, ReturnType<typeof mapImage>[]>();
   for (const image of results) {
     const current = grouped.get(image.product_code) ?? [];
@@ -202,10 +289,13 @@ async function imagesForProducts(db: D1Database, productCodes: string[]) {
   return grouped;
 }
 
-async function optionsForProduct(db: D1Database, productCode: string) {
-  const { results = [] } = await db.prepare(
+async function optionsForProduct(env: WorkerEnv, endpoint: string, productCode: string) {
+  const { results = [] } = await d1All<ProductOptionRow>(
+    env,
+    { endpoint, label: "product_options_by_code" },
     "SELECT * FROM product_options WHERE product_code = ? ORDER BY position, id",
-  ).bind(productCode).all<ProductOptionRow>();
+    [productCode],
+  );
   if (results.length > 0) return results;
   return ["M", "L", "XL", "XXL"].map((size, index) => ({
     id: index + 1, product_code: productCode, option_name: "Size", option_value: size, position: index + 1,
@@ -214,6 +304,7 @@ async function optionsForProduct(db: D1Database, productCode: string) {
 
 async function handleCatalog(request: Request, env: WorkerEnv): Promise<Response> {
   const url = new URL(request.url);
+  const endpoint = url.pathname.replace(/\/+$/, "") || "/catalog";
   const filters = ["status = ?"];
   const values: D1Value[] = ["active"];
   const category = cleanText(url.searchParams.get("category"), 100);
@@ -231,11 +322,19 @@ async function handleCatalog(request: Request, env: WorkerEnv): Promise<Response
   const limit = normaliseLimit(url.searchParams.get("limit"));
   const page = normalisePage(url.searchParams.get("page"));
   const offset = url.searchParams.has("offset") ? normaliseOffset(url.searchParams.get("offset")) : (page - 1) * limit;
-  const countRow = await env.DB.prepare(`SELECT COUNT(*) AS total FROM products WHERE ${filters.join(" AND ")}`).bind(...values).first<{ total: number }>();
-  const { results = [] } = await env.DB.prepare(
+  const countRow = await d1First<{ total: number }>(
+    env,
+    { endpoint, label: "catalog_count", limit, offset },
+    `SELECT COUNT(*) AS total FROM products WHERE ${filters.join(" AND ")} LIMIT 1`,
+    values,
+  );
+  const { results = [] } = await d1All<ProductRow>(
+    env,
+    { endpoint, label: "catalog_page", limit, offset },
     `SELECT * FROM products WHERE ${filters.join(" AND ")} ORDER BY ${orderByClause(cleanText(url.searchParams.get("sort"), 30))} LIMIT ? OFFSET ?`,
-  ).bind(...values, limit, offset).all<ProductRow>();
-  const images = await imagesForProducts(env.DB, results.map((product) => product.product_code));
+    [...values, limit, offset],
+  );
+  const images = await imagesForProducts(env, endpoint, results.map((product) => product.product_code));
   const total = Number(countRow?.total || 0);
   const totalPages = limit > 0 ? Math.ceil(total / limit) : 0;
   const items = results.map((product) => ({ ...mapProduct(product), images: images.get(product.product_code) ?? [] }));
@@ -251,18 +350,49 @@ async function handleCatalog(request: Request, env: WorkerEnv): Promise<Response
 }
 
 async function productByField(request: Request, env: WorkerEnv, field: "slug" | "product_code", value: string) {
-  const product = await env.DB.prepare(`SELECT * FROM products WHERE status = ? AND ${field} = ? LIMIT 1`).bind("active", value).first<ProductRow>();
+  const endpoint = field === "slug" ? "/product/:slug" : "/product-code/:product_code";
+  const normalizedValue = normaliseProductLookup(value, field);
+  const product = await d1First<ProductRow>(
+    env,
+    { endpoint, label: field === "slug" ? "product_by_slug" : "product_by_code", limit: 1, offset: 0 },
+    `SELECT * FROM products WHERE status = ? AND ${field} = ? LIMIT 1`,
+    ["active", normalizedValue],
+  );
   if (!product) return jsonResponse(request, { error: "Product not found" }, 404);
-  const images = await imagesForProducts(env.DB, [product.product_code]);
-  const options = await optionsForProduct(env.DB, product.product_code);
+  const images = await imagesForProducts(env, endpoint, [product.product_code]);
+  const options = await optionsForProduct(env, endpoint, product.product_code);
   return jsonResponse(request, { product: { ...mapProduct(product), images: images.get(product.product_code) ?? [], options } });
+}
+
+function productCacheKey(request: Request, field: "slug" | "product_code", value: string) {
+  const url = new URL(request.url);
+  url.pathname = field === "slug"
+    ? `/product/${encodeURIComponent(normaliseProductLookup(value, field))}`
+    : `/product-code/${encodeURIComponent(normaliseProductLookup(value, field))}`;
+  url.search = "";
+  return new Request(url.toString(), { method: "GET" });
+}
+
+async function cachedProductByField(request: Request, env: WorkerEnv, ctx: ExecutionContext, field: "slug" | "product_code", value: string) {
+  const cache = (caches as CloudflareCacheStorage).default;
+  const key = productCacheKey(request, field, value);
+  const cached = await cache.match(key);
+  if (cached) return addResponseHeaders(cached, { "x-cnfans-cache": "HIT" });
+
+  const response = await productByField(request, env, field, value);
+  const responseWithCache = addResponseHeaders(response, {
+    "Cache-Control": `public, max-age=${PRODUCT_CACHE_SECONDS}, s-maxage=${PRODUCT_CACHE_SECONDS}, stale-while-revalidate=${PRODUCT_CACHE_SECONDS * 2}`,
+    "x-cnfans-cache": "MISS",
+  });
+  if (responseWithCache.status === 200) ctx.waitUntil(cache.put(key, responseWithCache.clone()));
+  return responseWithCache;
 }
 
 async function handleFilters(request: Request, env: WorkerEnv) {
   const [{ results: categories = [] }, { results: subcategories = [] }, { results: brands = [] }] = await Promise.all([
-    env.DB.prepare("SELECT category, COUNT(*) AS count FROM products WHERE status = ? AND category IS NOT NULL GROUP BY category ORDER BY category").bind("active").all<{ category: string; count: number }>(),
-    env.DB.prepare("SELECT subcategory, category, COUNT(*) AS count FROM products WHERE status = ? AND subcategory IS NOT NULL AND subcategory != '' GROUP BY category, subcategory ORDER BY category, subcategory").bind("active").all<{ category: string; subcategory: string; count: number }>(),
-    env.DB.prepare("SELECT brand, COUNT(*) AS count FROM products WHERE status = ? AND brand IS NOT NULL AND brand != '' GROUP BY brand ORDER BY brand").bind("active").all<{ brand: string; count: number }>(),
+    d1All<{ category: string; count: number }>(env, { endpoint: "/filters", label: "filters_categories" }, "SELECT category, COUNT(*) AS count FROM products WHERE status = ? AND category IS NOT NULL GROUP BY category ORDER BY category", ["active"]),
+    d1All<{ category: string; subcategory: string; count: number }>(env, { endpoint: "/filters", label: "filters_subcategories" }, "SELECT subcategory, category, COUNT(*) AS count FROM products WHERE status = ? AND subcategory IS NOT NULL AND subcategory != '' GROUP BY category, subcategory ORDER BY category, subcategory", ["active"]),
+    d1All<{ brand: string; count: number }>(env, { endpoint: "/filters", label: "filters_brands" }, "SELECT brand, COUNT(*) AS count FROM products WHERE status = ? AND brand IS NOT NULL AND brand != '' GROUP BY brand ORDER BY brand", ["active"]),
   ]);
   return jsonResponse(request, {
     categories: categories.map((row) => row.category),
@@ -272,10 +402,93 @@ async function handleFilters(request: Request, env: WorkerEnv) {
   });
 }
 
+function filtersCacheKey(request: Request) {
+  const sourceUrl = new URL(request.url);
+  const url = new URL(request.url);
+  url.pathname = "/filters";
+  url.search = "";
+  const category = cleanText(sourceUrl.searchParams.get("category"), 100);
+  if (category) url.searchParams.set("category", category);
+  return new Request(url.toString(), { method: "GET" });
+}
+
+async function cachedFilters(request: Request, env: WorkerEnv, ctx: ExecutionContext) {
+  const cache = (caches as CloudflareCacheStorage).default;
+  const key = filtersCacheKey(request);
+  const cached = await cache.match(key);
+  if (cached) return addResponseHeaders(cached, { "x-cnfans-cache": "HIT" });
+
+  const response = await handleFilters(request, env);
+  const responseWithCache = addResponseHeaders(response, {
+    "Cache-Control": `public, max-age=${FILTER_CACHE_SECONDS}, s-maxage=${FILTER_CACHE_SECONDS}, stale-while-revalidate=${FILTER_CACHE_SECONDS * 2}`,
+    "x-cnfans-cache": "MISS",
+  });
+  if (responseWithCache.status === 200) ctx.waitUntil(cache.put(key, responseWithCache.clone()));
+  return responseWithCache;
+}
+
+async function handleSitemapProducts(request: Request, env: WorkerEnv) {
+  const url = new URL(request.url);
+  const page = normalisePage(url.searchParams.get("page"));
+  const limit = normaliseLimit(url.searchParams.get("limit"), 1000, 1000);
+  const offset = url.searchParams.has("offset") ? normaliseOffset(url.searchParams.get("offset")) : (page - 1) * limit;
+  const { results = [] } = await d1All<Pick<ProductRow, "slug" | "product_code" | "updated_at" | "created_at">>(
+    env,
+    { endpoint: "/sitemap-products", label: "sitemap_products_page", limit, offset },
+    `SELECT slug, product_code, updated_at, created_at
+     FROM products
+     WHERE status = ?
+     ORDER BY updated_at DESC, id DESC
+     LIMIT ? OFFSET ?`,
+    ["active", limit + 1, offset],
+  );
+  const products = results.slice(0, limit).map((product) => ({
+    slug: product.slug,
+    product_code: product.product_code,
+    lastModified: product.updated_at || product.created_at,
+  }));
+  return jsonResponse(request, {
+    products,
+    page,
+    limit,
+    count: products.length,
+    hasMore: results.length > limit,
+  });
+}
+
+function sitemapCacheKey(request: Request) {
+  const sourceUrl = new URL(request.url);
+  const url = new URL(request.url);
+  url.pathname = "/sitemap-products";
+  url.search = "";
+  url.searchParams.set("page", String(normalisePage(sourceUrl.searchParams.get("page"))));
+  url.searchParams.set("limit", String(normaliseLimit(sourceUrl.searchParams.get("limit"), 1000, 1000)));
+  if (sourceUrl.searchParams.has("offset")) url.searchParams.set("offset", String(normaliseOffset(sourceUrl.searchParams.get("offset"))));
+  return new Request(url.toString(), { method: "GET" });
+}
+
+async function cachedSitemapProducts(request: Request, env: WorkerEnv, ctx: ExecutionContext) {
+  const cache = (caches as CloudflareCacheStorage).default;
+  const key = sitemapCacheKey(request);
+  const cached = await cache.match(key);
+  if (cached) return addResponseHeaders(cached, { "x-cnfans-cache": "HIT" });
+
+  const response = await handleSitemapProducts(request, env);
+  const responseWithCache = addResponseHeaders(response, {
+    "Cache-Control": `public, max-age=${SITEMAP_CACHE_SECONDS}, s-maxage=${SITEMAP_CACHE_SECONDS}, stale-while-revalidate=${SITEMAP_CACHE_SECONDS * 2}`,
+    "x-cnfans-cache": "MISS",
+  });
+  if (responseWithCache.status === 200) ctx.waitUntil(cache.put(key, responseWithCache.clone()));
+  return responseWithCache;
+}
+
 async function handleSiteSettings(request: Request, env: WorkerEnv) {
-  const row = await env.DB.prepare(
+  const row = await d1First<{ settings_json: string }>(
+    env,
+    { endpoint: "/site-settings", label: "site_settings_storefront", limit: 1, offset: 0 },
     "SELECT settings_json FROM site_settings WHERE settings_key = ? LIMIT 1",
-  ).bind("storefront").first<{ settings_json: string }>();
+    ["storefront"],
+  );
   if (!row) return jsonResponse(request, { settings: null });
   try {
     return jsonResponse(request, { settings: JSON.parse(row.settings_json) });
@@ -289,10 +502,13 @@ async function handleAdminSiteSettings(request: Request, env: WorkerEnv) {
   if (!isRecord(body)) return jsonResponse(request, { error: "首页设置数据无效" }, 400);
   const settingsJson = JSON.stringify(body);
   if (settingsJson.length > 60_000) return jsonResponse(request, { error: "首页设置内容过大" }, 413);
-  await env.DB.prepare(
+  await d1Run(
+    env,
+    { endpoint: "/admin/site-settings", label: "site_settings_upsert" },
     `INSERT INTO site_settings (settings_key, settings_json) VALUES (?, ?)
      ON CONFLICT(settings_key) DO UPDATE SET settings_json = excluded.settings_json, updated_at = CURRENT_TIMESTAMP`,
-  ).bind("storefront", settingsJson).run();
+    ["storefront", settingsJson],
+  );
   return handleSiteSettings(request, env);
 }
 
@@ -378,12 +594,15 @@ async function handleCreateOrder(request: Request, env: WorkerEnv): Promise<Resp
 
   const uniqueCodes = Array.from(new Set(requestedItems.map((item) => item.productCode)));
   const placeholders = uniqueCodes.map(() => "?").join(", ");
-  const { results: products = [] } = await env.DB.prepare(
+  const { results: products = [] } = await d1All<ProductRow>(
+    env,
+    { endpoint: "/orders", label: "order_products_by_codes", limit: uniqueCodes.length },
     `SELECT * FROM products WHERE status = 'active' AND product_code IN (${placeholders})`,
-  ).bind(...uniqueCodes).all<ProductRow>();
+    uniqueCodes,
+  );
   if (products.length !== uniqueCodes.length) return jsonResponse(request, { error: "订单包含不存在或已下架商品" }, 400);
   const productsByCode = new Map(products.map((product) => [product.product_code, product]));
-  const images = await imagesForProducts(env.DB, uniqueCodes);
+  const images = await imagesForProducts(env, "/orders", uniqueCodes);
 
   let subtotal = 0;
   let subtotalGbp = 0;
@@ -448,11 +667,14 @@ async function handleAdminProducts(request: Request, env: WorkerEnv) {
     const term = `%${q}%`;
     values.push(term, term, term);
   }
-  const limit = normaliseLimit(url.searchParams.get("limit"), 50, 100);
-  const { results = [] } = await env.DB.prepare(
+  const limit = normaliseLimit(url.searchParams.get("limit"), 50, MAX_LIST_LIMIT);
+  const { results = [] } = await d1All<ProductRow>(
+    env,
+    { endpoint: "/admin/products", label: "admin_products_search", limit, offset: 0 },
     `SELECT * FROM products ${where} ORDER BY updated_at DESC, id DESC LIMIT ?`,
-  ).bind(...values, limit).all<ProductRow>();
-  const images = await imagesForProducts(env.DB, results.map((product) => product.product_code));
+    [...values, limit],
+  );
+  const images = await imagesForProducts(env, "/admin/products", results.map((product) => product.product_code));
   const subcategories = Object.entries(ALLOWED_SUBCATEGORIES).flatMap(([category, values]) =>
     Array.from(values, (subcategory) => ({ category, subcategory })),
   );
@@ -475,12 +697,20 @@ async function handleAdminProductUpdate(request: Request, env: WorkerEnv, produc
   if (subcategory && !ALLOWED_SUBCATEGORIES[category]?.has(subcategory)) {
     return jsonResponse(request, { error: "子类目与当前产品分类不匹配" }, 400);
   }
-  const result = await env.DB.prepare(
+  const result = await d1Run(
+    env,
+    { endpoint: "/admin/products/:product_code", label: "admin_product_update" },
     "UPDATE products SET title = ?, category = ?, subcategory = ?, brand = ?, updated_at = CURRENT_TIMESTAMP WHERE product_code = ?",
-  ).bind(title, category, subcategory || null, brand, productCode).run();
+    [title, category, subcategory || null, brand, productCode],
+  );
   if (!result.meta.changes) return jsonResponse(request, { error: "未找到商品" }, 404);
-  const updated = await env.DB.prepare("SELECT * FROM products WHERE product_code = ? LIMIT 1").bind(productCode).first<ProductRow>();
-  const images = await imagesForProducts(env.DB, [productCode]);
+  const updated = await d1First<ProductRow>(
+    env,
+    { endpoint: "/admin/products/:product_code", label: "admin_product_by_code", limit: 1, offset: 0 },
+    "SELECT * FROM products WHERE product_code = ? LIMIT 1",
+    [productCode],
+  );
+  const images = await imagesForProducts(env, "/admin/products/:product_code", [productCode]);
   return jsonResponse(request, { product: updated ? { ...mapProduct(updated), images: images.get(productCode) ?? [] } : null });
 }
 
@@ -497,17 +727,30 @@ async function handleAdminOrders(request: Request, env: WorkerEnv) {
   }
   if (status && ORDER_STATUSES.has(status)) { filters.push("status = ?"); values.push(status); }
   const where = filters.length ? `WHERE ${filters.join(" AND ")}` : "";
-  const limit = normaliseLimit(url.searchParams.get("limit"), 100, 200);
-  const { results = [] } = await env.DB.prepare(
+  const limit = normaliseLimit(url.searchParams.get("limit"), 50, MAX_LIST_LIMIT);
+  const { results = [] } = await d1All<OrderRow>(
+    env,
+    { endpoint: "/admin/orders", label: "admin_orders_page", limit, offset: 0 },
     `SELECT * FROM orders ${where} ORDER BY created_at DESC LIMIT ?`,
-  ).bind(...values, limit).all<OrderRow>();
+    [...values, limit],
+  );
   return jsonResponse(request, { orders: results });
 }
 
 async function readOrder(env: WorkerEnv, orderNumber: string) {
-  const order = await env.DB.prepare("SELECT * FROM orders WHERE order_number = ? LIMIT 1").bind(orderNumber).first<OrderRow>();
+  const order = await d1First<OrderRow>(
+    env,
+    { endpoint: "/admin/orders/:order_number", label: "admin_order_by_number", limit: 1, offset: 0 },
+    "SELECT * FROM orders WHERE order_number = ? LIMIT 1",
+    [orderNumber],
+  );
   if (!order) return null;
-  const { results: items = [] } = await env.DB.prepare("SELECT * FROM order_items WHERE order_id = ? ORDER BY id").bind(order.id).all<OrderItemRow>();
+  const { results: items = [] } = await d1All<OrderItemRow>(
+    env,
+    { endpoint: "/admin/orders/:order_number", label: "admin_order_items" },
+    "SELECT * FROM order_items WHERE order_id = ? ORDER BY id",
+    [order.id],
+  );
   return { ...order, items };
 }
 
@@ -520,17 +763,23 @@ async function handleAdminOrderStatus(request: Request, env: WorkerEnv, orderNum
   const body = await readBoundedJson(request);
   const status = isRecord(body) ? cleanText(body.status, 30) as OrderStatus : "pending";
   if (!ORDER_STATUSES.has(status)) return jsonResponse(request, { error: "订单状态无效" }, 400);
-  const result = await env.DB.prepare(
+  const result = await d1Run(
+    env,
+    { endpoint: "/admin/orders/:order_number/status", label: "admin_order_status_update" },
     "UPDATE orders SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE order_number = ?",
-  ).bind(status, orderNumber).run();
+    [status, orderNumber],
+  );
   if (!result.meta.changes) return jsonResponse(request, { error: "未找到订单" }, 404);
   return handleAdminOrderDetail(request, env, orderNumber);
 }
 
 async function handleAdminOrderDelete(request: Request, env: WorkerEnv, orderNumber: string) {
-  const existing = await env.DB.prepare(
+  const existing = await d1First<{ id: string }>(
+    env,
+    { endpoint: "/admin/orders/:order_number", label: "admin_order_id_by_number", limit: 1, offset: 0 },
     "SELECT id FROM orders WHERE order_number = ? LIMIT 1",
-  ).bind(orderNumber).first<{ id: string }>();
+    [orderNumber],
+  );
   if (!existing) return jsonResponse(request, { error: "未找到订单" }, 404);
 
   const results = await env.DB.batch([
@@ -543,7 +792,7 @@ async function handleAdminOrderDelete(request: Request, env: WorkerEnv, orderNum
 }
 
 export default {
-  async fetch(request: Request, env: WorkerEnv): Promise<Response> {
+  async fetch(request: Request, env: WorkerEnv, ctx: ExecutionContext): Promise<Response> {
     if (request.method === "OPTIONS") return new Response(null, { status: 204, headers: corsHeaders(request) });
     const url = new URL(request.url);
     const pathname = url.pathname.replace(/\/+$/, "") || "/";
@@ -551,13 +800,14 @@ export default {
       if (pathname === "/health" && request.method === "GET") return jsonResponse(request, { ok: true, service: SERVICE_NAME });
       if (pathname === "/catalog" && request.method === "GET") return handleCatalog(request, env);
       if (pathname === "/latest" && request.method === "GET") return handleCatalog(request, env);
-      if (pathname === "/filters" && request.method === "GET") return handleFilters(request, env);
+      if (pathname === "/filters" && request.method === "GET") return cachedFilters(request, env, ctx);
+      if (pathname === "/sitemap-products" && request.method === "GET") return cachedSitemapProducts(request, env, ctx);
       if (pathname === "/site-settings" && request.method === "GET") return handleSiteSettings(request, env);
       if (pathname === "/orders" && request.method === "POST") return handleCreateOrder(request, env);
       const productMatch = pathname.match(/^\/product\/([^/]+)$/);
-      if (productMatch && request.method === "GET") return productByField(request, env, "slug", decodeURIComponent(productMatch[1]));
+      if (productMatch && request.method === "GET") return cachedProductByField(request, env, ctx, "slug", productMatch[1]);
       const productCodeMatch = pathname.match(/^\/product-code\/([^/]+)$/);
-      if (productCodeMatch && request.method === "GET") return productByField(request, env, "product_code", decodeURIComponent(productCodeMatch[1]));
+      if (productCodeMatch && request.method === "GET") return cachedProductByField(request, env, ctx, "product_code", productCodeMatch[1]);
 
       if (pathname.startsWith("/admin/") && !(await verifyAdmin(request, env))) {
         return jsonResponse(request, { error: "未授权" }, 401);

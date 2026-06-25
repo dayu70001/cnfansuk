@@ -62,6 +62,14 @@ type ProductResponse = {
   product?: CatalogProduct;
 };
 
+type SitemapProductsResponse = {
+  products?: Array<{
+    slug?: string | null;
+    product_code?: string | null;
+    lastModified?: string | null;
+  }>;
+};
+
 export type CatalogFilters = {
   categories: string[];
   subcategories: string[];
@@ -109,6 +117,17 @@ export async function fetchCatalogPage(query: CatalogQuery = {}): Promise<{ prod
 export async function fetchCatalogProductBySlug(slug: string): Promise<Product | null> {
   const response = await requestCatalog<ProductResponse>(`/product/${encodeURIComponent(slug)}`);
   return response?.product ? mapCatalogProduct(response.product) : null;
+}
+
+export async function fetchSitemapProducts(): Promise<Array<{ slug: string; lastModified?: string | null }> | null> {
+  const response = await requestCatalog<SitemapProductsResponse>("/sitemap-products", { limit: 1000 });
+  if (!response?.products) return response ? [] : null;
+  return response.products
+    .map((product) => ({
+      slug: cleanText(product.slug),
+      lastModified: cleanText(product.lastModified) || null,
+    }))
+    .filter((product) => product.slug);
 }
 
 export async function fetchCatalogFilters(): Promise<CatalogFilters | null> {
