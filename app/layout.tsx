@@ -1,7 +1,9 @@
 import type { Metadata, Viewport } from "next";
 import { Hanken_Grotesk, Newsreader } from "next/font/google";
+import { Suspense } from "react";
 import { CartDrawer } from "@/components/CartDrawer";
 import { CartProvider } from "@/components/CartProvider";
+import { FacebookPixel } from "@/components/FacebookPixel";
 import { Footer } from "@/components/Footer";
 import { Header } from "@/components/Header";
 import { SITE_NAME, SITE_URL } from "@/lib/site";
@@ -58,6 +60,9 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
           <Footer />
           <CartDrawer />
         </CartProvider>
+        <Suspense fallback={null}>
+          <FacebookPixel />
+        </Suspense>
       </body>
     </html>
   );
