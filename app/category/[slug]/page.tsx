@@ -2,10 +2,11 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { ProductCard } from "@/components/ProductCard";
+import { FilterDropdown, type DropdownOption } from "@/components/FilterDropdown";
 import { JsonLd } from "@/components/JsonLd";
 import { getCategory } from "@/data/categories";
 import { getProductsByCategory, products } from "@/data/products";
-import { fetchCatalogProducts } from "@/lib/catalogApi";
+import { fetchCatalogFilters, fetchCatalogPage } from "@/lib/catalogApi";
 import { SITE_NAME, SITE_URL } from "@/lib/site";
 import type { Product } from "@/lib/types";
 
@@ -179,22 +180,13 @@ export default async function CategoryPage({
   const filterCategory = legacyCategoryMap[slug] || slug;
   const localProducts = getProductsByCategory(slug);
   const catalogQuery = slug === "new-in" ? {} : { category: filterCategory };
-  // Fetch the full first page (limit 100) for client-side filtering + sorting.
-  // The URL ?page is handled by our own pagination below; do NOT forward it to
-  // the catalog API, which would otherwise apply server-side offset pagination.
-  const [catalogProducts, optionProducts] = await Promise.all([
-    fetchCatalogProducts({ ...catalogQuery, q, brand, subcategory, sort, limit: 100 }),
-    fetchCatalogProducts({ ...catalogQuery, limit: 100 }),
-  ]);
-  const matchingCatalogProducts =
-    catalogProducts?.filter((product) => (slug === "new-in" ? product.newIn : product.category === filterCategory)) || [];
-  const baseProducts = catalogProducts === null ? localProducts : matchingCatalogProducts;
-  const filterOptionProducts = optionProducts === null ? localProducts : optionProducts;
-  const brandOptions = getBrandOptions(filterOptionProducts);
-  const styleGroup = styleOptionsByCategory[filterCategory];
   const PAGE_SIZE = 20;
-  const categoryProducts = sortProducts(
-    baseProducts.filter((product) => {
+  const [catalog, filters] = await Promise.all([
+    fetchCatalogPage({ ...catalogQuery, q, brand, subcategory, sort, page, limit: PAGE_SIZE }),
+    fetchCatalogFilters(),
+  ]);
+  const fallbackProducts = sortProducts(
+    localProducts.filter((product) => {
       const matchesSearch = q ? `${product.name} ${product.shortDescription} ${product.description}`.toLowerCase().includes(q.toLowerCase()) : true;
       const matchesBrand = brand ? product.brand.toLowerCase() === brand.toLowerCase() : true;
       const matchesStyle = subcategory ? product.style === subcategory : true;
@@ -202,10 +194,13 @@ export default async function CategoryPage({
     }),
     sort,
   );
-  const totalPages = Math.max(1, Math.ceil(categoryProducts.length / PAGE_SIZE));
-  const paginatedProducts = categoryProducts.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  const paginatedProducts = catalog === null ? fallbackProducts.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE) : catalog.products;
+  const totalProducts = catalog === null ? fallbackProducts.length : catalog.total;
+  const totalPages = catalog === null ? Math.ceil(totalProducts / PAGE_SIZE) : catalog.totalPages;
+  const brandOptions = filters?.brands?.length ? getBrandOptionsFromLabels(filters.brands) : getBrandOptions(localProducts);
+  const styleGroup = styleOptionsByCategory[filterCategory];
   const hasFilters = Boolean(q || brand || subcategory || (sort && sort !== "newest") || page > 1);
-  const productCountLabel = `${categoryProducts.length} ${categoryProducts.length === 1 ? "style" : "styles"}`;
+  const productCountLabel = `${totalProducts} ${totalProducts === 1 ? "style" : "styles"}`;
 
   const categoryCanonical = `${SITE_URL}/category/${slug}`;
   const breadcrumbSchema = {
@@ -250,28 +245,22 @@ export default async function CategoryPage({
       </form>
 
       <div className="category-filter-row" aria-label="Category filters">
-        <FilterMenu
+        <FilterDropdown
           label={`Brand: ${brandOptions.find((option) => option.value === brand)?.label || "All"}`}
-          options={[{ value: "", label: "All Brands" }, ...brandOptions]}
-          slug={slug}
-          current={{ q, brand, subcategory, sort, page: String(page) }}
-          param="brand"
+          options={toDropdownOptions([{ value: "", label: "All Brands" }, ...brandOptions], slug, { q, brand, subcategory, sort, page: String(page) }, "brand")}
+          currentValue={brand}
         />
         {styleGroup ? (
-          <FilterMenu
+          <FilterDropdown
             label={`Style: ${styleGroup.options.find((option) => option.value === subcategory)?.label || "All"}`}
-            options={[{ value: "", label: styleGroup.allLabel }, ...styleGroup.options]}
-            slug={slug}
-            current={{ q, brand, subcategory, sort, page: String(page) }}
-            param="subcategory"
+            options={toDropdownOptions([{ value: "", label: styleGroup.allLabel }, ...styleGroup.options], slug, { q, brand, subcategory, sort, page: String(page) }, "subcategory")}
+            currentValue={subcategory}
           />
         ) : null}
-        <FilterMenu
+        <FilterDropdown
           label={`Sort: ${sortOptions.find((option) => option.value === sort)?.label || "Newest"}`}
-          options={sortOptions}
-          slug={slug}
-          current={{ q, brand, subcategory, sort, page: String(page) }}
-          param="sort"
+          options={toDropdownOptions(sortOptions, slug, { q, brand, subcategory, sort, page: String(page) }, "sort")}
+          currentValue={sort}
         />
       </div>
 
@@ -295,36 +284,17 @@ export default async function CategoryPage({
   );
 }
 
-function FilterMenu({
-  current,
-  label,
-  options,
-  param,
-  slug,
-}: {
-  current: NormalizedFilters;
-  label: string;
-  options: StyleOption[];
-  param: keyof NormalizedFilters;
-  slug: string;
-}) {
-  return (
-    <details className="category-filter-menu">
-      <summary>{label}</summary>
-      <div>
-        {options.map((option) => (
-          <a
-            className={current[param] === option.value ? "active" : ""}
-            href={buildCategoryHref(slug, { ...current, [param]: option.value, page: "1" })}
-            key={option.value || "all"}
-            aria-current={current[param] === option.value ? "true" : undefined}
-          >
-            {option.label}
-          </a>
-        ))}
-      </div>
-    </details>
-  );
+function toDropdownOptions(
+  options: StyleOption[],
+  slug: string,
+  current: NormalizedFilters,
+  param: keyof NormalizedFilters,
+): DropdownOption[] {
+  return options.map((option) => ({
+    value: option.value,
+    label: option.label,
+    href: buildCategoryHref(slug, { ...current, [param]: option.value, page: "1" }),
+  }));
 }
 
 function Pagination({
@@ -342,6 +312,7 @@ function Pagination({
 
   const prevPage = page > 1 ? String(page - 1) : "1";
   const nextPage = page < totalPages ? String(page + 1) : String(totalPages);
+  const pages = buildPaginationPages(page, totalPages);
 
   return (
     <nav className="category-pagination" aria-label="Pagination">
@@ -350,13 +321,17 @@ function Pagination({
       ) : (
         <a href={buildCategoryHref(slug, { ...current, page: prevPage })}>Previous</a>
       )}
-      {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) =>
-        page === p ? (
-          <span key={p} className="active">{p}</span>
+      <span className="category-pagination-status">Page {page} of {totalPages}</span>
+      {pages.map((item, index) => {
+        if (item === "...") {
+          return <span key={`ellipsis-${index}`} className="category-pagination-ellipsis">…</span>;
+        }
+        return page === item ? (
+          <span key={item} className="active category-pagination-page">{item}</span>
         ) : (
-          <a key={p} href={buildCategoryHref(slug, { ...current, page: String(p) })}>{p}</a>
-        )
-      )}
+          <a key={item} className="category-pagination-page" href={buildCategoryHref(slug, { ...current, page: String(item) })}>{item}</a>
+        );
+      })}
       {page >= totalPages ? (
         <span className="disabled">Next</span>
       ) : (
@@ -382,6 +357,21 @@ function getBrandOptions(items: Product[]) {
     if (label && label !== "CNFans UK") brands.set(label, label);
   });
   return Array.from(brands, ([value, label]) => ({ value, label })).sort((a, b) => a.label.localeCompare(b.label));
+}
+
+function getBrandOptionsFromLabels(items: string[]) {
+  return items
+    .map((item) => item.trim())
+    .filter((item) => item && item !== "CNFans UK")
+    .map((item) => ({ value: item, label: item }))
+    .sort((a, b) => a.label.localeCompare(b.label));
+}
+
+function buildPaginationPages(page: number, totalPages: number): Array<number | "..."> {
+  if (totalPages <= 7) return Array.from({ length: totalPages }, (_, index) => index + 1);
+  if (page <= 4) return [1, 2, 3, 4, 5, "...", totalPages];
+  if (page >= totalPages - 3) return [1, "...", totalPages - 4, totalPages - 3, totalPages - 2, totalPages - 1, totalPages];
+  return [1, "...", page - 1, page, page + 1, "...", totalPages];
 }
 
 function sortProducts(items: Product[], sort: string) {

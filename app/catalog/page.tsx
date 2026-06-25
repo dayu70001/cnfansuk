@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { ProductCard } from "@/components/ProductCard";
-import { fetchCatalogPage, fetchCatalogProducts } from "@/lib/catalogApi";
-import type { Product } from "@/lib/types";
+import { FilterDropdown, type DropdownOption } from "@/components/FilterDropdown";
+import { fetchCatalogFilters, fetchCatalogPage } from "@/lib/catalogApi";
 
 export const dynamic = "force-dynamic";
 
@@ -38,6 +38,7 @@ const categoryOptions: Option[] = [
 const subcategoryOptions: Record<string, Option[]> = {
   tops: [
     { value: "t-shirts", label: "T-Shirts" },
+    { value: "tank-tops", label: "Tank Tops" },
     { value: "hoodies", label: "Hoodies" },
     { value: "sweatshirts", label: "Sweatshirts" },
     { value: "zip-hoodies", label: "Zip Hoodies" },
@@ -94,14 +95,33 @@ export default async function CatalogPage({
     page: String(cleanPage(query.page)),
   };
   const page = Number(filters.page);
-  const [catalog, optionProducts] = await Promise.all([
-    fetchCatalogPage({ ...filters, page, limit: 24 }),
-    fetchCatalogProducts({ category: filters.category, limit: 100 }),
+  const PAGE_SIZE = 20;
+  const [catalog, catalogFilters] = await Promise.all([
+    fetchCatalogPage({ ...filters, page, limit: PAGE_SIZE }),
+    fetchCatalogFilters(),
   ]);
   const products = catalog?.products || [];
-  const brandOptions = getBrandOptions(optionProducts || []);
+  const brandOptions = getBrandOptions(catalogFilters?.brands || []);
+  const totalPages = catalog?.totalPages || 0;
   const visibleSubcategories = filters.category ? subcategoryOptions[filters.category] || [] : allSubcategoryOptions;
   const hasFilters = Boolean(filters.category || filters.subcategory || filters.brand || filters.q || (filters.sort && filters.sort !== "newest") || page > 1);
+
+  const categoryDropdownOptions = toDropdownOptions(
+    [{ value: "", label: "All Categories" }, ...categoryOptions],
+    filters,
+    "category"
+  );
+  const brandDropdownOptions = toDropdownOptions(
+    [{ value: "", label: "All Brands" }, ...brandOptions],
+    filters,
+    "brand"
+  );
+  const subcategoryDropdownOptions = toDropdownOptions(
+    [{ value: "", label: "All Styles" }, ...visibleSubcategories],
+    filters,
+    "subcategory"
+  );
+  const sortDropdownOptions = toDropdownOptions(sortOptions, filters, "sort");
 
   return (
     <section className="category-page">
@@ -135,10 +155,26 @@ export default async function CatalogPage({
       </form>
 
       <div className="category-filter-row" aria-label="Catalog filters">
-        <FilterMenu label={`Category: ${categoryOptions.find((option) => option.value === filters.category)?.label || "All"}`} options={[{ value: "", label: "All Categories" }, ...categoryOptions]} current={filters} param="category" />
-        <FilterMenu label={`Brand: ${brandOptions.find((option) => option.value === filters.brand)?.label || "All"}`} options={[{ value: "", label: "All Brands" }, ...brandOptions]} current={filters} param="brand" />
-        <FilterMenu label={`Style: ${visibleSubcategories.find((option) => option.value === filters.subcategory)?.label || "All"}`} options={[{ value: "", label: "All Styles" }, ...visibleSubcategories]} current={filters} param="subcategory" />
-        <FilterMenu label={`Sort: ${sortOptions.find((option) => option.value === filters.sort)?.label || "Newest"}`} options={sortOptions} current={filters} param="sort" />
+        <FilterDropdown
+          label={`Category: ${categoryOptions.find((option) => option.value === filters.category)?.label || "All"}`}
+          options={categoryDropdownOptions}
+          currentValue={filters.category}
+        />
+        <FilterDropdown
+          label={`Brand: ${brandOptions.find((option) => option.value === filters.brand)?.label || "All"}`}
+          options={brandDropdownOptions}
+          currentValue={filters.brand}
+        />
+        <FilterDropdown
+          label={`Style: ${visibleSubcategories.find((option) => option.value === filters.subcategory)?.label || "All"}`}
+          options={subcategoryDropdownOptions}
+          currentValue={filters.subcategory}
+        />
+        <FilterDropdown
+          label={`Sort: ${sortOptions.find((option) => option.value === filters.sort)?.label || "Newest"}`}
+          options={sortDropdownOptions}
+          currentValue={filters.sort}
+        />
       </div>
 
       {products.length > 0 ? (
@@ -150,46 +186,82 @@ export default async function CatalogPage({
       ) : (
         <p className="category-empty">No products found for this filter.</p>
       )}
+      <Pagination current={filters} page={page} totalPages={totalPages} />
     </section>
   );
 }
 
-function FilterMenu({
+function toDropdownOptions(
+  options: Option[],
+  current: NormalizedFilters,
+  param: keyof NormalizedFilters
+): DropdownOption[] {
+  return options.map((option) => {
+    const next = { ...current, [param]: option.value, page: "1" };
+    if (param === "category") next.subcategory = "";
+    return {
+      value: option.value,
+      label: option.label,
+      href: buildCatalogHref(next),
+    };
+  });
+}
+
+function Pagination({
   current,
-  label,
-  options,
-  param,
+  page,
+  totalPages,
 }: {
   current: NormalizedFilters;
-  label: string;
-  options: Option[];
-  param: keyof NormalizedFilters;
+  page: number;
+  totalPages: number;
 }) {
+  if (totalPages <= 1) return null;
+
+  const prevPage = page > 1 ? String(page - 1) : "1";
+  const nextPage = page < totalPages ? String(page + 1) : String(totalPages);
+  const pages = buildPaginationPages(page, totalPages);
+
   return (
-    <details className="category-filter-menu">
-      <summary>{label}</summary>
-      <div>
-        {options.map((option) => {
-          const next = { ...current, [param]: option.value, page: "1" };
-          if (param === "category") next.subcategory = "";
-          return (
-            <a className={current[param] === option.value ? "active" : ""} href={buildCatalogHref(next)} key={option.value || "all"} aria-current={current[param] === option.value ? "true" : undefined}>
-              {option.label}
-            </a>
-          );
-        })}
-      </div>
-    </details>
+    <nav className="category-pagination" aria-label="Pagination">
+      {page <= 1 ? (
+        <span className="disabled">Previous</span>
+      ) : (
+        <a href={buildCatalogHref({ ...current, page: prevPage })}>Previous</a>
+      )}
+      <span className="category-pagination-status">Page {page} of {totalPages}</span>
+      {pages.map((item, index) => {
+        if (item === "...") {
+          return <span key={`ellipsis-${index}`} className="category-pagination-ellipsis">…</span>;
+        }
+        return page === item ? (
+          <span key={item} className="active category-pagination-page">{item}</span>
+        ) : (
+          <a key={item} className="category-pagination-page" href={buildCatalogHref({ ...current, page: String(item) })}>{item}</a>
+        );
+      })}
+      {page >= totalPages ? (
+        <span className="disabled">Next</span>
+      ) : (
+        <a href={buildCatalogHref({ ...current, page: nextPage })}>Next</a>
+      )}
+    </nav>
   );
 }
 
-function getBrandOptions(items: Product[]) {
-  const brands = new Map<string, string>();
-  items.forEach((product) => {
-    const label = product.brand.trim();
-    if (label && label !== "CNFans UK") brands.set(label, label);
-  });
-  return Array.from(brands, ([value, label]) => ({ value, label })).sort((a, b) => a.label.localeCompare(b.label));
+function getBrandOptions(items: string[]) {
+  return items
+    .map((item) => item.trim())
+    .filter((item) => item && item !== "CNFans UK")
+    .map((item) => ({ value: item, label: item }))
+    .sort((a, b) => a.label.localeCompare(b.label));
+}
+
+function buildPaginationPages(page: number, totalPages: number): Array<number | "..."> {
+  if (totalPages <= 7) return Array.from({ length: totalPages }, (_, index) => index + 1);
+  if (page <= 4) return [1, 2, 3, 4, 5, "...", totalPages];
+  if (page >= totalPages - 3) return [1, "...", totalPages - 4, totalPages - 3, totalPages - 2, totalPages - 1, totalPages];
+  return [1, "...", page - 1, page, page + 1, "...", totalPages];
 }
 
 function buildCatalogHref(params: NormalizedFilters) {

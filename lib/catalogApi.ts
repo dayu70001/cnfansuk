@@ -43,12 +43,18 @@ type CatalogProduct = {
 };
 
 type CatalogResponse = {
+  items?: CatalogProduct[];
   products?: CatalogProduct[];
+  total?: number;
+  page?: number;
+  limit?: number;
+  totalPages?: number;
   pagination?: {
     limit?: number;
     offset?: number;
     page?: number;
     total?: number;
+    totalPages?: number;
   };
 };
 
@@ -84,14 +90,19 @@ export async function fetchCatalogProducts(query: CatalogQuery = {}): Promise<Pr
   return response.products.map(mapCatalogProduct);
 }
 
-export async function fetchCatalogPage(query: CatalogQuery = {}): Promise<{ products: Product[]; total: number; page: number; limit: number } | null> {
+export async function fetchCatalogPage(query: CatalogQuery = {}): Promise<{ products: Product[]; total: number; page: number; limit: number; totalPages: number } | null> {
   const response = await requestCatalog<CatalogResponse>("/catalog", query);
-  if (!response?.products) return response ? { products: [], total: 0, page: query.page || 1, limit: query.limit || 24 } : null;
+  const catalogItems = response?.products || response?.items;
+  if (!catalogItems) return response ? { products: [], total: 0, page: query.page || 1, limit: query.limit || 20, totalPages: 0 } : null;
+  const total = Number(response.total ?? response.pagination?.total ?? catalogItems.length);
+  const limit = Number(response.limit ?? response.pagination?.limit ?? query.limit ?? 20);
+  const totalPages = Number(response.totalPages ?? response.pagination?.totalPages ?? (limit > 0 ? Math.ceil(total / limit) : 0));
   return {
-    products: response.products.map(mapCatalogProduct),
-    total: Number(response.pagination?.total ?? response.products.length),
-    page: Number(response.pagination?.page ?? query.page ?? 1),
-    limit: Number(response.pagination?.limit ?? query.limit ?? 24),
+    products: catalogItems.map(mapCatalogProduct),
+    total,
+    page: Number(response.page ?? response.pagination?.page ?? query.page ?? 1),
+    limit,
+    totalPages,
   };
 }
 

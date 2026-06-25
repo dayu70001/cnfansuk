@@ -104,7 +104,7 @@ const ALLOWED_ORIGINS = new Set([
 const ALLOWED_CATEGORIES = new Set(["outerwear", "tops", "bottoms", "co-ords-sets"]);
 const ALLOWED_SUBCATEGORIES: Record<string, Set<string>> = {
   outerwear: new Set(["jackets", "hooded-jackets", "varsity-jackets", "puffer-jackets", "vests", "coats"]),
-  tops: new Set(["t-shirts", "hoodies", "sweatshirts", "zip-hoodies", "shirts", "knitwear"]),
+  tops: new Set(["t-shirts", "tank-tops", "hoodies", "sweatshirts", "zip-hoodies", "shirts", "knitwear"]),
   bottoms: new Set(["trousers", "joggers", "cargo-pants", "jeans", "shorts", "skirts"]),
   "co-ords-sets": new Set(["tracksuits", "hoodie-sets", "t-shirt-shorts-sets", "knit-sets", "casual-sets", "jacket-pants-sets"]),
 };
@@ -236,9 +236,17 @@ async function handleCatalog(request: Request, env: WorkerEnv): Promise<Response
     `SELECT * FROM products WHERE ${filters.join(" AND ")} ORDER BY ${orderByClause(cleanText(url.searchParams.get("sort"), 30))} LIMIT ? OFFSET ?`,
   ).bind(...values, limit, offset).all<ProductRow>();
   const images = await imagesForProducts(env.DB, results.map((product) => product.product_code));
+  const total = Number(countRow?.total || 0);
+  const totalPages = limit > 0 ? Math.ceil(total / limit) : 0;
+  const items = results.map((product) => ({ ...mapProduct(product), images: images.get(product.product_code) ?? [] }));
   return jsonResponse(request, {
-    products: results.map((product) => ({ ...mapProduct(product), images: images.get(product.product_code) ?? [] })),
-    pagination: { limit, offset, page, total: Number(countRow?.total || 0) },
+    items,
+    products: items,
+    total,
+    page,
+    limit,
+    totalPages,
+    pagination: { limit, offset, page, total, totalPages },
   });
 }
 
