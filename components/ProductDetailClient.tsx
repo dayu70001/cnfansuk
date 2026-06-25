@@ -1,10 +1,10 @@
 "use client";
 
-import { type MouseEvent, type UIEvent, useEffect, useMemo, useState } from "react";
+import { type MouseEvent, type UIEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { formatMoney } from "@/lib/formatMoney";
 import { getProductPrice } from "@/lib/productPrice";
-import { trackMetaEvent } from "@/lib/metaPixel";
+import { trackAddToCart, trackInitiateCheckout, trackViewContent } from "@/lib/metaPixel";
 import { useCurrency } from "@/lib/useCurrency";
 import type { CartItem, Product } from "@/lib/types";
 import { useCart } from "./CartProvider";
@@ -26,10 +26,18 @@ export function ProductDetailClient({ product }: { product: Product }) {
   const galleryItems = useMemo(() => product.images.filter((item) => item && item !== "placeholder").slice(0, 9), [product.images]);
   const currentPrice = getProductPrice(product, currency);
 
+  // Fire ViewContent once per product. Guarding by product id prevents a
+  // re-render (currency change, gallery state, etc.) from re-sending the event.
+  const viewedProductId = useRef<string | null>(null);
   useEffect(() => {
-    trackMetaEvent("ViewContent", {
-      content_ids: [product.id],
+    if (viewedProductId.current === product.id) return;
+    viewedProductId.current = product.id;
+    trackViewContent({
+      source_page: "product_detail",
       content_name: product.name,
+      content_ids: [product.id],
+      product_slug: product.slug,
+      product_code: product.id,
       content_category: product.category,
       content_type: "product",
       currency: "GBP",
@@ -56,6 +64,8 @@ export function ProductDetailClient({ product }: { product: Product }) {
     [defaultColor, galleryItems, product.id, product.name, product.priceEUR, product.priceGBP, product.priceUSD, product.slug, quantity, size],
   );
 
+  // Adds the selected item to the cart. Tracking is handled by the caller so
+  // that one button click maps to exactly one business event.
   function addSelectedItem(openCart = true) {
     if (!size) {
       setSizeError(true);
@@ -63,26 +73,46 @@ export function ProductDetailClient({ product }: { product: Product }) {
     }
 
     addItem(cartItem, { openCart });
-    trackMetaEvent("InitiateCheckout", {
-      content_ids: [product.id],
-      content_name: product.name,
-      content_type: "product",
-      currency,
-      value: currentPrice * quantity,
-      num_items: quantity,
-    });
     setSizeError(false);
     return true;
   }
 
   function handleAddToCart(event?: MouseEvent<HTMLButtonElement>) {
     event?.stopPropagation();
-    addSelectedItem(true);
+    if (addSelectedItem(true)) {
+      trackAddToCart({
+        source_page: "product_detail",
+        placement: "add_to_cart",
+        button_label: "Add to cart",
+        content_name: product.name,
+        content_ids: [product.id],
+        product_slug: product.slug,
+        product_code: product.id,
+        content_type: "product",
+        currency,
+        value: currentPrice * quantity,
+        num_items: quantity,
+      });
+    }
   }
 
   function orderNow(event: MouseEvent<HTMLButtonElement>) {
     event.stopPropagation();
     if (addSelectedItem(false)) {
+      trackInitiateCheckout({
+        source_page: "product_detail",
+        placement: "order_now",
+        button_label: "Order now",
+        destination: "/checkout",
+        content_name: product.name,
+        content_ids: [product.id],
+        product_slug: product.slug,
+        product_code: product.id,
+        content_type: "product",
+        currency,
+        value: currentPrice * quantity,
+        num_items: quantity,
+      });
       router.push("/checkout");
     }
   }

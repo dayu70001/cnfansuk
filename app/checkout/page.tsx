@@ -7,7 +7,7 @@ import { useCart } from "@/components/CartProvider";
 import { getCartItemPrice, getCartSubtotal } from "@/lib/cart";
 import type { CurrencyCode } from "@/lib/currency";
 import { formatMoney } from "@/lib/formatMoney";
-import { trackMetaEvent } from "@/lib/metaPixel";
+import { trackInitiateCheckout } from "@/lib/metaPixel";
 import { getPaymentFee, getPaymentMethod, paymentMethods, type PaymentMethodId } from "@/lib/payment";
 import {
   DEFAULT_SHIPPING_METHOD_ID,
@@ -252,13 +252,8 @@ export default function CheckoutPage() {
         setSubmitting(false);
         return;
       }
-      trackMetaEvent("Lead", {
-        content_ids: items.map((item) => item.productId),
-        content_type: "product",
-        currency,
-        value: total,
-        num_items: items.reduce((sum, item) => sum + item.quantity, 0),
-      });
+      // Lead is fired once on the order-success page (not here) so Submit Order
+      // and order-success do not double-count.
       clearCart();
       router.push(`/order-success?order=${encodeURIComponent(result.order.orderNumber)}`);
     } catch {
@@ -600,7 +595,11 @@ function MethodStep({
           className="btn btn-solid"
           type="button"
           onClick={() => {
-            trackMetaEvent("InitiateCheckout", { checkout_step: "payment" });
+            trackInitiateCheckout({
+              source_page: "checkout",
+              placement: "continue_to_payment",
+              button_label: "Continue to payment",
+            });
             onContinue();
           }}
         >

@@ -4,7 +4,7 @@ import Link from "next/link";
 import { Product } from "@/lib/types";
 import { formatMoney } from "@/lib/formatMoney";
 import { getProductPrice } from "@/lib/productPrice";
-import { trackMetaEvent } from "@/lib/metaPixel";
+import { trackAddToCart } from "@/lib/metaPixel";
 import { useCurrency } from "@/lib/useCurrency";
 import { useCart } from "./CartProvider";
 
@@ -45,9 +45,14 @@ export function ProductCard({ product }: { product: Product }) {
               size,
               quantity: 1,
             });
-            trackMetaEvent("InitiateCheckout", {
-              content_ids: [product.id],
+            trackAddToCart({
+              source_page: "product_card",
+              placement: "product_card_add_to_cart",
+              button_label: "Add to cart",
               content_name: product.name,
+              content_ids: [product.id],
+              product_slug: product.slug,
+              product_code: product.id,
               content_type: "product",
               currency,
               value: currentPrice,

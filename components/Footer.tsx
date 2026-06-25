@@ -50,40 +50,46 @@ export async function Footer() {
           <nav className="foot-col" aria-label="Support">
             <h4>Support</h4>
             {supportLinks.map((item) => (
-              item.label === "Contact" ? (
-                <MetaPixelEventLink href={item.href} key={item.href} eventName="Contact" eventParams={{ contact_channel: "contact_page", source: "footer" }}>
-                  {item.label}
-                </MetaPixelEventLink>
-              ) : (
-                <Link href={item.href} key={item.href}>
-                  {item.label}
-                </Link>
-              )
+              <Link href={item.href} key={item.href}>
+                {item.label}
+              </Link>
             ))}
           </nav>
           <nav className="foot-col" aria-label="Follow">
             <h4>Follow</h4>
-            {channels.map((item) => (
-              item.label === "WhatsApp" || item.label === "Telegram" ? (
-                <MetaPixelEventLink
-                  className="foot-icon-link"
-                  href={item.href}
-                  key={item.label}
-                  target="_blank"
-                  rel="noreferrer"
-                  eventName="Contact"
-                  eventParams={{ contact_channel: item.label.toLowerCase(), source: "footer" }}
-                >
-                  {item.icon}
-                  {item.label}
-                </MetaPixelEventLink>
-              ) : (
+            {channels.map((item) => {
+              // The footer "Follow" WhatsApp/Telegram links point at the public
+              // channel URLs, so they map to the Join*Channel events.
+              if (item.label === "WhatsApp" || item.label === "Telegram") {
+                const eventName = item.label === "WhatsApp" ? "JoinWhatsAppChannel" : "JoinTelegramChannel";
+                const destination = item.label === "WhatsApp" ? "whatsapp_channel" : "telegram_channel";
+                return (
+                  <MetaPixelEventLink
+                    className="foot-icon-link"
+                    href={item.href}
+                    key={item.label}
+                    target="_blank"
+                    rel="noreferrer"
+                    eventName={eventName}
+                    eventParams={{
+                      source_page: "footer",
+                      placement: "footer_follow",
+                      button_label: item.label,
+                      destination,
+                    }}
+                  >
+                    {item.icon}
+                    {item.label}
+                  </MetaPixelEventLink>
+                );
+              }
+              return (
                 <Link className="foot-icon-link" href={item.href} key={item.label} target="_blank" rel="noreferrer">
                   {item.icon}
                   {item.label}
                 </Link>
-              )
-            ))}
+              );
+            })}
           </nav>
           <nav className="foot-col" aria-label="Company">
             <h4>Company</h4>

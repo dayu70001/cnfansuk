@@ -261,8 +261,13 @@ export default async function Home() {
               href={links.whatsappChannelUrl}
               target="_blank"
               rel="noreferrer"
-              eventName="Contact"
-              eventParams={{ contact_channel: "whatsapp", source: "homepage_channel" }}
+              eventName="JoinWhatsAppChannel"
+              eventParams={{
+                source_page: "home",
+                placement: "homepage_channel",
+                button_label: "WhatsApp Channel",
+                destination: "whatsapp_channel",
+              }}
             >
               <WhatsAppIcon />
               WhatsApp Channel
@@ -272,8 +277,13 @@ export default async function Home() {
               href={links.telegramChannelUrl}
               target="_blank"
               rel="noreferrer"
-              eventName="Contact"
-              eventParams={{ contact_channel: "telegram", source: "homepage_channel" }}
+              eventName="JoinTelegramChannel"
+              eventParams={{
+                source_page: "home",
+                placement: "homepage_channel",
+                button_label: "Telegram Channel",
+                destination: "telegram_channel",
+              }}
             >
               <TelegramIcon />
               Telegram Channel

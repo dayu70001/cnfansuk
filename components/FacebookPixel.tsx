@@ -3,7 +3,7 @@
 import { useEffect, useRef } from "react";
 import Script from "next/script";
 import { usePathname, useSearchParams } from "next/navigation";
-import { trackMetaEvent } from "@/lib/metaPixel";
+import { trackPageView } from "@/lib/metaPixel";
 
 const PIXEL_ID = "1510906363753888";
 
@@ -18,7 +18,7 @@ export function FacebookPixel() {
       return;
     }
 
-    trackMetaEvent("PageView");
+    trackPageView();
   }, [pathname, searchParams]);
 
   return (
@@ -36,6 +36,7 @@ export function FacebookPixel() {
             t.src=v;s=b.getElementsByTagName(e)[0];
             s.parentNode.insertBefore(t,s)}(window, document,'script',
             'https://connect.facebook.net/en_US/fbevents.js');
+            fbq('set', 'autoConfig', false, '${PIXEL_ID}');
             fbq('init', '${PIXEL_ID}');
             fbq('track', 'PageView');
           `,

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { getCartItemPrice, getCartSubtotal } from "@/lib/cart";
 import { formatMoney } from "@/lib/formatMoney";
-import { trackMetaEvent } from "@/lib/metaPixel";
+import { trackInitiateCheckout } from "@/lib/metaPixel";
 import { useCurrency } from "@/lib/useCurrency";
 import { useCart } from "./CartProvider";
 
@@ -73,7 +73,11 @@ export function CartDrawer() {
                 href="/checkout"
                 scroll
                 onClick={() => {
-                  trackMetaEvent("InitiateCheckout", {
+                  trackInitiateCheckout({
+                    source_page: "cart_drawer",
+                    placement: "cart_checkout",
+                    button_label: "Checkout",
+                    destination: "/checkout",
                     content_ids: items.map((item) => item.productId),
                     content_type: "product",
                     currency,

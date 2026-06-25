@@ -20,8 +20,13 @@ export default function ContactPage() {
         <span>Email support</span>
         <MetaPixelEventLink
           href="mailto:support@cnfans.co.uk"
-          eventName="Contact"
-          eventParams={{ contact_channel: "email", source: "contact_page" }}
+          eventName="ContactEmail"
+          eventParams={{
+            source_page: "contact_page",
+            placement: "contact_page_email",
+            button_label: "Email support",
+            destination: "email",
+          }}
         >
           support@cnfans.co.uk
         </MetaPixelEventLink>

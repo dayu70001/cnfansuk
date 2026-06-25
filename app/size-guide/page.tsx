@@ -64,8 +64,13 @@ export default function SizeGuidePage() {
         </div>
         <MetaPixelEventLink
           href="mailto:support@cnfans.co.uk"
-          eventName="Contact"
-          eventParams={{ contact_channel: "email", source: "size_guide" }}
+          eventName="ContactEmail"
+          eventParams={{
+            source_page: "size_guide",
+            placement: "size_guide_email",
+            button_label: "Email support",
+            destination: "email",
+          }}
         >
           support@cnfans.co.uk
         </MetaPixelEventLink>

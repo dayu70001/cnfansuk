@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { trackMetaEvent } from "@/lib/metaPixel";
+import { trackSearch } from "@/lib/metaPixel";
 
 type HiddenField = {
   name: string;
@@ -31,7 +31,7 @@ export function CatalogSearchForm({
         const search = new FormData(event.currentTarget).get("q");
         const searchString = typeof search === "string" ? search.trim() : "";
         if (searchString) {
-          trackMetaEvent("Search", { search_string: searchString });
+          trackSearch({ source_page: "catalog", placement: "catalog_search", search_string: searchString });
         }
       }}
     >
