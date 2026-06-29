@@ -141,6 +141,7 @@ const MAX_LIST_LIMIT = 50;
 const FILTER_CACHE_SECONDS = 1800;
 const PRODUCT_CACHE_SECONDS = 1800;
 const SITEMAP_CACHE_SECONDS = 3600;
+const CATALOG_CACHE_SECONDS = 300;
 
 function corsHeaders(request: Request): HeadersInit {
   const origin = request.headers.get("Origin");
@@ -347,6 +348,43 @@ async function handleCatalog(request: Request, env: WorkerEnv): Promise<Response
     totalPages,
     pagination: { limit, offset, page, total, totalPages },
   });
+}
+
+function catalogCacheKey(request: Request) {
+  const sourceUrl = new URL(request.url);
+  const url = new URL(request.url);
+  url.pathname = sourceUrl.pathname.replace(/\/+$/, "") || "/catalog";
+  url.search = "";
+  url.searchParams.set("page", String(normalisePage(sourceUrl.searchParams.get("page"))));
+  url.searchParams.set("limit", String(normaliseLimit(sourceUrl.searchParams.get("limit"))));
+  const category = cleanText(sourceUrl.searchParams.get("category"), 100);
+  const subcategory = cleanText(sourceUrl.searchParams.get("subcategory"), 100);
+  const brand = cleanText(sourceUrl.searchParams.get("brand"), 100);
+  const q = cleanText(sourceUrl.searchParams.get("q"), 100);
+  const search = cleanText(sourceUrl.searchParams.get("search"), 100);
+  const sort = cleanText(sourceUrl.searchParams.get("sort"), 30);
+  if (category) url.searchParams.set("category", category);
+  if (subcategory) url.searchParams.set("subcategory", subcategory);
+  if (brand) url.searchParams.set("brand", brand.toLowerCase());
+  if (q) url.searchParams.set("q", q);
+  if (search) url.searchParams.set("search", search);
+  if (sort) url.searchParams.set("sort", sort);
+  return new Request(url.toString(), { method: "GET" });
+}
+
+async function cachedCatalog(request: Request, env: WorkerEnv, ctx: ExecutionContext) {
+  const cache = (caches as CloudflareCacheStorage).default;
+  const key = catalogCacheKey(request);
+  const cached = await cache.match(key);
+  if (cached) return addResponseHeaders(cached, { "x-cnfans-cache": "HIT" });
+
+  const response = await handleCatalog(request, env);
+  const responseWithCache = addResponseHeaders(response, {
+    "Cache-Control": `public, max-age=${CATALOG_CACHE_SECONDS}, s-maxage=${CATALOG_CACHE_SECONDS}, stale-while-revalidate=${CATALOG_CACHE_SECONDS * 2}`,
+    "x-cnfans-cache": "MISS",
+  });
+  if (responseWithCache.status === 200) ctx.waitUntil(cache.put(key, responseWithCache.clone()));
+  return responseWithCache;
 }
 
 async function productByField(request: Request, env: WorkerEnv, field: "slug" | "product_code", value: string) {
@@ -798,8 +836,8 @@ export default {
     const pathname = url.pathname.replace(/\/+$/, "") || "/";
     try {
       if (pathname === "/health" && request.method === "GET") return jsonResponse(request, { ok: true, service: SERVICE_NAME });
-      if (pathname === "/catalog" && request.method === "GET") return handleCatalog(request, env);
-      if (pathname === "/latest" && request.method === "GET") return handleCatalog(request, env);
+      if (pathname === "/catalog" && request.method === "GET") return cachedCatalog(request, env, ctx);
+      if (pathname === "/latest" && request.method === "GET") return cachedCatalog(request, env, ctx);
       if (pathname === "/filters" && request.method === "GET") return cachedFilters(request, env, ctx);
       if (pathname === "/sitemap-products" && request.method === "GET") return cachedSitemapProducts(request, env, ctx);
       if (pathname === "/site-settings" && request.method === "GET") return handleSiteSettings(request, env);
