@@ -7,7 +7,7 @@ import { fetchCatalogProductBySlug } from "@/lib/catalogApi";
 import { getCategory } from "@/data/categories";
 import { SITE_NAME, SITE_URL } from "@/lib/site";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 600;
 
 async function resolveProduct(slug: string) {
   return (await fetchCatalogProductBySlug(slug)) || getProduct(slug);

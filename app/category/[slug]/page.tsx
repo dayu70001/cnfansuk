@@ -11,7 +11,9 @@ import { fetchCatalogFilters, fetchCatalogPage } from "@/lib/catalogApi";
 import { SITE_NAME, SITE_URL } from "@/lib/site";
 import type { Product } from "@/lib/types";
 
-export const dynamic = "force-dynamic";
+// Rendered dynamically because it reads searchParams (filters/sort/page).
+// D1 load is reduced via fetch-layer revalidate in lib/catalogApi.ts, not via
+// static rendering, so no page-level revalidate is set here.
 
 const CATEGORY_META: Record<string, { title: string; description: string }> = {
   "new-in": {

@@ -9,7 +9,7 @@ import { fetchCatalogProducts } from "@/lib/catalogApi";
 import { fetchSiteSettings } from "@/lib/siteSettings";
 import { SITE_NAME, SITE_URL } from "@/lib/site";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 300;
 
 const HOME_TITLE = `${SITE_NAME} | Everyday Apparel, Hoodies, Jackets & Sets`;
 const HOME_DESCRIPTION =

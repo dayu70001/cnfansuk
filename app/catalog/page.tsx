@@ -4,7 +4,9 @@ import { ProductCard } from "@/components/ProductCard";
 import { FilterDropdown, type DropdownOption } from "@/components/FilterDropdown";
 import { fetchCatalogFilters, fetchCatalogPage } from "@/lib/catalogApi";
 
-export const dynamic = "force-dynamic";
+// Rendered dynamically because it reads searchParams (filters/sort/page).
+// D1 load is reduced via fetch-layer revalidate in lib/catalogApi.ts, not via
+// static rendering, so no page-level revalidate is set here.
 
 type CatalogSearchParams = {
   category?: string;

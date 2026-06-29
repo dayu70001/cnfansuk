@@ -354,7 +354,7 @@ export async function fetchSiteSettings(): Promise<SiteSettings> {
   const baseUrl = (process.env.CATALOG_API_BASE || process.env.NEXT_PUBLIC_CATALOG_API_BASE || "").replace(/\/+$/, "");
   if (!baseUrl) return readSiteSettings();
   try {
-    const response = await fetch(`${baseUrl}/site-settings`, { cache: "no-store", headers: { Accept: "application/json" } });
+    const response = await fetch(`${baseUrl}/site-settings`, { next: { revalidate: 600 }, headers: { Accept: "application/json" } });
     if (!response.ok) return readSiteSettings();
     const payload = await response.json() as { settings?: unknown };
     return payload.settings ? sanitizeSiteSettings(payload.settings) : readSiteSettings();

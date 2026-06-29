@@ -95,13 +95,13 @@ type CatalogQuery = {
 };
 
 export async function fetchCatalogProducts(query: CatalogQuery = {}): Promise<Product[] | null> {
-  const response = await requestCatalog<CatalogResponse>("/catalog", query);
+  const response = await requestCatalog<CatalogResponse>("/catalog", query, 300);
   if (!response?.products) return response ? [] : null;
   return response.products.map(mapCatalogProduct);
 }
 
 export async function fetchCatalogPage(query: CatalogQuery = {}): Promise<{ products: Product[]; total: number; page: number; limit: number; totalPages: number } | null> {
-  const response = await requestCatalog<CatalogResponse>("/catalog", query);
+  const response = await requestCatalog<CatalogResponse>("/catalog", query, 300);
   const catalogItems = response?.products || response?.items;
   if (!catalogItems) return response ? { products: [], total: 0, page: query.page || 1, limit: query.limit || 20, totalPages: 0 } : null;
   const total = Number(response.total ?? response.pagination?.total ?? catalogItems.length);
@@ -117,12 +117,12 @@ export async function fetchCatalogPage(query: CatalogQuery = {}): Promise<{ prod
 }
 
 export async function fetchCatalogProductBySlug(slug: string): Promise<Product | null> {
-  const response = await requestCatalog<ProductResponse>(`/product/${encodeURIComponent(slug)}`);
+  const response = await requestCatalog<ProductResponse>(`/product/${encodeURIComponent(slug)}`, {}, 600);
   return response?.product ? mapCatalogProduct(response.product) : null;
 }
 
 export async function fetchSitemapProducts(): Promise<Array<{ slug: string; lastModified?: string | null }> | null> {
-  const response = await requestCatalog<SitemapProductsResponse>("/sitemap-products", { limit: 1000 });
+  const response = await requestCatalog<SitemapProductsResponse>("/sitemap-products", { limit: 1000 }, 3600);
   if (!response?.products) return response ? [] : null;
   return response.products
     .map((product) => ({
@@ -133,10 +133,10 @@ export async function fetchSitemapProducts(): Promise<Array<{ slug: string; last
 }
 
 export async function fetchCatalogFilters(): Promise<CatalogFilters | null> {
-  return requestCatalog<CatalogFilters>("/filters");
+  return requestCatalog<CatalogFilters>("/filters", {}, 1800);
 }
 
-async function requestCatalog<T>(path: string, query: CatalogQuery = {}): Promise<T | null> {
+async function requestCatalog<T>(path: string, query: CatalogQuery = {}, revalidate = 300): Promise<T | null> {
   const catalogApiBase = getCatalogApiBase();
   if (!catalogApiBase) return null;
 
@@ -150,7 +150,9 @@ async function requestCatalog<T>(path: string, query: CatalogQuery = {}): Promis
   try {
     const response = await fetch(url, {
       headers: { Accept: "application/json" },
-      cache: "no-store",
+      // Public read-only catalog data. Cached in the Next.js Data Cache and
+      // revalidated on a timer so repeated visits do not hit D1 every request.
+      next: { revalidate },
     });
 
     if (!response.ok) return null;
