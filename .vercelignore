@@ -1,0 +1,6 @@
+# Local tooling and data not needed for the Next.js build/deploy
+scripts
+backups
+reference
+workers
+*.tsbuildinfo

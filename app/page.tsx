@@ -63,6 +63,14 @@ export default async function Home() {
     name: SITE_NAME,
     url: SITE_URL,
   };
+  const homeGuides = [
+    { href: "/cnfans-finds", title: "CNFans Finds UK", blurb: "Browse finds across hoodies, jackets, tops, bottoms and sets." },
+    { href: "/cnfans-spreadsheet", title: "CNFans Spreadsheet UK", blurb: "What a finds spreadsheet is, and a simpler way to browse styles." },
+    { href: "/cnfans-size-guide", title: "CNFans UK Size Guide", blurb: "Fit notes for hoodies, jackets, t-shirts and bottoms." },
+    { href: "/cnfans-delivery-uk", title: "CNFans UK Delivery Guide", blurb: "Timings, tracking and order updates for UK buyers." },
+    { href: "/how-to-order", title: "How to Order", blurb: "A simple step-by-step guide from browsing to tracking." },
+    { href: "/cnfans-qc-photos", title: "CNFans QC Photos Guide", blurb: "How to check size, fabric and finish before ordering." },
+  ];
   const categoryTones = ["forest", "navy", "stone", "charcoal"];
   const homeCategoryCards = [
     {
@@ -316,6 +324,25 @@ export default async function Home() {
               <h4>Order Support</h4>
               <p>Get help with sizing, order details and delivery updates when needed.</p>
             </div>
+          </div>
+        </div>
+      </section>
+
+      <section className="home-guides">
+        <div className="wrap">
+          <div className="sec-head">
+            <div>
+              <span className="eyebrow sec-head-label">Guides</span>
+              <h2>Popular CNFans UK guides</h2>
+            </div>
+          </div>
+          <div className="guides-grid">
+            {homeGuides.map((guide) => (
+              <Link href={guide.href} key={guide.href}>
+                <strong>{guide.title}</strong>
+                <span>{guide.blurb}</span>
+              </Link>
+            ))}
           </div>
         </div>
       </section>

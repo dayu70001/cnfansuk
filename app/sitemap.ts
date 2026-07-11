@@ -16,6 +16,13 @@ const PUBLIC_PATHS = [
   "/contact",
   "/about",
   "/how-to-order",
+  "/cnfans-spreadsheet",
+  "/cnfans-finds",
+  "/cnfans-delivery-uk",
+  "/cnfans-qc-photos",
+  "/cnfans-size-guide",
+  "/cnfans-hoodie-finds",
+  "/cnfans-jacket-finds",
 ];
 
 export default function sitemap(): MetadataRoute.Sitemap {

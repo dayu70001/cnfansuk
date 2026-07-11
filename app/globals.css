@@ -5400,3 +5400,253 @@ a:focus-visible {
     transform: translateY(0);
   }
 }
+
+/* ============================================================
+   SEO guide / landing pages
+   Self-contained styles for the CNFans UK guide pages
+   (/cnfans-spreadsheet, /cnfans-finds, /how-to-order, etc.).
+   Mobile-first; reuses the site palette and fonts only.
+   ============================================================ */
+.seo-page {
+  width: min(880px, calc(100% - 32px));
+  margin: 0 auto;
+  padding: 44px 0 80px;
+  color: var(--ink-soft);
+}
+
+.seo-hero {
+  padding-bottom: 26px;
+  margin-bottom: 8px;
+  border-bottom: 1px solid var(--line);
+}
+
+.seo-hero .eyebrow {
+  margin-bottom: 14px;
+}
+
+.seo-hero h1 {
+  margin: 0 0 16px;
+  font-family: var(--serif);
+  font-weight: 400;
+  font-size: clamp(30px, 6vw, 46px);
+  line-height: 1.08;
+  color: var(--ink);
+}
+
+.seo-lead {
+  margin: 0;
+  font-size: clamp(16px, 2.4vw, 18px);
+  line-height: 1.6;
+  color: var(--ink-soft);
+}
+
+.seo-section {
+  margin-top: 34px;
+}
+
+.seo-section h2 {
+  margin: 0 0 14px;
+  font-family: var(--serif);
+  font-weight: 400;
+  font-size: clamp(21px, 4vw, 27px);
+  line-height: 1.2;
+  color: var(--ink);
+}
+
+.seo-section h3 {
+  margin: 22px 0 8px;
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  color: var(--ink);
+}
+
+.seo-page p {
+  margin: 0 0 15px;
+  font-size: 15.5px;
+  line-height: 1.7;
+}
+
+.seo-page ul {
+  margin: 0 0 16px;
+  padding-left: 20px;
+  display: grid;
+  gap: 8px;
+}
+
+.seo-page li {
+  font-size: 15.5px;
+  line-height: 1.6;
+}
+
+.seo-page a {
+  color: var(--ink);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  text-decoration-thickness: 1px;
+  text-decoration-color: var(--clay);
+}
+
+.seo-page a:hover {
+  text-decoration-color: var(--ink);
+}
+
+/* Numbered step cards (how-to-order, delivery style reuse) */
+.seo-steps {
+  display: grid;
+  gap: 14px;
+  margin-top: 6px;
+  padding: 0;
+}
+
+.seo-steps li {
+  list-style: none;
+  display: grid;
+  grid-template-columns: 44px 1fr;
+  gap: 16px;
+  align-items: start;
+  padding: 18px 20px;
+  border: 1px solid var(--line);
+  background: var(--white);
+}
+
+.seo-steps li span {
+  font-family: var(--serif);
+  font-size: 22px;
+  color: var(--clay);
+  line-height: 1;
+}
+
+.seo-steps li h3 {
+  margin: 0 0 4px;
+}
+
+.seo-steps li p {
+  margin: 0;
+}
+
+/* CTA row */
+.seo-cta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 30px;
+  padding-top: 28px;
+  border-top: 1px solid var(--line);
+}
+
+.seo-cta .btn-ghost {
+  background: transparent;
+  color: var(--ink);
+}
+
+.seo-cta .btn-ghost:hover {
+  background: var(--ink);
+  color: var(--paper);
+}
+
+/* Related guides / internal links */
+.seo-related {
+  margin-top: 46px;
+  padding-top: 30px;
+  border-top: 1px solid var(--line);
+}
+
+.seo-related h2 {
+  margin: 0 0 16px;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.seo-related-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+}
+
+.seo-related-grid a {
+  display: block;
+  padding: 16px 18px;
+  border: 1px solid var(--line);
+  background: var(--white);
+  text-decoration: none;
+  transition: border-color 0.2s ease;
+}
+
+.seo-related-grid a:hover {
+  border-color: var(--ink);
+}
+
+.seo-related-grid strong {
+  display: block;
+  font-size: 15px;
+  color: var(--ink);
+  margin-bottom: 4px;
+}
+
+.seo-related-grid span {
+  display: block;
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
+/* Homepage "Popular CNFans UK Guides" section */
+.home-guides {
+  padding-top: 8px;
+  padding-bottom: 8px;
+}
+
+.home-guides .guides-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 14px;
+  margin-top: 22px;
+}
+
+.home-guides .guides-grid a {
+  display: block;
+  padding: 20px 22px;
+  border: 1px solid var(--line);
+  background: var(--white);
+  text-decoration: none;
+  transition: border-color 0.2s ease, transform 0.2s ease;
+}
+
+.home-guides .guides-grid a:hover {
+  border-color: var(--ink);
+  transform: translateY(-2px);
+}
+
+.home-guides .guides-grid strong {
+  display: block;
+  font-size: 16px;
+  color: var(--ink);
+  margin-bottom: 6px;
+}
+
+.home-guides .guides-grid span {
+  display: block;
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--ink-soft);
+}
+
+@media (max-width: 640px) {
+  .seo-page {
+    padding: 30px 0 60px;
+  }
+
+  .seo-steps li {
+    grid-template-columns: 36px 1fr;
+    gap: 12px;
+    padding: 16px;
+  }
+
+  .seo-cta .btn {
+    flex: 1 1 100%;
+  }
+}
