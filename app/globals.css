@@ -5594,6 +5594,41 @@ a:focus-visible {
   color: var(--muted);
 }
 
+/* /guides index page — compact link cards, no images */
+.guides-index-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 12px;
+  margin-top: 28px;
+}
+
+.guides-index-grid a {
+  display: block;
+  padding: 16px 18px;
+  border: 1px solid var(--line);
+  background: var(--white);
+  text-decoration: none;
+  transition: border-color 0.2s ease;
+}
+
+.guides-index-grid a:hover {
+  border-color: var(--ink);
+}
+
+.guides-index-grid strong {
+  display: block;
+  font-size: 15px;
+  color: var(--ink);
+  margin-bottom: 4px;
+}
+
+.guides-index-grid span {
+  display: block;
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: var(--muted);
+}
+
 /* Homepage "Popular CNFans UK Guides" section */
 .home-guides {
   padding-top: 8px;

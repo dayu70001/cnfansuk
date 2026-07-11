@@ -16,6 +16,7 @@ const PUBLIC_PATHS = [
   "/contact",
   "/about",
   "/how-to-order",
+  "/guides",
   "/cnfans-spreadsheet",
   "/cnfans-finds",
   "/cnfans-delivery-uk",

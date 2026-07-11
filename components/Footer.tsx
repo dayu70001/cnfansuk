@@ -21,13 +21,7 @@ export async function Footer() {
   const companyLinks = [
     { href: "/about", label: "About CNFans UK" },
     { href: "/how-to-order", label: "How to Order" },
-  ];
-  const guideLinks = [
-    { href: "/cnfans-spreadsheet", label: "CNFans Spreadsheet" },
-    { href: "/cnfans-finds", label: "CNFans Finds" },
-    { href: "/how-to-order", label: "How to Order" },
-    { href: "/cnfans-delivery-uk", label: "Delivery Guide" },
-    { href: "/cnfans-size-guide", label: "Size Guide" },
+    { href: "/guides", label: "Guides" },
   ];
   const channels = [
     { href: links.instagramUrl, label: "Instagram", icon: <InstagramIcon /> },
@@ -102,14 +96,6 @@ export async function Footer() {
             <h4>Company</h4>
             {companyLinks.map((item) => (
               <Link href={item.href} key={item.href}>
-                {item.label}
-              </Link>
-            ))}
-          </nav>
-          <nav className="foot-col" aria-label="CNFans UK guides">
-            <h4>Guides</h4>
-            {guideLinks.map((item) => (
-              <Link href={item.href} key={item.label}>
                 {item.label}
               </Link>
             ))}
