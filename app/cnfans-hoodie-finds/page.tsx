@@ -1,8 +1,9 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { JsonLd } from "@/components/JsonLd";
 import { GuideCta } from "@/components/GuideCta";
 import { GuideRelated } from "@/components/GuideRelated";
-import { buildGuideMetadata } from "@/lib/seoPage";
+import { buildGuideMetadata, buildGuidePageSchemas } from "@/lib/seoPage";
 
 export const metadata: Metadata = buildGuideMetadata({
   path: "/cnfans-hoodie-finds",
@@ -13,6 +14,7 @@ export const metadata: Metadata = buildGuideMetadata({
 export default function CnfansHoodieFindsPage() {
   return (
     <main className="seo-page">
+      <JsonLd data={buildGuidePageSchemas({ path: "/cnfans-hoodie-finds", name: "CNFans Hoodie Finds UK", description: "Explore everyday hoodie, sweatshirt and matching-set finds with practical fit notes for UK shoppers." })} />
       <header className="seo-hero">
         <p className="eyebrow">CNFans UK guide</p>
         <h1>CNFans Hoodie Finds UK</h1>

@@ -1,12 +1,16 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { buildGuideMetadata } from "@/lib/seoPage";
+import { JsonLd } from "@/components/JsonLd";
+import { buildGuideIndexSchemas, buildGuideMetadata } from "@/lib/seoPage";
+
+const PAGE_TITLE = "CNFans UK Guides | Ordering, Finds, Sizing & Delivery";
+const PAGE_DESCRIPTION =
+  "Browse CNFans UK guides for clothing finds, ordering, delivery, sizing and product checks before you buy.";
 
 export const metadata: Metadata = buildGuideMetadata({
   path: "/guides",
-  title: "CNFans UK Guides | Ordering, Finds, Sizing & Delivery",
-  description:
-    "Browse CNFans UK guides for clothing finds, ordering, delivery, sizing and product checks before you buy.",
+  title: PAGE_TITLE,
+  description: PAGE_DESCRIPTION,
 });
 
 const guides = [
@@ -23,6 +27,7 @@ const guides = [
 export default function GuidesPage() {
   return (
     <main className="seo-page guides-index">
+      <JsonLd data={buildGuideIndexSchemas({ name: "CNFans UK Guides", description: PAGE_DESCRIPTION })} />
       <header className="seo-hero">
         <p className="eyebrow">CNFans UK guide</p>
         <h1>CNFans UK Guides</h1>

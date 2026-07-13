@@ -1,8 +1,9 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { JsonLd } from "@/components/JsonLd";
 import { GuideCta } from "@/components/GuideCta";
 import { GuideRelated } from "@/components/GuideRelated";
-import { buildGuideMetadata } from "@/lib/seoPage";
+import { buildGuideMetadata, buildGuidePageSchemas } from "@/lib/seoPage";
 
 export const metadata: Metadata = buildGuideMetadata({
   path: "/how-to-order",
@@ -42,6 +43,7 @@ const steps = [
 export default function HowToOrderPage() {
   return (
     <main className="seo-page">
+      <JsonLd data={buildGuidePageSchemas({ path: "/how-to-order", name: "How to Order from CNFans UK", description: "Learn how to browse products, check sizing, place an order and follow delivery updates with CNFans UK." })} />
       <header className="seo-hero">
         <p className="eyebrow">CNFans UK guide</p>
         <h1>How to Order from CNFans UK</h1>
