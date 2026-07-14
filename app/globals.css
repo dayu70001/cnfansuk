@@ -5629,6 +5629,25 @@ a:focus-visible {
   color: var(--muted);
 }
 
+.guides-index-section {
+  margin-top: 44px;
+}
+
+.guides-index-section > h2 {
+  margin: 0;
+  font-family: var(--font-display), Georgia, serif;
+  font-size: clamp(25px, 3vw, 34px);
+  font-weight: 400;
+}
+
+.guides-index-grid-compact {
+  margin-top: 18px;
+}
+
+.guides-index-grid-compact a {
+  padding: 14px 16px;
+}
+
 @media (max-width: 640px) {
   .seo-page {
     padding: 30px 0 60px;
@@ -5642,5 +5661,14 @@ a:focus-visible {
 
   .seo-cta .btn {
     flex: 1 1 100%;
+  }
+
+  .guides-index-grid {
+    grid-template-columns: 1fr;
+    gap: 9px;
+  }
+
+  .guides-index-grid-compact a {
+    padding: 12px 14px;
   }
 }

@@ -24,6 +24,18 @@ const PUBLIC_PATHS = [
   "/cnfans-size-guide",
   "/cnfans-hoodie-finds",
   "/cnfans-jacket-finds",
+  "/cnfans-t-shirt-finds",
+  "/cnfans-tracksuit-finds",
+  "/cnfans-sweatshirt-finds",
+  "/cnfans-trouser-finds",
+  "/cnfans-cargo-pants-finds",
+  "/cnfans-jeans-finds",
+  "/cnfans-co-ord-finds",
+  "/cnfans-streetwear-finds",
+  "/cnfans-winter-jacket-finds",
+  "/cnfans-summer-outfits",
+  "/cnfans-men-clothing-finds",
+  "/cnfans-uk-new-in",
 ];
 
 export default function sitemap(): MetadataRoute.Sitemap {

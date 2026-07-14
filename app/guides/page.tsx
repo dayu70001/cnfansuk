@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { JsonLd } from "@/components/JsonLd";
+import { PHASE_THREE_GUIDES } from "@/lib/phaseThreeGuides";
 import { buildGuideIndexSchemas, buildGuideMetadata } from "@/lib/seoPage";
 
 const PAGE_TITLE = "CNFans UK Guides | Ordering, Finds, Sizing & Delivery";
@@ -45,6 +46,18 @@ export default function GuidesPage() {
           </Link>
         ))}
       </div>
+
+      <section className="guides-index-section" aria-labelledby="clothing-finds-heading">
+        <h2 id="clothing-finds-heading">Clothing Finds</h2>
+        <div className="guides-index-grid guides-index-grid-compact">
+          {PHASE_THREE_GUIDES.map((guide) => (
+            <Link href={guide.path} key={guide.path}>
+              <strong>{guide.h1}</strong>
+              <span>{guide.blurb}</span>
+            </Link>
+          ))}
+        </div>
+      </section>
     </main>
   );
 }
