@@ -1,12 +1,17 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { useCart } from "@/components/CartProvider";
 import { getCartItemPrice, getCartSubtotal } from "@/lib/cart";
 import type { CurrencyCode } from "@/lib/currency";
 import { formatMoney } from "@/lib/formatMoney";
+import {
+  cartItemToGoogleAnalyticsItem,
+  rememberSubmittedOrderAnalytics,
+  trackGoogleAnalyticsEvent,
+} from "@/lib/googleAnalytics";
 import { trackInitiateCheckout } from "@/lib/metaPixel";
 import { getPaymentFee, getPaymentMethod, paymentMethods, type PaymentMethodId } from "@/lib/payment";
 import {
@@ -120,6 +125,17 @@ export default function CheckoutPage() {
   const shippingPrice = getShippingPrice(shippingMethodId, subtotalGbp, currency);
   const paymentFee = getPaymentFee(paymentMethodId, subtotal + shippingPrice);
   const total = subtotal + shippingPrice + paymentFee;
+  const checkoutTracked = useRef(false);
+
+  useEffect(() => {
+    if (checkoutTracked.current || items.length === 0) return;
+    checkoutTracked.current = true;
+    trackGoogleAnalyticsEvent("begin_checkout", {
+      currency,
+      value: subtotal,
+      items: items.map((item) => cartItemToGoogleAnalyticsItem(item, getCartItemPrice(item, currency))),
+    });
+  }, [currency, items, subtotal]);
 
   useEffect(() => {
     if (document.activeElement instanceof HTMLElement) {
@@ -178,6 +194,22 @@ export default function CheckoutPage() {
     if (step === "payment" && !paymentMethodId) {
       setErrors({ paymentMethod: "Please select a payment method." });
       return;
+    }
+    if (step === "method" && nextStep === "payment") {
+      trackGoogleAnalyticsEvent("add_shipping_info", {
+        currency,
+        value: subtotal + shippingPrice,
+        shipping_tier: getShippingMethod(shippingMethodId).label,
+        items: items.map((item) => cartItemToGoogleAnalyticsItem(item, getCartItemPrice(item, currency))),
+      });
+    }
+    if (step === "payment" && nextStep === "review") {
+      trackGoogleAnalyticsEvent("add_payment_info", {
+        currency,
+        value: total,
+        payment_type: getPaymentMethod(paymentMethodId)?.label || paymentMethodId,
+        items: items.map((item) => cartItemToGoogleAnalyticsItem(item, getCartItemPrice(item, currency))),
+      });
     }
     const nextIndex = steps.findIndex((item) => item.id === nextStep);
     setStep(nextStep);
@@ -252,6 +284,12 @@ export default function CheckoutPage() {
         setSubmitting(false);
         return;
       }
+      rememberSubmittedOrderAnalytics({
+        transactionId: result.order.orderNumber,
+        currency,
+        value: total,
+        items: items.map((item) => cartItemToGoogleAnalyticsItem(item, getCartItemPrice(item, currency))),
+      });
       // Lead is fired once on the order-success page (not here) so Submit Order
       // and order-success do not double-count.
       clearCart();

@@ -4,6 +4,7 @@ import { type MouseEvent, type UIEvent, useEffect, useMemo, useRef, useState } f
 import { useRouter } from "next/navigation";
 import { formatMoney } from "@/lib/formatMoney";
 import { getProductPrice } from "@/lib/productPrice";
+import { productToGoogleAnalyticsItem, trackGoogleAnalyticsEvent } from "@/lib/googleAnalytics";
 import { trackAddToCart, trackInitiateCheckout, trackViewContent } from "@/lib/metaPixel";
 import { useCurrency } from "@/lib/useCurrency";
 import type { CartItem, Product } from "@/lib/types";
@@ -43,7 +44,12 @@ export function ProductDetailClient({ product }: { product: Product }) {
       currency: "GBP",
       value: product.priceGBP,
     });
-  }, [product.category, product.id, product.name, product.priceGBP, product.slug]);
+    trackGoogleAnalyticsEvent("view_item", {
+      currency,
+      value: currentPrice,
+      items: [productToGoogleAnalyticsItem(product, currentPrice)],
+    });
+  }, [currency, currentPrice, product]);
 
   const cartItem = useMemo<CartItem>(
     () => ({
@@ -92,6 +98,11 @@ export function ProductDetailClient({ product }: { product: Product }) {
         currency,
         value: currentPrice * quantity,
         num_items: quantity,
+      });
+      trackGoogleAnalyticsEvent("add_to_cart", {
+        currency,
+        value: currentPrice * quantity,
+        items: [productToGoogleAnalyticsItem(product, currentPrice, quantity)],
       });
     }
   }

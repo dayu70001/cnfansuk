@@ -3,17 +3,10 @@
 import { useEffect, useState } from 'react';
 import Script from 'next/script';
 import { usePathname, useSearchParams } from 'next/navigation';
+import { flushGoogleAnalyticsQueue } from '@/lib/googleAnalytics';
 
 const GA_MEASUREMENT_ID = process.env.NEXT_PUBLIC_GA_ID?.trim();
 const GTM_CONTAINER_ID = process.env.NEXT_PUBLIC_GTM_ID?.trim();
-
-declare global {
-  interface Window {
-    dataLayer: unknown[];
-    gtag?: (...args: unknown[]) => void;
-    __cnfansGa4Configured?: boolean;
-  }
-}
 
 export default function GoogleAnalytics() {
   const pathname = usePathname();
@@ -71,7 +64,10 @@ export default function GoogleAnalytics() {
           <Script
             id="google-analytics"
             strategy="afterInteractive"
-            onReady={() => setReady(true)}
+            onReady={() => {
+              setReady(true);
+              flushGoogleAnalyticsQueue();
+            }}
             dangerouslySetInnerHTML={{
               __html: `
             window.dataLayer = window.dataLayer || [];

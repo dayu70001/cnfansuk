@@ -70,6 +70,9 @@ type SitemapProductsResponse = {
     product_code?: string | null;
     lastModified?: string | null;
   }>;
+  hasMore?: boolean;
+  page?: number;
+  limit?: number;
 };
 
 export type CatalogFilters = {
@@ -122,14 +125,33 @@ export async function fetchCatalogProductBySlug(slug: string): Promise<Product |
 }
 
 export async function fetchSitemapProducts(): Promise<Array<{ slug: string; lastModified?: string | null }> | null> {
-  const response = await requestCatalog<SitemapProductsResponse>("/sitemap-products", { limit: 1000 }, 3600);
-  if (!response?.products) return response ? [] : null;
-  return response.products
-    .map((product) => ({
-      slug: cleanText(product.slug),
-      lastModified: cleanText(product.lastModified) || null,
-    }))
-    .filter((product) => product.slug);
+  const pageSize = 1000;
+  const products: Array<{ slug: string; lastModified?: string | null }> = [];
+
+  // The Worker caps sitemap responses at 1,000 rows. Fetch every page so the
+  // storefront sitemap covers the full active catalogue instead of silently
+  // omitting products after the first page.
+  for (let page = 1; page <= 50; page += 1) {
+    const response = await requestCatalog<SitemapProductsResponse>(
+      "/sitemap-products",
+      { limit: pageSize, page },
+      3600,
+    );
+    if (!response?.products) return products.length ? products : response ? [] : null;
+
+    products.push(
+      ...response.products
+        .map((product) => ({
+          slug: cleanText(product.slug),
+          lastModified: cleanText(product.lastModified) || null,
+        }))
+        .filter((product) => product.slug),
+    );
+
+    if (!response.hasMore && response.products.length < pageSize) break;
+  }
+
+  return products;
 }
 
 export async function fetchCatalogFilters(): Promise<CatalogFilters | null> {

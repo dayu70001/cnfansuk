@@ -4,6 +4,7 @@ import Link from "next/link";
 import { Product } from "@/lib/types";
 import { formatMoney } from "@/lib/formatMoney";
 import { getProductPrice } from "@/lib/productPrice";
+import { productToGoogleAnalyticsItem, trackGoogleAnalyticsEvent } from "@/lib/googleAnalytics";
 import { trackAddToCart } from "@/lib/metaPixel";
 import { useCurrency } from "@/lib/useCurrency";
 import { useCart } from "./CartProvider";
@@ -57,6 +58,11 @@ export function ProductCard({ product }: { product: Product }) {
               currency,
               value: currentPrice,
               num_items: 1,
+            });
+            trackGoogleAnalyticsEvent("add_to_cart", {
+              currency,
+              value: currentPrice,
+              items: [productToGoogleAnalyticsItem(product, currentPrice)],
             });
           }}
         >

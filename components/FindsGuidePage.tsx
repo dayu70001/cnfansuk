@@ -2,10 +2,23 @@ import Link from "next/link";
 import { GuideCta } from "@/components/GuideCta";
 import { GuideRelated } from "@/components/GuideRelated";
 import { JsonLd } from "@/components/JsonLd";
+import { ProductCard } from "@/components/ProductCard";
+import { getProductsByCategory } from "@/data/products";
+import { fetchCatalogPage } from "@/lib/catalogApi";
 import { buildGuidePageSchemas } from "@/lib/seoPage";
 import type { PhaseThreeGuide } from "@/lib/phaseThreeGuides";
 
-export function FindsGuidePage({ guide }: { guide: PhaseThreeGuide }) {
+export async function FindsGuidePage({ guide }: { guide: PhaseThreeGuide }) {
+  const categorySlug = guide.categoryHref.replace(/^\/category\//, "");
+  const catalog = await fetchCatalogPage({
+    ...(categorySlug === "new-in" ? {} : { category: categorySlug }),
+    page: 1,
+    limit: 4,
+  });
+  const relatedProducts = catalog?.products.length
+    ? catalog.products
+    : getProductsByCategory(categorySlug).slice(0, 4);
+
   return (
     <main className="seo-page">
       <JsonLd data={buildGuidePageSchemas({ path: guide.path, name: guide.h1, description: guide.description })} />
@@ -53,6 +66,16 @@ export function FindsGuidePage({ guide }: { guide: PhaseThreeGuide }) {
           season or way of dressing.
         </p>
       </section>
+
+      {relatedProducts.length ? (
+        <section className="seo-section" aria-labelledby="current-products-heading">
+          <h2 id="current-products-heading">Shop current {guide.categoryLabel.replace(/^Browse /, "").toLowerCase()}</h2>
+          <p>These current products connect the guide to live items you can compare by fit, colour and price.</p>
+          <div className="category-product-grid">
+            {relatedProducts.map((product) => <ProductCard key={product.id} product={product} />)}
+          </div>
+        </section>
+      ) : null}
 
       <GuideCta browseHref={guide.categoryHref} browseLabel={guide.categoryLabel} />
       <GuideRelated links={guide.related} />

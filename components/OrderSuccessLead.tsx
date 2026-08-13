@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import { takeSubmittedOrderAnalytics, trackGoogleAnalyticsEvent } from "@/lib/googleAnalytics";
 import { trackLead } from "@/lib/metaPixel";
 
 // Fires the Lead event exactly once when the order-success page loads. This is
@@ -17,6 +18,18 @@ export function OrderSuccessLead({ order }: { order: string }) {
       placement: "order_success_load",
       content_name: order,
       currency: "GBP",
+    });
+    const orderAnalytics = takeSubmittedOrderAnalytics(order);
+    trackGoogleAnalyticsEvent("generate_lead", {
+      currency: orderAnalytics?.currency || "GBP",
+      ...(orderAnalytics ? { value: orderAnalytics.value } : {}),
+      transaction_id: order,
+      lead_source: "online_order",
+    });
+    trackGoogleAnalyticsEvent("order_submitted", {
+      currency: orderAnalytics?.currency || "GBP",
+      ...(orderAnalytics ? { value: orderAnalytics.value, items: orderAnalytics.items } : {}),
+      transaction_id: order,
     });
   }, [order]);
 

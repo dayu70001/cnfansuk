@@ -1,3 +1,13 @@
+import type { Metadata } from "next";
+import Link from "next/link";
+import { SITE_NAME, SITE_URL } from "@/lib/site";
+
+export const metadata: Metadata = {
+  title: { absolute: `About ${SITE_NAME} | Clothing & Production Experience` },
+  description: "Learn about CNFans UK, our garment production background and our approach to practical everyday clothing.",
+  alternates: { canonical: `${SITE_URL}/about` },
+};
+
 const trustCards = [
   {
     title: "Production experience",
@@ -44,6 +54,16 @@ export default function AboutPage() {
             <p>{card.text}</p>
           </article>
         ))}
+      </section>
+
+      <section className="about-story-card">
+        <h2>Explore the collection</h2>
+        <div className="about-story-copy">
+          <p>
+            Browse our <Link href="/category/new-in">latest clothing arrivals</Link>, compare practical fits in the
+            <Link href="/guides"> CNFans UK guides</Link>, or read our <Link href="/how-to-order">ordering guide</Link> before you buy.
+          </p>
+        </div>
       </section>
     </main>
   );

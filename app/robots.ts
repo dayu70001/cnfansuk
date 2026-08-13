@@ -4,6 +4,7 @@ export default function robots(): MetadataRoute.Robots {
     rules: {
       userAgent: "*",
       allow: "/",
+      disallow: ["/api/", "/admin/", "/homepage-admin"],
     },
     sitemap: "https://www.cnfans.co.uk/sitemap.xml",
   };

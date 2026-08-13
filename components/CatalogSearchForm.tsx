@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { trackGoogleAnalyticsEvent } from "@/lib/googleAnalytics";
 import { trackSearch } from "@/lib/metaPixel";
 
 type HiddenField = {
@@ -32,6 +33,7 @@ export function CatalogSearchForm({
         const searchString = typeof search === "string" ? search.trim() : "";
         if (searchString) {
           trackSearch({ source_page: "catalog", placement: "catalog_search", search_string: searchString });
+          trackGoogleAnalyticsEvent("search", { search_term: searchString });
         }
       }}
     >

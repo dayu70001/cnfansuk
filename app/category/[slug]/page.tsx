@@ -45,8 +45,9 @@ const CATEGORY_META: Record<string, { title: string; description: string }> = {
 
 type CategoryParams = { params: Promise<{ slug: string }>; searchParams: Promise<CategorySearchParams> };
 
-export async function generateMetadata({ params }: CategoryParams): Promise<Metadata> {
+export async function generateMetadata({ params, searchParams }: CategoryParams): Promise<Metadata> {
   const { slug } = await params;
+  const query = await searchParams;
   const meta = CATEGORY_META[slug];
   if (!meta) {
     return {
@@ -54,22 +55,34 @@ export async function generateMetadata({ params }: CategoryParams): Promise<Meta
       robots: { index: false, follow: false },
     };
   }
-  const canonical = `${SITE_URL}/category/${slug}`;
+  const page = cleanPage(query.page);
+  const hasNonPaginationParams = Boolean(
+    cleanParam(query.q) ||
+    cleanParam(query.brand) ||
+    cleanParam(query.subcategory) ||
+    cleanParam(query.style) ||
+    (cleanParam(query.sort) && cleanParam(query.sort) !== "newest"),
+  );
+  const baseCanonical = `${SITE_URL}/category/${slug}`;
+  const canonical = !hasNonPaginationParams && page > 1 ? `${baseCanonical}?page=${page}` : baseCanonical;
+  const title = !hasNonPaginationParams && page > 1 ? `${meta.title.replace(` | ${SITE_NAME}`, "")} – Page ${page} | ${SITE_NAME}` : meta.title;
+  const description = !hasNonPaginationParams && page > 1 ? `${meta.description} Browse page ${page}.` : meta.description;
   return {
-    title: { absolute: meta.title },
-    description: meta.description,
+    title: { absolute: title },
+    description,
     alternates: { canonical },
+    ...(hasNonPaginationParams ? { robots: { index: false, follow: true } } : {}),
     openGraph: {
-      title: meta.title,
-      description: meta.description,
+      title,
+      description,
       url: canonical,
       type: "website",
       siteName: SITE_NAME,
     },
     twitter: {
       card: "summary_large_image",
-      title: meta.title,
-      description: meta.description,
+      title,
+      description,
     },
   };
 }
@@ -200,6 +213,12 @@ export default async function CategoryPage({
   const paginatedProducts = catalog === null ? fallbackProducts.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE) : catalog.products;
   const totalProducts = catalog === null ? fallbackProducts.length : catalog.total;
   const totalPages = catalog === null ? Math.ceil(totalProducts / PAGE_SIZE) : catalog.totalPages;
+  if ((brand || subcategory) && totalProducts === 0) {
+    notFound();
+  }
+  if (page > 1 && totalPages > 0 && page > totalPages) {
+    notFound();
+  }
   const brandOptions = filters?.brands?.length ? getBrandOptionsFromLabels(filters.brands) : getBrandOptions(localProducts);
   const styleGroup = styleOptionsByCategory[filterCategory];
   const hasFilters = Boolean(q || brand || subcategory || (sort && sort !== "newest") || page > 1);

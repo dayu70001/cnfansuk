@@ -1,8 +1,10 @@
 "use client";
 
+import { useEffect, useRef } from "react";
 import Link from "next/link";
 import { getCartItemPrice, getCartSubtotal } from "@/lib/cart";
 import { formatMoney } from "@/lib/formatMoney";
+import { cartItemToGoogleAnalyticsItem, trackGoogleAnalyticsEvent } from "@/lib/googleAnalytics";
 import { trackInitiateCheckout } from "@/lib/metaPixel";
 import { useCurrency } from "@/lib/useCurrency";
 import { useCart } from "./CartProvider";
@@ -11,6 +13,21 @@ export function CartDrawer() {
   const { items, isOpen, closeCart, updateQuantity, removeItem } = useCart();
   const { currency } = useCurrency();
   const subtotal = getCartSubtotal(items, currency);
+  const viewedOpenCart = useRef(false);
+
+  useEffect(() => {
+    if (!isOpen) {
+      viewedOpenCart.current = false;
+      return;
+    }
+    if (viewedOpenCart.current || items.length === 0) return;
+    viewedOpenCart.current = true;
+    trackGoogleAnalyticsEvent("view_cart", {
+      currency,
+      value: subtotal,
+      items: items.map((item) => cartItemToGoogleAnalyticsItem(item, getCartItemPrice(item, currency))),
+    });
+  }, [currency, isOpen, items, subtotal]);
 
   return (
     <>
@@ -53,7 +70,19 @@ export function CartDrawer() {
                       <button type="button" onClick={() => updateQuantity(item, item.quantity + 1)}>
                         +
                       </button>
-                      <button className="cart-remove" type="button" onClick={() => removeItem(item)} aria-label="Remove item">
+                      <button
+                        className="cart-remove"
+                        type="button"
+                        onClick={() => {
+                          trackGoogleAnalyticsEvent("remove_from_cart", {
+                            currency,
+                            value: getCartItemPrice(item, currency) * item.quantity,
+                            items: [cartItemToGoogleAnalyticsItem(item, getCartItemPrice(item, currency))],
+                          });
+                          removeItem(item);
+                        }}
+                        aria-label="Remove item"
+                      >
                         <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
                           <path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6M10 11v6M14 11v6" />
                         </svg>
