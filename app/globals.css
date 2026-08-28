@@ -2815,6 +2815,27 @@ select {
   white-space: nowrap;
 }
 
+.summary-items .checkout-summary-item {
+  display: grid;
+  grid-template-columns: 52px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+}
+
+.checkout-summary-item img,
+.checkout-summary-image-placeholder {
+  display: block;
+  width: 52px;
+  height: 62px;
+  border-radius: 3px;
+  background: var(--oat);
+  object-fit: cover;
+}
+
+.checkout-summary-item-copy {
+  min-width: 0;
+}
+
 .checkout-summary-mobile {
   display: none;
   margin-bottom: 28px;
@@ -2844,6 +2865,92 @@ select {
   color: var(--muted);
   font-size: 13px;
   line-height: 1.55;
+}
+
+.checkout-bank-intro {
+  display: grid;
+  gap: 6px;
+  border-left: 3px solid var(--ink);
+  background: var(--oat);
+  padding: 16px 18px;
+}
+
+.checkout-bank-intro strong {
+  color: var(--ink);
+  font-family: var(--serif);
+  font-size: 22px;
+  font-weight: 500;
+}
+
+.checkout-bank-intro p,
+.checkout-contact-next,
+.checkout-summary-currency {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.checkout-bank-card {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--paper);
+  padding: 22px;
+}
+
+.checkout-bank-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 14px;
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.checkout-bank-details {
+  margin: 0;
+}
+
+.checkout-bank-details div {
+  display: grid;
+  grid-template-columns: minmax(150px, 0.8fr) minmax(0, 1.2fr);
+  gap: 18px;
+  border-bottom: 1px solid var(--line);
+  padding: 13px 0;
+}
+
+.checkout-bank-details dt {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.checkout-bank-details dd {
+  margin: 0;
+  color: var(--ink);
+  font-size: 14px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.checkout-bank-note {
+  margin: 16px 0 0;
+  color: var(--ink-soft);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.checkout-contact-next {
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+}
+
+.checkout-summary-currency {
+  margin-top: 16px;
+  font-size: 12px;
 }
 
 .success-wrap {
@@ -5324,6 +5431,15 @@ a:focus-visible {
   .checkout-review div {
     grid-template-columns: 1fr;
     gap: 6px;
+  }
+
+  .checkout-bank-card {
+    padding: 18px 16px;
+  }
+
+  .checkout-bank-details div {
+    grid-template-columns: 1fr;
+    gap: 4px;
   }
 
   .pdp {

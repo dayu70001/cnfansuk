@@ -5,7 +5,6 @@ import dynamic from "next/dynamic";
 import { useRouter } from "next/navigation";
 import { useCart } from "@/components/CartProvider";
 import { getCartItemPrice, getCartSubtotal } from "@/lib/cart";
-import type { CurrencyCode } from "@/lib/currency";
 import { formatMoney } from "@/lib/formatMoney";
 import {
   cartItemToGoogleAnalyticsItem,
@@ -13,7 +12,6 @@ import {
   trackGoogleAnalyticsEvent,
 } from "@/lib/googleAnalytics";
 import { trackInitiateCheckout } from "@/lib/metaPixel";
-import { getPaymentFee, getPaymentMethod, paymentMethods, type PaymentMethodId } from "@/lib/payment";
 import {
   DEFAULT_SHIPPING_METHOD_ID,
   getShippingMethod,
@@ -23,10 +21,9 @@ import {
   shippingMethods,
   type ShippingMethodId,
 } from "@/lib/shipping";
-import { useCurrency } from "@/lib/useCurrency";
 import type { CartItem, CustomerDetails } from "@/lib/types";
 
-type CheckoutStep = "contact" | "shipping" | "method" | "payment" | "review";
+type CheckoutStep = "details" | "payment";
 
 type ContactForm = {
   email: string;
@@ -87,24 +84,28 @@ const countries = [
 ] as const;
 
 const steps: { id: CheckoutStep; label: string }[] = [
-  { id: "contact", label: "Contact" },
-  { id: "shipping", label: "Shipping" },
-  { id: "method", label: "Delivery" },
-  { id: "payment", label: "Payment" },
-  { id: "review", label: "Review" },
+  { id: "details", label: "Details" },
+  { id: "payment", label: "Delivery & Payment" },
 ];
+
+const bankDetails = [
+  ["Account Holder Name", "HE SHUO"],
+  ["Bank Account Number", "58500616"],
+  ["Bank Sort Code", "608382"],
+  ["Bank Name", "Banking Circle S.A."],
+  ["Bank Location", "24 King William Street, London EC4R 9AT"],
+  ["Account Currency", "GBP"],
+] as const;
 
 export default function CheckoutPage() {
   const router = useRouter();
   const { items, clearCart } = useCart();
-  const { currency } = useCurrency();
-  const [step, setStep] = useState<CheckoutStep>("contact");
+  const [step, setStep] = useState<CheckoutStep>("details");
   const [maxStep, setMaxStep] = useState(0);
   const [summaryOpen, setSummaryOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState("");
   const [shippingMethodId, setShippingMethodId] = useState<ShippingMethodId>(DEFAULT_SHIPPING_METHOD_ID);
-  const [paymentMethodId, setPaymentMethodId] = useState<PaymentMethodId | "">("");
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [contact, setContact] = useState<ContactForm>({ email: "" });
   const [shipping, setShipping] = useState<ShippingForm>({
@@ -120,22 +121,20 @@ export default function CheckoutPage() {
     phone: "",
   });
 
-  const subtotal = useMemo(() => getCartSubtotal(items, currency), [currency, items]);
-  const subtotalGbp = useMemo(() => getCartSubtotal(items, "GBP"), [items]);
-  const shippingPrice = getShippingPrice(shippingMethodId, subtotalGbp, currency);
-  const paymentFee = getPaymentFee(paymentMethodId, subtotal + shippingPrice);
-  const total = subtotal + shippingPrice + paymentFee;
+  const subtotal = useMemo(() => getCartSubtotal(items, "GBP"), [items]);
+  const shippingPrice = getShippingPrice(shippingMethodId, subtotal, "GBP");
+  const total = subtotal + shippingPrice;
   const checkoutTracked = useRef(false);
 
   useEffect(() => {
     if (checkoutTracked.current || items.length === 0) return;
     checkoutTracked.current = true;
     trackGoogleAnalyticsEvent("begin_checkout", {
-      currency,
+      currency: "GBP",
       value: subtotal,
-      items: items.map((item) => cartItemToGoogleAnalyticsItem(item, getCartItemPrice(item, currency))),
+      items: items.map((item) => cartItemToGoogleAnalyticsItem(item, getCartItemPrice(item, "GBP"))),
     });
-  }, [currency, items, subtotal]);
+  }, [items, subtotal]);
 
   useEffect(() => {
     if (document.activeElement instanceof HTMLElement) {
@@ -152,7 +151,7 @@ export default function CheckoutPage() {
     return () => window.cancelAnimationFrame(frame);
   }, [step]);
 
-  function validateContact() {
+  function validateDetails() {
     const nextErrors: Record<string, string> = {};
     const email = contact.email.trim();
     if (!email) {
@@ -160,11 +159,6 @@ export default function CheckoutPage() {
     } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       nextErrors.email = "Enter a valid email address.";
     }
-    setErrors(nextErrors);
-    return Object.keys(nextErrors).length === 0;
-  }
-
-  function validateShipping() {
     const requiredFields: (keyof ShippingForm)[] = [
       "firstName",
       "lastName",
@@ -174,7 +168,6 @@ export default function CheckoutPage() {
       "countryCode",
       "phone",
     ];
-    const nextErrors: Record<string, string> = {};
     requiredFields.forEach((field) => {
       if (!shipping[field].trim()) {
         nextErrors[field] = "This field is required.";
@@ -184,36 +177,15 @@ export default function CheckoutPage() {
     return Object.keys(nextErrors).length === 0;
   }
 
-  function continueTo(nextStep: CheckoutStep) {
-    if (step === "contact" && !validateContact()) {
-      return;
-    }
-    if (step === "shipping" && !validateShipping()) {
-      return;
-    }
-    if (step === "payment" && !paymentMethodId) {
-      setErrors({ paymentMethod: "Please select a payment method." });
-      return;
-    }
-    if (step === "method" && nextStep === "payment") {
-      trackGoogleAnalyticsEvent("add_shipping_info", {
-        currency,
-        value: subtotal + shippingPrice,
-        shipping_tier: getShippingMethod(shippingMethodId).label,
-        items: items.map((item) => cartItemToGoogleAnalyticsItem(item, getCartItemPrice(item, currency))),
-      });
-    }
-    if (step === "payment" && nextStep === "review") {
-      trackGoogleAnalyticsEvent("add_payment_info", {
-        currency,
-        value: total,
-        payment_type: getPaymentMethod(paymentMethodId)?.label || paymentMethodId,
-        items: items.map((item) => cartItemToGoogleAnalyticsItem(item, getCartItemPrice(item, currency))),
-      });
-    }
-    const nextIndex = steps.findIndex((item) => item.id === nextStep);
-    setStep(nextStep);
-    setMaxStep((value) => Math.max(value, nextIndex));
+  function continueToPayment() {
+    if (!validateDetails()) return;
+    trackInitiateCheckout({
+      source_page: "checkout",
+      placement: "continue_to_payment",
+      button_label: "Continue to payment",
+    });
+    setStep("payment");
+    setMaxStep(1);
     setErrors({});
   }
 
@@ -226,10 +198,20 @@ export default function CheckoutPage() {
   }
 
   async function submitOrder() {
-    if (items.length === 0 || !validateContact() || !validateShipping() || !paymentMethodId) {
-      if (!paymentMethodId) setErrors({ paymentMethod: "Please select a payment method." });
-      return;
-    }
+    if (items.length === 0 || !validateDetails()) return;
+
+    trackGoogleAnalyticsEvent("add_shipping_info", {
+      currency: "GBP",
+      value: total,
+      shipping_tier: getShippingMethod(shippingMethodId).label,
+      items: items.map((item) => cartItemToGoogleAnalyticsItem(item, getCartItemPrice(item, "GBP"))),
+    });
+    trackGoogleAnalyticsEvent("add_payment_info", {
+      currency: "GBP",
+      value: total,
+      payment_type: "GBP Bank Transfer",
+      items: items.map((item) => cartItemToGoogleAnalyticsItem(item, getCartItemPrice(item, "GBP"))),
+    });
 
     const customer: CustomerDetails = {
       fullName: `${shipping.firstName.trim()} ${shipping.lastName.trim()}`.trim(),
@@ -267,14 +249,14 @@ export default function CheckoutPage() {
             color: item.color,
             size: item.size,
             quantity: item.quantity,
-            price: getCartItemPrice(item, currency),
-            currency,
+            price: getCartItemPrice(item, "GBP"),
+            currency: "GBP",
           })),
           shippingMethodId,
-          currency,
-          paymentMethod: paymentMethodId,
-          paymentFee,
-          paymentFeeRate: getPaymentMethod(paymentMethodId)?.feeRate || 0,
+          currency: "GBP",
+          paymentMethod: "bank-transfer",
+          paymentFee: 0,
+          paymentFeeRate: 0,
           finalTotal: total,
         }),
       });
@@ -286,9 +268,9 @@ export default function CheckoutPage() {
       }
       rememberSubmittedOrderAnalytics({
         transactionId: result.order.orderNumber,
-        currency,
+        currency: "GBP",
         value: total,
-        items: items.map((item) => cartItemToGoogleAnalyticsItem(item, getCartItemPrice(item, currency))),
+        items: items.map((item) => cartItemToGoogleAnalyticsItem(item, getCartItemPrice(item, "GBP"))),
       });
       // Lead is fired once on the order-success page (not here) so Submit Order
       // and order-success do not double-count.
@@ -308,68 +290,45 @@ export default function CheckoutPage() {
 
       <StepIndicator currentStep={step} maxStep={maxStep} onSelect={goToCompleted} />
 
-      <MobileSummary items={items} subtotal={subtotal} subtotalGbp={subtotalGbp} shippingPrice={shippingPrice} paymentMethodId={paymentMethodId} paymentFee={paymentFee} total={total} currency={currency} open={summaryOpen} onToggle={() => setSummaryOpen(!summaryOpen)} />
+      <MobileSummary
+        items={items}
+        subtotal={subtotal}
+        shippingPrice={shippingPrice}
+        total={total}
+        open={summaryOpen}
+        onToggle={() => setSummaryOpen(!summaryOpen)}
+      />
 
       <div className="checkout-layout">
         <div className="checkout-panel">
-          {step === "contact" ? (
-            <ContactStep contact={contact} errors={errors} onChange={setContact} onContinue={() => continueTo("shipping")} />
-          ) : null}
-
-          {step === "shipping" ? (
-            <ShippingStep
+          {step === "details" ? (
+            <DetailsStep
+              contact={contact}
               shipping={shipping}
               errors={errors}
+              onContactChange={setContact}
               onChange={setShipping}
-              onBack={() => setStep("contact")}
-              onContinue={() => continueTo("method")}
-            />
-          ) : null}
-
-          {step === "method" ? (
-            <MethodStep
-              currency={currency}
-              subtotalGbp={subtotalGbp}
-              selectedMethodId={shippingMethodId}
-              onSelect={setShippingMethodId}
-              onBack={() => setStep("shipping")}
-              onContinue={() => continueTo("payment")}
+              onContinue={continueToPayment}
             />
           ) : null}
 
           {step === "payment" ? (
             <PaymentStep
-              selectedMethodId={paymentMethodId}
-              error={errors.paymentMethod}
-              onSelect={(methodId) => { setPaymentMethodId(methodId); setErrors({}); }}
-              onBack={() => setStep("method")}
-              onContinue={() => continueTo("review")}
-            />
-          ) : null}
-
-          {step === "review" ? (
-            <ReviewStep
-              contact={contact}
-              shipping={shipping}
-              items={items}
               subtotal={subtotal}
-              subtotalGbp={subtotalGbp}
               shippingPrice={shippingPrice}
+              selectedMethodId={shippingMethodId}
+              onSelect={setShippingMethodId}
               total={total}
-              currency={currency}
-              shippingMethodId={shippingMethodId}
-              paymentMethodId={paymentMethodId}
-              paymentFee={paymentFee}
               submitting={submitting}
               submitError={submitError}
-              onBack={() => setStep("payment")}
+              onBack={() => setStep("details")}
               onSubmit={submitOrder}
             />
           ) : null}
         </div>
 
         <aside className="checkout-summary checkout-summary-desktop" aria-label="Order summary">
-          <OrderSummary items={items} subtotal={subtotal} subtotalGbp={subtotalGbp} shippingPrice={shippingPrice} paymentMethodId={paymentMethodId} paymentFee={paymentFee} total={total} currency={currency} />
+          <OrderSummary items={items} subtotal={subtotal} shippingPrice={shippingPrice} total={total} />
         </aside>
       </div>
     </section>
@@ -410,53 +369,19 @@ function StepIndicator({
   );
 }
 
-function ContactStep({
+function DetailsStep({
   contact,
+  shipping,
   errors,
+  onContactChange,
   onChange,
   onContinue,
 }: {
   contact: ContactForm;
-  errors: Record<string, string>;
-  onChange: (value: ContactForm) => void;
-  onContinue: () => void;
-}) {
-  return (
-    <div className="checkout-step-panel">
-      <h2>Contact</h2>
-      <div className={errors.email ? "field error" : "field"}>
-        <label htmlFor="checkout-email">Email</label>
-        <input
-          id="checkout-email"
-          autoComplete="email"
-          inputMode="email"
-          placeholder="you@example.com"
-          value={contact.email}
-          onChange={(event) => onChange({ email: event.target.value })}
-          aria-invalid={errors.email ? "true" : "false"}
-        />
-        {errors.email ? <span className="err-msg">{errors.email}</span> : null}
-      </div>
-      <div className="checkout-actions end">
-        <button className="btn btn-solid" type="button" onClick={onContinue}>
-          Continue to shipping
-        </button>
-      </div>
-    </div>
-  );
-}
-
-function ShippingStep({
-  shipping,
-  errors,
-  onChange,
-  onBack,
-  onContinue,
-}: {
   shipping: ShippingForm;
   errors: Record<string, string>;
+  onContactChange: (value: ContactForm) => void;
   onChange: (value: ShippingForm) => void;
-  onBack: () => void;
   onContinue: () => void;
 }) {
   const [addressQuery, setAddressQuery] = useState("");
@@ -504,7 +429,21 @@ function ShippingStep({
         onContinue();
       }}
     >
-      <h2>Shipping address</h2>
+      <h2>Contact &amp; Shipping Address</h2>
+      <p className="checkout-submit-note">Enter your delivery details. Payment is made in GBP by bank transfer on the next step.</p>
+      <div className={errors.email ? "field error" : "field"}>
+        <label htmlFor="checkout-email">Email</label>
+        <input
+          id="checkout-email"
+          autoComplete="email"
+          inputMode="email"
+          placeholder="you@example.com"
+          value={contact.email}
+          onChange={(event) => onContactChange({ email: event.target.value })}
+          aria-invalid={errors.email ? "true" : "false"}
+        />
+        {errors.email ? <span className="err-msg">{errors.email}</span> : null}
+      </div>
       <div className="field-row">
         <CheckoutInput label="First name" autoComplete="given-name" value={shipping.firstName} error={errors.firstName} onChange={(value) => update("firstName", value)} />
         <CheckoutInput label="Last name" autoComplete="family-name" value={shipping.lastName} error={errors.lastName} onChange={(value) => update("lastName", value)} />
@@ -574,38 +513,41 @@ function ShippingStep({
         </div>
       </div>
       <CheckoutInput label="Phone" autoComplete="tel" inputMode="tel" value={shipping.phone} error={errors.phone} onChange={(value) => update("phone", value)} />
-      <div className="checkout-actions">
-        <button className="checkout-back" type="button" onClick={onBack}>
-          Return to contact
-        </button>
+      <div className="checkout-actions end">
         <button className="btn btn-solid" type="submit">
-          Continue to shipping method
+          Continue to Payment
         </button>
       </div>
     </form>
   );
 }
 
-function MethodStep({
-  currency,
-  subtotalGbp,
+function PaymentStep({
+  subtotal,
+  shippingPrice,
   selectedMethodId,
   onSelect,
+  total,
+  submitting,
+  submitError,
   onBack,
-  onContinue,
+  onSubmit,
 }: {
-  currency: CurrencyCode;
-  subtotalGbp: number;
+  subtotal: number;
+  shippingPrice: number;
   selectedMethodId: ShippingMethodId;
   onSelect: (methodId: ShippingMethodId) => void;
+  total: number;
+  submitting: boolean;
+  submitError: string;
   onBack: () => void;
-  onContinue: () => void;
+  onSubmit: () => void;
 }) {
-  const freeShipping = isFreeShippingApplied(selectedMethodId, subtotalGbp);
+  const freeShipping = isFreeShippingApplied(selectedMethodId, subtotal);
 
   return (
     <div className="checkout-step-panel">
-      <h2>Shipping method</h2>
+      <h2>Choose your delivery</h2>
       <div className="ship-options">
         {shippingMethods.map((method) => (
           <label className={method.id === selectedMethodId ? "ship-option selected" : "ship-option"} key={method.id}>
@@ -620,146 +562,41 @@ function MethodStep({
               <strong>{method.label}</strong>
               <small>{method.estimate}</small>
             </span>
-            <strong>{formatMoney(getShippingPrice(method.id, subtotalGbp, currency), currency)}</strong>
+            <strong>{formatMoney(getShippingPrice(method.id, subtotal, "GBP"), "GBP")}</strong>
           </label>
         ))}
       </div>
       {freeShipping ? <p className="free-shipping-applied">Free shipping applied</p> : null}
-      <div className="checkout-actions">
-        <button className="checkout-back" type="button" onClick={onBack}>
-          Return to shipping
-        </button>
-        <button
-          className="btn btn-solid"
-          type="button"
-          onClick={() => {
-            trackInitiateCheckout({
-              source_page: "checkout",
-              placement: "continue_to_payment",
-              button_label: "Continue to payment",
-            });
-            onContinue();
-          }}
-        >
-          Continue to payment
-        </button>
-      </div>
-    </div>
-  );
-}
-
-function PaymentStep({
-  selectedMethodId,
-  error,
-  onSelect,
-  onBack,
-  onContinue,
-}: {
-  selectedMethodId: PaymentMethodId | "";
-  error?: string;
-  onSelect: (methodId: PaymentMethodId) => void;
-  onBack: () => void;
-  onContinue: () => void;
-}) {
-  return (
-    <div className="checkout-step-panel">
-      <h2>Payment method</h2>
-      <div className="ship-options">
-        {paymentMethods.map((method) => (
-          <label className={method.id === selectedMethodId ? "ship-option selected" : "ship-option"} key={method.id}>
-            <input
-              type="radio"
-              name="paymentMethod"
-              value={method.id}
-              checked={method.id === selectedMethodId}
-              onChange={() => onSelect(method.id)}
-            />
-            <span className="ship-option-copy">
-              <strong>{method.label}</strong>
-              <small>{method.description}</small>
-            </span>
-          </label>
-        ))}
-      </div>
-      {error ? <p className="checkout-submit-error">{error}</p> : null}
-      <div className="checkout-actions">
-        <button className="checkout-back" type="button" onClick={onBack}>
-          Return to delivery method
-        </button>
-        <button className="btn btn-solid" type="button" onClick={onContinue} disabled={!selectedMethodId}>
-          Continue to review
-        </button>
-      </div>
-    </div>
-  );
-}
-
-function ReviewStep({
-  contact,
-  shipping,
-  items,
-  subtotal,
-  subtotalGbp,
-  shippingPrice,
-  total,
-  currency,
-  shippingMethodId,
-  paymentMethodId,
-  paymentFee,
-  submitting,
-  submitError,
-  onBack,
-  onSubmit,
-}: {
-  contact: ContactForm;
-  shipping: ShippingForm;
-  items: CartItem[];
-  subtotal: number;
-  subtotalGbp: number;
-  shippingPrice: number;
-  total: number;
-  currency: CurrencyCode;
-  shippingMethodId: ShippingMethodId;
-  paymentMethodId: PaymentMethodId | "";
-  paymentFee: number;
-  submitting: boolean;
-  submitError: string;
-  onBack: () => void;
-  onSubmit: () => void;
-}) {
-  const shippingMethod = getShippingMethod(shippingMethodId);
-  const paymentMethod = getPaymentMethod(paymentMethodId);
-
-  return (
-    <div className="checkout-step-panel">
-      <h2>Review & submit</h2>
       <div className="checkout-review">
-        <ReviewRow label="Contact" value={contact.email} />
-        <ReviewRow
-          label="Ship to"
-          value={[
-            shipping.firstName,
-            shipping.lastName,
-            shipping.addressLine1,
-            shipping.addressLine2,
-            shipping.city,
-            shipping.county,
-            shipping.postcode,
-            shipping.countryName,
-          ]
-            .filter(Boolean)
-            .join(", ")}
-        />
-        <ReviewRow label="Method" value={`${shippingMethod.label} · ${shippingMethod.estimate} — ${formatMoney(shippingPrice, currency)}`} />
-        <ReviewRow label="Payment" value={paymentMethod?.label || ""} />
+        <div>
+          <span>Selected delivery</span>
+          <strong>{getShippingMethod(selectedMethodId).label} · {formatMoney(shippingPrice, "GBP")}</strong>
+        </div>
       </div>
-      <OrderSummary items={items} subtotal={subtotal} subtotalGbp={subtotalGbp} shippingPrice={shippingPrice} paymentMethodId={paymentMethodId} paymentFee={paymentFee} total={total} currency={currency} compact={false} />
+      <h2>GBP Bank Transfer</h2>
+      <div className="checkout-bank-intro">
+        <strong>Amount to transfer: {formatMoney(total, "GBP")}</strong>
+        <p>Complete the bank transfer using the account below. When payment is finished, use the button at the bottom to save your order and contact us.</p>
+      </div>
+      <section className="checkout-bank-card" aria-label="GBP bank account details">
+        <div className="checkout-bank-card-head">
+          <span>Bank transfer</span>
+          <strong>GBP</strong>
+        </div>
+        <dl className="checkout-bank-details">
+          {bankDetails.map(([label, value]) => (
+            <div key={label}><dt>{label}</dt><dd>{value}</dd></div>
+          ))}
+        </dl>
+        <p className="checkout-bank-note">Please check every detail carefully before sending payment. Use your full name as the payment reference so we can verify the transfer.</p>
+      </section>
+      <p className="checkout-contact-next">After you save the order, the next page will show your order number and the WhatsApp / Telegram buttons. Your message will include the order number automatically.</p>
       <div className="checkout-actions">
         <button className="checkout-back" type="button" onClick={onBack}>
-          Return to method
+          Back to Details
         </button>
-        <button className="btn btn-solid" type="button" onClick={onSubmit} disabled={items.length === 0 || submitting}>
-          {submitting ? "Saving order…" : "Submit Order"}
+        <button className="btn btn-solid" type="button" onClick={onSubmit} disabled={submitting}>
+          {submitting ? "Saving order…" : "I Have Completed the Bank Transfer"}
         </button>
       </div>
       {submitError ? <p className="checkout-submit-error">{submitError}</p> : null}
@@ -804,35 +641,18 @@ function countryNameForCode(countryCode: string) {
   return countries.find(([code]) => code === countryCode.toUpperCase())?.[1] || "";
 }
 
-function ReviewRow({ label, value }: { label: string; value: string }) {
-  return (
-    <div>
-      <span>{label}</span>
-      <strong>{value}</strong>
-    </div>
-  );
-}
-
 function MobileSummary({
   items,
   subtotal,
-  subtotalGbp,
   shippingPrice,
-  paymentMethodId,
-  paymentFee,
   total,
-  currency,
   open,
   onToggle,
 }: {
   items: CartItem[];
   subtotal: number;
-  subtotalGbp: number;
   shippingPrice: number;
-  paymentMethodId: PaymentMethodId | "";
-  paymentFee: number;
   total: number;
-  currency: CurrencyCode;
   open: boolean;
   onToggle: () => void;
 }) {
@@ -840,9 +660,9 @@ function MobileSummary({
     <div className="checkout-summary-mobile">
       <button className="summary-toggle" type="button" onClick={onToggle} aria-expanded={open}>
         <span>Order summary</span>
-        <strong>{formatMoney(total, currency)}</strong>
+        <strong>{formatMoney(total, "GBP")}</strong>
       </button>
-      {open ? <OrderSummary items={items} subtotal={subtotal} subtotalGbp={subtotalGbp} shippingPrice={shippingPrice} paymentMethodId={paymentMethodId} paymentFee={paymentFee} total={total} currency={currency} /> : null}
+      {open ? <OrderSummary items={items} subtotal={subtotal} shippingPrice={shippingPrice} total={total} /> : null}
     </div>
   );
 }
@@ -850,69 +670,48 @@ function MobileSummary({
 function OrderSummary({
   items,
   subtotal,
-  subtotalGbp,
   shippingPrice,
-  paymentMethodId,
-  paymentFee,
   total,
-  currency,
-  compact = false,
 }: {
   items: CartItem[];
   subtotal: number;
-  subtotalGbp: number;
   shippingPrice: number;
-  paymentMethodId: PaymentMethodId | "";
-  paymentFee: number;
   total: number;
-  currency: CurrencyCode;
-  compact?: boolean;
 }) {
-  const paymentMethod = getPaymentMethod(paymentMethodId);
   return (
-    <div className={compact ? "summary-panel compact" : "summary-panel"}>
+    <div className="summary-panel">
       <h2>Order Summary</h2>
       {items.length === 0 ? (
         <p>Your cart is empty.</p>
       ) : (
         <div className="summary-items">
           {items.map((item) => (
-            <div key={`${item.productId}-${item.color}-${item.size}`}>
-              <span>
+            <article className="checkout-summary-item" key={`${item.productId}-${item.color}-${item.size}`}>
+              {item.image ? <img src={item.image} alt="" /> : <span className="checkout-summary-image-placeholder" aria-hidden="true" />}
+              <span className="checkout-summary-item-copy">
                 {[item.name, item.color, `Size ${item.size}`, `Qty ${item.quantity}`].filter(Boolean).join(" · ")}
               </span>
-              <strong>{formatMoney(getCartItemPrice(item, currency) * item.quantity, currency)}</strong>
-            </div>
+              <strong>{formatMoney(getCartItemPrice(item, "GBP") * item.quantity, "GBP")}</strong>
+            </article>
           ))}
         </div>
       )}
       <div className="totals">
         <div>
           <span>Subtotal</span>
-          <strong>{formatMoney(subtotal, currency)}</strong>
+          <strong>{formatMoney(subtotal, "GBP")}</strong>
         </div>
         <div>
           <span>Shipping</span>
-          <strong>{formatMoney(shippingPrice, currency)}</strong>
+          <strong>{formatMoney(shippingPrice, "GBP")}</strong>
         </div>
-        {shippingPrice === 0 && hasFreeShipping(subtotalGbp) ? <p className="free-shipping-applied">Free shipping applied</p> : null}
-        {paymentMethod ? (
-          <div>
-            <span>Payment Method</span>
-            <strong>{paymentMethod.label}</strong>
-          </div>
-        ) : null}
-        {paymentMethod?.id === "paypal" ? (
-          <div>
-            <span>PayPal fee</span>
-            <strong>{formatMoney(paymentFee, currency)}</strong>
-          </div>
-        ) : null}
+        {shippingPrice === 0 && hasFreeShipping(subtotal) ? <p className="free-shipping-applied">Free shipping applied</p> : null}
         <div>
           <span>Total</span>
-          <strong>{formatMoney(total, currency)}</strong>
+          <strong>{formatMoney(total, "GBP")}</strong>
         </div>
       </div>
+      <p className="checkout-summary-currency">Checkout and bank transfer are completed in GBP.</p>
     </div>
   );
 }
