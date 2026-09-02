@@ -113,14 +113,14 @@ const fixedHomeVisuals = {
 
 export const defaultSiteSettings: SiteSettings = {
   links: {
-    whatsappChannelUrl: process.env.NEXT_PUBLIC_WHATSAPP_CHANNEL || "https://whatsapp.com/channel/0029VbCaLkaGpLHHrhnDip3N",
-    telegramChannelUrl: process.env.NEXT_PUBLIC_TELEGRAM_CHANNEL || "https://t.me/liusnning",
+    whatsappChannelUrl: process.env.NEXT_PUBLIC_WHATSAPP_CHANNEL || "https://whatsapp.com/channel/0029Vb7eg1jDZ4LU1XMbt630",
+    telegramChannelUrl: process.env.NEXT_PUBLIC_TELEGRAM_CHANNEL || "https://t.me/cnfansu",
     instagramUrl: process.env.NEXT_PUBLIC_INSTAGRAM || "https://instagram.com/PLACEHOLDER",
     facebookUrl: process.env.NEXT_PUBLIC_FACEBOOK || "https://facebook.com/PLACEHOLDER",
-    personalWhatsappUrl: "https://api.whatsapp.com/send?phone=41799182999",
-    personalWhatsappNumber: process.env.NEXT_PUBLIC_WHATSAPP_NUMBER || "41799182999",
-    personalTelegramUrl: "https://t.me/kunkunyu0",
-    personalTelegramUsername: process.env.NEXT_PUBLIC_TELEGRAM_USERNAME || "@kunkunyu0",
+    personalWhatsappUrl: "https://api.whatsapp.com/send?phone=85251200580",
+    personalWhatsappNumber: process.env.NEXT_PUBLIC_WHATSAPP_NUMBER || "85251200580",
+    personalTelegramUrl: "https://t.me/cnfansgb",
+    personalTelegramUsername: process.env.NEXT_PUBLIC_TELEGRAM_USERNAME || "@cnfansgb",
   },
   homepage: {
     ...fixedHomeVisuals,
