@@ -57,6 +57,10 @@ export type HomepageImage = {
   label?: string;
 };
 
+// Keep the settings fetch tagged so an admin save can invalidate both the
+// cached response and any statically rendered pages that depend on it.
+export const SITE_SETTINGS_CACHE_TAG = "site-settings";
+
 const fixedHomeVisuals = {
   homeHeroImage: {
     imageUrl: "https://taplink.st/p/d/a/8/5/70249982.jpg?0",
@@ -113,14 +117,14 @@ const fixedHomeVisuals = {
 
 export const defaultSiteSettings: SiteSettings = {
   links: {
-    whatsappChannelUrl: process.env.NEXT_PUBLIC_WHATSAPP_CHANNEL || "https://whatsapp.com/channel/0029VbCaLkaGpLHHrhnDip3N",
-    telegramChannelUrl: process.env.NEXT_PUBLIC_TELEGRAM_CHANNEL || "https://t.me/liusnning",
-    instagramUrl: process.env.NEXT_PUBLIC_INSTAGRAM || "https://instagram.com/PLACEHOLDER",
-    facebookUrl: process.env.NEXT_PUBLIC_FACEBOOK || "https://facebook.com/PLACEHOLDER",
-    personalWhatsappUrl: "https://api.whatsapp.com/send?phone=41799182999",
-    personalWhatsappNumber: process.env.NEXT_PUBLIC_WHATSAPP_NUMBER || "41799182999",
-    personalTelegramUrl: "https://t.me/kunkunyu0",
-    personalTelegramUsername: process.env.NEXT_PUBLIC_TELEGRAM_USERNAME || "@kunkunyu0",
+    whatsappChannelUrl: process.env.NEXT_PUBLIC_WHATSAPP_CHANNEL || "https://whatsapp.com/channel/0029Vb7eg1jDZ4LU1XMbt630",
+    telegramChannelUrl: process.env.NEXT_PUBLIC_TELEGRAM_CHANNEL || "https://t.me/cnfansu",
+    instagramUrl: process.env.NEXT_PUBLIC_INSTAGRAM || "https://instagram.com/cnfans1",
+    facebookUrl: process.env.NEXT_PUBLIC_FACEBOOK || "https://www.facebook.com/profile.php?id=61594247253586",
+    personalWhatsappUrl: "https://api.whatsapp.com/send?phone=85251200580",
+    personalWhatsappNumber: process.env.NEXT_PUBLIC_WHATSAPP_NUMBER || "85251200580",
+    personalTelegramUrl: "https://t.me/cnfansgb",
+    personalTelegramUsername: process.env.NEXT_PUBLIC_TELEGRAM_USERNAME || "@cnfansgb",
   },
   homepage: {
     ...fixedHomeVisuals,
@@ -354,7 +358,10 @@ export async function fetchSiteSettings(): Promise<SiteSettings> {
   const baseUrl = (process.env.CATALOG_API_BASE || process.env.NEXT_PUBLIC_CATALOG_API_BASE || "").replace(/\/+$/, "");
   if (!baseUrl) return readSiteSettings();
   try {
-    const response = await fetch(`${baseUrl}/site-settings`, { next: { revalidate: 600 }, headers: { Accept: "application/json" } });
+    const response = await fetch(`${baseUrl}/site-settings`, {
+      next: { revalidate: 3600, tags: [SITE_SETTINGS_CACHE_TAG] },
+      headers: { Accept: "application/json" },
+    });
     if (!response.ok) return readSiteSettings();
     const payload = await response.json() as { settings?: unknown };
     return payload.settings ? sanitizeSiteSettings(payload.settings) : readSiteSettings();

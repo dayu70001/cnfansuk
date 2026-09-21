@@ -14,7 +14,7 @@ async function proxyAdminRequest(request: Request, context: RouteContext) {
   if (!baseUrl || !secret) return NextResponse.json({ error: "后台服务环境变量尚未配置。" }, { status: 503 });
 
   const { path } = await context.params;
-  if (!path.length || !["products", "orders"].includes(path[0])) {
+  if (!path.length || !["products", "orders", "classification"].includes(path[0])) {
     return NextResponse.json({ error: "接口不存在" }, { status: 404 });
   }
   const incomingUrl = new URL(request.url);
@@ -40,6 +40,10 @@ async function proxyAdminRequest(request: Request, context: RouteContext) {
 }
 
 export async function GET(request: Request, context: RouteContext) {
+  return proxyAdminRequest(request, context);
+}
+
+export async function POST(request: Request, context: RouteContext) {
   return proxyAdminRequest(request, context);
 }
 

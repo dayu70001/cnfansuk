@@ -2,9 +2,9 @@
 
 import { FormEvent, useEffect, useState } from "react";
 import { formatMoney } from "@/lib/formatMoney";
+import { getOrderPaymentStage, orderPaymentStageLabel, type OrderPaymentStage, type RawOrderStatus } from "@/lib/orderStatus";
 import type { CurrencyCode } from "@/lib/currency";
 
-type AdminOrderStatus = "pending" | "confirmed" | "paid" | "processing" | "shipped" | "completed" | "cancelled";
 type AdminOrderItem = {
   id: number;
   product_code: string;
@@ -19,10 +19,12 @@ type AdminOrderItem = {
   line_total: number;
   currency: CurrencyCode;
 };
+
 type AdminOrder = {
   id: string;
   order_number: string;
   created_at: string;
+  updated_at: string;
   customer_name: string;
   email: string;
   phone: string;
@@ -43,29 +45,45 @@ type AdminOrder = {
   payment_fee: number;
   payment_fee_rate: number;
   final_total: number;
-  status: AdminOrderStatus;
+  status: RawOrderStatus;
+  payment_page_viewed_at: string | null;
+  transfer_submitted_at: string | null;
+  whatsapp_clicked_at: string | null;
+  payment_confirmed_at: string | null;
+  payment_stage?: OrderPaymentStage;
+  whatsapp_clicked?: boolean;
   items?: AdminOrderItem[];
 };
 
-const statusLabels: Record<AdminOrderStatus, string> = {
-  pending: "待处理",
-  confirmed: "已确认",
-  paid: "已付款",
-  processing: "处理中",
-  shipped: "已发货",
-  completed: "已完成",
-  cancelled: "已取消",
-};
-const statuses = Object.keys(statusLabels) as AdminOrderStatus[];
+type AdminOrderFilter = "" | OrderPaymentStage | "whatsapp_not_clicked";
 
-function formatOrderDate(value: string) {
+const filterOptions: Array<{ value: AdminOrderFilter; label: string }> = [
+  { value: "", label: "全部" },
+  { value: "created", label: "未进入付款页" },
+  { value: "awaiting_payment", label: "待付款" },
+  { value: "payment_submitted", label: "已提交转账" },
+  { value: "payment_confirmed", label: "已确认到账" },
+  { value: "whatsapp_not_clicked", label: "WhatsApp 未点击" },
+  { value: "cancelled", label: "已取消" },
+];
+
+function formatOrderDate(value: string | null) {
+  if (!value) return "—";
   return new Date(value).toLocaleString("zh-CN", {
     year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit",
   });
 }
 
-async function requestOrders(search: string, status: string) {
-  const params = new URLSearchParams({ q: search.trim(), status, limit: "200" });
+function paymentStage(order: AdminOrder) {
+  return order.payment_stage || getOrderPaymentStage(order);
+}
+
+function whatsappClicked(order: AdminOrder) {
+  return Boolean(order.whatsapp_clicked_at || order.whatsapp_clicked);
+}
+
+async function requestOrders(search: string, status: AdminOrderFilter) {
+  const params = new URLSearchParams({ q: search.trim(), status, limit: "50" });
   const response = await fetch(`/api/admin/orders?${params}`, { cache: "no-store" });
   const result = await response.json().catch(() => ({})) as { orders?: AdminOrder[]; error?: string };
   return { response, result };
@@ -81,11 +99,25 @@ export function AdminOrderPanel() {
   const [orders, setOrders] = useState<AdminOrder[]>([]);
   const [selected, setSelected] = useState<AdminOrder | null>(null);
   const [query, setQuery] = useState("");
-  const [status, setStatus] = useState("");
+  const [status, setStatus] = useState<AdminOrderFilter>("");
   const [loading, setLoading] = useState(true);
   const [detailLoading, setDetailLoading] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [savingPayment, setSavingPayment] = useState(false);
   const [message, setMessage] = useState("");
+
+  async function loadOrderDetail(orderNumber: string) {
+    setDetailLoading(true);
+    setMessage("");
+    const { response, result } = await requestOrderDetail(orderNumber);
+    if (!response.ok || !result.order) {
+      setMessage(result.error || "读取订单详情失败。");
+      setDetailLoading(false);
+      return;
+    }
+    setSelected(result.order);
+    setDetailLoading(false);
+  }
 
   async function loadOrders(search = query, nextStatus = status) {
     setLoading(true);
@@ -100,19 +132,6 @@ export function AdminOrderPanel() {
     setLoading(false);
     if (nextOrders.length > 0) await loadOrderDetail(nextOrders[0].order_number);
     else setSelected(null);
-  }
-
-  async function loadOrderDetail(orderNumber: string) {
-    setDetailLoading(true);
-    setMessage("");
-    const { response, result } = await requestOrderDetail(orderNumber);
-    if (!response.ok || !result.order) {
-      setMessage(result.error || "读取订单详情失败。");
-      setDetailLoading(false);
-      return;
-    }
-    setSelected(result.order);
-    setDetailLoading(false);
   }
 
   useEffect(() => {
@@ -135,21 +154,46 @@ export function AdminOrderPanel() {
     return () => { active = false; };
   }, []);
 
-  async function updateStatus(nextStatus: AdminOrderStatus) {
-    if (!selected) return;
-    const response = await fetch(`/api/admin/orders/${encodeURIComponent(selected.order_number)}/status`, {
+  async function confirmPayment() {
+    if (!selected || savingPayment || paymentStage(selected) === "cancelled") return;
+    setSavingPayment(true);
+    setMessage("");
+    const response = await fetch(`/api/admin/orders/${encodeURIComponent(selected.order_number)}/payment-confirmed`, {
       method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status: nextStatus }),
+      headers: { Accept: "application/json" },
     });
     const result = await response.json().catch(() => ({})) as { order?: AdminOrder; error?: string };
     if (!response.ok || !result.order) {
-      setMessage(result.error || "状态保存失败。");
+      setMessage(result.error || "确认到账失败。");
+      setSavingPayment(false);
       return;
     }
     setSelected(result.order);
-    setOrders((current) => current.map((order) => order.order_number === result.order?.order_number ? { ...order, status: result.order.status } : order));
-    setMessage("订单状态已保存。 ");
+    setOrders((current) => current.map((order) => order.order_number === result.order?.order_number ? { ...order, ...result.order } : order));
+    setMessage("已记录实际到账。");
+    setSavingPayment(false);
+  }
+
+  async function cancelOrder() {
+    if (!selected || savingPayment || paymentStage(selected) === "cancelled") return;
+    if (!window.confirm(`确定取消订单 ${selected.order_number}？`)) return;
+    setSavingPayment(true);
+    setMessage("");
+    const response = await fetch(`/api/admin/orders/${encodeURIComponent(selected.order_number)}/status`, {
+      method: "PATCH",
+      headers: { Accept: "application/json", "Content-Type": "application/json" },
+      body: JSON.stringify({ status: "cancelled" }),
+    });
+    const result = await response.json().catch(() => ({})) as { order?: AdminOrder; error?: string };
+    if (!response.ok || !result.order) {
+      setMessage(result.error || "取消订单失败。");
+      setSavingPayment(false);
+      return;
+    }
+    setSelected(result.order);
+    setOrders((current) => current.map((order) => order.order_number === result.order?.order_number ? { ...order, ...result.order } : order));
+    setMessage("订单已取消。");
+    setSavingPayment(false);
   }
 
   async function deleteOrder() {
@@ -180,32 +224,40 @@ export function AdminOrderPanel() {
     void loadOrders();
   }
 
+  const selectedStage = selected ? paymentStage(selected) : null;
+  const selectedWhatsappClicked = selected ? whatsappClicked(selected) : false;
+
   return (
     <section className="admin-shell admin-orders-shell">
       <div className="admin-list">
         <form className="admin-order-search" onSubmit={submitSearch}>
           <input aria-label="搜索订单" placeholder="订单号、姓名、邮箱或电话" value={query} onChange={(event) => setQuery(event.target.value)} />
-          <select aria-label="订单状态" value={status} onChange={(event) => { setStatus(event.target.value); void loadOrders(query, event.target.value); }}>
-            <option value="">全部状态</option>
-            {statuses.map((item) => <option value={item} key={item}>{statusLabels[item]}</option>)}
+          <select aria-label="订单付款状态" value={status} onChange={(event) => { const next = event.target.value as AdminOrderFilter; setStatus(next); void loadOrders(query, next); }}>
+            {filterOptions.map((item) => <option value={item.value} key={item.value}>{item.label}</option>)}
           </select>
           <button className="btn btn-solid" type="submit">搜索</button>
         </form>
         {loading ? <p>正在读取订单…</p> : null}
         {!loading && orders.length === 0 ? <p>暂时没有订单。</p> : null}
-        {orders.map((order) => (
-          <button
-            className={order.order_number === selected?.order_number ? "order-row active" : "order-row"}
-            type="button"
-            key={order.order_number}
-            aria-pressed={order.order_number === selected?.order_number}
-            onClick={() => void loadOrderDetail(order.order_number)}
-          >
-            <span className="order-row-top"><strong>{order.order_number}</strong><small className={`order-status order-status-${order.status}`}>{statusLabels[order.status]}</small></span>
-            <span className="order-row-customer">{order.customer_name}</span>
-            <span className="order-row-bottom"><small>{formatOrderDate(order.created_at)}</small><strong>{formatMoney(order.total, order.currency)}</strong></span>
-          </button>
-        ))}
+        {orders.map((order) => {
+          const stage = paymentStage(order);
+          const clicked = whatsappClicked(order);
+          const warning = stage === "payment_submitted" && !clicked;
+          return (
+            <button
+              className={`${order.order_number === selected?.order_number ? "order-row active" : "order-row"}${warning ? " order-row-warning" : ""}`}
+              type="button"
+              key={order.order_number}
+              aria-pressed={order.order_number === selected?.order_number}
+              onClick={() => void loadOrderDetail(order.order_number)}
+            >
+              <span className="order-row-top"><strong>{order.order_number}</strong><small className="order-status">{orderPaymentStageLabel(stage, "zh")}</small></span>
+              <span className="order-row-customer">{order.customer_name}</span>
+              <span className="order-row-payment-summary">付款：{orderPaymentStageLabel(stage, "zh")} · WhatsApp：{clicked ? "已点击" : "未点击"}</span>
+              <span className="order-row-bottom"><small>{formatOrderDate(order.created_at)} · {order.currency}</small><strong>{formatMoney(order.total, order.currency)}</strong></span>
+            </button>
+          );
+        })}
       </div>
       <div className="admin-detail">
         {message ? <p className="admin-status">{message}</p> : null}
@@ -213,13 +265,22 @@ export function AdminOrderPanel() {
         {selected && !detailLoading ? (
           <>
             <header className="admin-order-detail-head">
-              <h2>订单详情：{selected.order_number}</h2>
-              <p>下单时间：{formatOrderDate(selected.created_at)}</p>
+              <div>
+                <h2>订单详情：{selected.order_number}</h2>
+                <p>下单时间：{formatOrderDate(selected.created_at)}</p>
+              </div>
               <div className="admin-order-head-actions">
-                <label className="admin-order-status-field"><span>订单状态</span><select value={selected.status} disabled={deleting} onChange={(event) => void updateStatus(event.target.value as AdminOrderStatus)}>
-                  {statuses.map((item) => <option value={item} key={item}>{statusLabels[item]}</option>)}
-                </select></label>
-                <button className="admin-order-delete-button" type="button" disabled={deleting} onClick={() => void deleteOrder()}>
+                {selectedStage !== "payment_confirmed" && selectedStage !== "cancelled" ? (
+                  <button className="admin-order-confirm-button" type="button" disabled={savingPayment || deleting} onClick={() => void confirmPayment()}>
+                    {savingPayment ? "正在保存…" : "Confirm payment received"}
+                  </button>
+                ) : null}
+                {selectedStage !== "cancelled" ? (
+                  <button className="admin-order-cancel-button" type="button" disabled={savingPayment || deleting} onClick={() => void cancelOrder()}>
+                    Cancel order
+                  </button>
+                ) : null}
+                <button className="admin-order-delete-button" type="button" disabled={deleting || savingPayment} onClick={() => void deleteOrder()}>
                   {deleting ? "正在删除…" : "删除订单"}
                 </button>
               </div>
@@ -236,34 +297,44 @@ export function AdminOrderPanel() {
             </section>
 
             <section className="admin-order-detail-section">
-              <h3>配送与付款</h3>
+              <h3>付款与联系</h3>
               <dl className="admin-order-payment-list">
-                <div><dt>配送方式</dt><dd>{selected.shipping_method_label}</dd></div>
+                <div><dt>付款</dt><dd>{selectedStage ? orderPaymentStageLabel(selectedStage, "zh") : "—"}</dd></div>
+                <div><dt>WhatsApp</dt><dd>{selectedWhatsappClicked ? "已点击" : "未点击"}</dd></div>
                 <div><dt>付款方式</dt><dd>{selected.payment_method || "待确认"}</dd></div>
-                {selected.payment_fee > 0 ? <div><dt>PayPal fee</dt><dd>{formatMoney(selected.payment_fee, selected.currency)}</dd></div> : null}
                 <div><dt>币种</dt><dd>{selected.currency}</dd></div>
+              </dl>
+              {selectedStage === "payment_submitted" && !selectedWhatsappClicked ? <p className="admin-order-warning">已提交转账，但客户尚未点击 WhatsApp。</p> : null}
+            </section>
+
+            <section className="admin-order-detail-section">
+              <h3>关键时间</h3>
+              <dl className="admin-order-event-list">
+                <div><dt>Order created</dt><dd>{formatOrderDate(selected.created_at)}</dd></div>
+                <div><dt>Payment page viewed</dt><dd>{formatOrderDate(selected.payment_page_viewed_at)}</dd></div>
+                <div><dt>Transfer submitted</dt><dd>{formatOrderDate(selected.transfer_submitted_at)}</dd></div>
+                <div><dt>WhatsApp clicked</dt><dd>{formatOrderDate(selected.whatsapp_clicked_at)}</dd></div>
+                <div><dt>Payment confirmed</dt><dd>{formatOrderDate(selected.payment_confirmed_at)}</dd></div>
               </dl>
             </section>
 
             <section className="admin-order-detail-section admin-order-products">
               <h3>商品明细</h3>
-            <div className="admin-order-items">
-              {(selected.items || []).map((item) => (
-                <article key={item.id}>
-                  <a className="admin-order-item-image" href={`/product/${item.slug}`} target="_blank" rel="noreferrer">{item.image_url ? <img src={item.image_url} alt={item.title} /> : <span>暂无图片</span>}</a>
-                  <div className="admin-order-item-copy">
-                    <div className="admin-order-item-main"><h4>{item.title}</h4><strong>{formatMoney(item.line_total, selected.currency)}</strong></div>
-                    <div className="admin-order-item-options"><span>尺码：{item.size}</span><span>数量：{item.quantity}</span>{item.color ? <span>颜色：{item.color}</span> : null}</div>
-                  </div>
-                </article>
-              ))}
-            </div>
+              <div className="admin-order-items">
+                {(selected.items || []).map((item) => (
+                  <article key={item.id}>
+                    <a className="admin-order-item-image" href={`/product/${item.slug}`} target="_blank" rel="noreferrer">{item.image_url ? <img src={item.image_url} alt={item.title} /> : <span>暂无图片</span>}</a>
+                    <div className="admin-order-item-copy">
+                      <div className="admin-order-item-main"><h4>{item.title}</h4><strong>{formatMoney(item.line_total, selected.currency)}</strong></div>
+                      <div className="admin-order-item-options"><span>尺码：{item.size}</span><span>数量：{item.quantity}</span>{item.color ? <span>颜色：{item.color}</span> : null}</div>
+                    </div>
+                  </article>
+                ))}
+              </div>
             </section>
 
             <section className="admin-order-totals" aria-label="订单金额">
               <div><span>商品小计</span><strong>{formatMoney(selected.subtotal, selected.currency)}</strong></div>
-              <div><span>配送费用</span><strong>{formatMoney(selected.shipping_fee, selected.currency)}</strong></div>
-              {selected.payment_fee > 0 ? <div><span>PayPal fee</span><strong>{formatMoney(selected.payment_fee, selected.currency)}</strong></div> : null}
               <div className="admin-order-grand-total"><span>订单总额</span><strong>{formatMoney(selected.total, selected.currency)}</strong></div>
             </section>
           </>

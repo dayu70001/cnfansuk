@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
+import { revalidatePath, revalidateTag } from "next/cache";
 import { getAdminWorkerToken, isAdminAuthenticated } from "@/lib/adminAuth";
-import { fetchSiteSettings, sanitizeSiteSettings } from "@/lib/siteSettings";
+import { fetchSiteSettings, sanitizeSiteSettings, SITE_SETTINGS_CACHE_TAG } from "@/lib/siteSettings";
 
 function workerBaseUrl() {
   return (process.env.CATALOG_API_BASE || process.env.NEXT_PUBLIC_CATALOG_API_BASE || "").replace(/\/+$/, "");
@@ -26,7 +27,17 @@ export async function POST(request: Request) {
     });
     const result = await response.json().catch(() => ({})) as { settings?: unknown; error?: string };
     if (!response.ok || !result.settings) return NextResponse.json({ error: result.error || "设置保存失败。" }, { status: response.status || 500 });
-    return NextResponse.json(sanitizeSiteSettings(result.settings));
+    const nextSettings = sanitizeSiteSettings(result.settings);
+
+    // The Worker write succeeds before this route returns. Invalidate the
+    // tagged settings fetch and the cached homepage/layout so the next
+    // storefront request renders the newly saved values immediately instead
+    // of waiting for the previous one-hour ISR window.
+    revalidateTag(SITE_SETTINGS_CACHE_TAG, { expire: 0 });
+    revalidatePath("/", "page");
+    revalidatePath("/", "layout");
+
+    return NextResponse.json(nextSettings);
   } catch {
     return NextResponse.json({ error: "首页设置数据无效。" }, { status: 400 });
   }

@@ -8,9 +8,31 @@ function appendText(url: string, text: string) {
   return `${url}${separator}text=${encodeURIComponent(text)}`;
 }
 
+function withoutPrefilledText(url: string) {
+  try {
+    const parsed = new URL(url);
+    parsed.searchParams.delete("text");
+    return parsed.toString();
+  } catch {
+    return url;
+  }
+}
+
+function directWhatsappLinkFromLinks(links: ContactLinks) {
+  if (links.personalWhatsappUrl) return withoutPrefilledText(links.personalWhatsappUrl);
+  const number = links.personalWhatsappNumber || supportConfig.whatsappNumber || "0000000000";
+  return `https://wa.me/${number}`;
+}
+
+function directTelegramLinkFromLinks(links: ContactLinks) {
+  if (links.personalTelegramUrl) return withoutPrefilledText(links.personalTelegramUrl);
+  const username = (links.personalTelegramUsername || supportConfig.telegramUsername || "cnfansuk_support").replace(/^@/, "");
+  return `https://t.me/${username}`;
+}
+
 function whatsappLinkFromLinks(links: ContactLinks, orderNo?: string) {
   const text = orderNo
-    ? `Hi CNFans UK, I want to pay for order #${orderNo}.`
+    ? `Hi CNFans UK, I have completed the GBP bank transfer for order #${orderNo}. Please confirm my payment.`
     : "Hi CNFans UK, I would like help with an order.";
   if (links.personalWhatsappUrl) {
     return appendText(links.personalWhatsappUrl, text);
@@ -21,7 +43,7 @@ function whatsappLinkFromLinks(links: ContactLinks, orderNo?: string) {
 
 function telegramLinkFromLinks(links: ContactLinks, orderNo?: string) {
   const text = orderNo
-    ? `Hi CNFans UK, I want to pay for order #${orderNo}.`
+    ? `Hi CNFans UK, I have completed the GBP bank transfer for order #${orderNo}. Please confirm my payment.`
     : "Hi CNFans UK, I would like help with an order.";
   if (links.personalTelegramUrl) {
     return appendText(links.personalTelegramUrl, text);
@@ -44,4 +66,12 @@ export function getWhatsappLinkFromSettings(settings: SiteSettings, orderNo?: st
 
 export function getTelegramLinkFromSettings(settings: SiteSettings, orderNo?: string) {
   return telegramLinkFromLinks(settings.links, orderNo);
+}
+
+export function getDirectWhatsappLinkFromSettings(settings: SiteSettings) {
+  return directWhatsappLinkFromLinks(settings.links);
+}
+
+export function getDirectTelegramLinkFromSettings(settings: SiteSettings) {
+  return directTelegramLinkFromLinks(settings.links);
 }
