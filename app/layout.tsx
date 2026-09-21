@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Hanken_Grotesk, Newsreader } from "next/font/google";
+import { Inter } from "next/font/google";
 import { Suspense } from "react";
 import { CartDrawer } from "@/components/CartDrawer";
 import { CartProvider } from "@/components/CartProvider";
@@ -10,18 +10,10 @@ import { Header } from "@/components/Header";
 import { SITE_NAME, SITE_URL } from "@/lib/site";
 import "./globals.css";
 
-const hankenGrotesk = Hanken_Grotesk({
+const inter = Inter({
   variable: "--font-ui",
   subsets: ["latin"],
   weight: ["400", "500", "600", "700"],
-  display: "swap",
-});
-
-const newsreader = Newsreader({
-  variable: "--font-display",
-  subsets: ["latin"],
-  weight: ["300", "400", "500"],
-  style: ["normal", "italic"],
   display: "swap",
 });
 
@@ -52,7 +44,7 @@ export const viewport: Viewport = {
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en" className={`${hankenGrotesk.variable} ${newsreader.variable}`}>
+    <html lang="en" className={inter.variable}>
       <body>
         <CartProvider>
           <div className="announce">New season styles now in</div>
