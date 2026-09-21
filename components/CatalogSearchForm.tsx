@@ -15,6 +15,7 @@ type CatalogSearchFormProps = {
   defaultQuery?: string;
   placeholder: string;
   clearHref?: string;
+  className?: string;
 };
 
 export function CatalogSearchForm({
@@ -23,10 +24,11 @@ export function CatalogSearchForm({
   defaultQuery = "",
   placeholder,
   clearHref,
+  className,
 }: CatalogSearchFormProps) {
   return (
     <form
-      className="category-search-row"
+      className={["category-search-row", className].filter(Boolean).join(" ")}
       action={action}
       onSubmit={(event) => {
         const search = new FormData(event.currentTarget).get("q");
@@ -41,7 +43,7 @@ export function CatalogSearchForm({
         <input type="hidden" name={field.name} value={field.value} key={field.name} />
       ))}
       <input className="category-search-input" type="search" name="q" defaultValue={defaultQuery} placeholder={placeholder} />
-      <button className="category-search-button" type="submit">
+      <button className="category-search-button" type="submit" aria-label="Search products">
         Search
       </button>
       {clearHref ? (

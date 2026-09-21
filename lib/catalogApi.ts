@@ -32,6 +32,11 @@ type CatalogProduct = {
   category?: string | null;
   subcategory?: string | null;
   brand?: string | null;
+  productDetails?: string[] | string | null;
+  product_details?: string[] | string | null;
+  sizeFit?: string[] | string | null;
+  size_fit?: string[] | string | null;
+  material?: string | null;
   priceGbp?: number | string | null;
   priceEur?: number | string | null;
   priceUsd?: number | string | null;
@@ -81,15 +86,27 @@ export type CatalogFilters = {
   brands: string[];
   counts: {
     categories: Array<{ category: string; count: number }>;
-    subcategories: Array<{ subcategory: string; count: number }>;
+    subcategories: Array<{ category: string; subcategory: string; count: number }>;
     brands: Array<{ brand: string; count: number }>;
   };
 };
 
+export type CatalogSizeStats = {
+  totalListings: number;
+  listingsWithSizeOptions: number;
+  sizeLabels: Array<{ size: string; count: number }>;
+  categories: Array<{
+    category: string;
+    sizes: Array<{ size: string; count: number }>;
+  }>;
+};
+
 type CatalogQuery = {
+  collection?: string;
   category?: string;
   subcategory?: string;
   brand?: string;
+  price?: string;
   q?: string;
   sort?: string;
   page?: number;
@@ -98,13 +115,19 @@ type CatalogQuery = {
 };
 
 export async function fetchCatalogProducts(query: CatalogQuery = {}): Promise<Product[] | null> {
-  const response = await requestCatalog<CatalogResponse>("/catalog", query, 300);
+  // Homepage product data must reflect status changes promptly. The Worker
+  // still serves its versioned edge cache, so this bypasses only Next's own
+  // long-lived Data Cache copy.
+  const response = await requestCatalog<CatalogResponse>("/catalog", query, 3600, true);
   if (!response?.products) return response ? [] : null;
   return response.products.map(mapCatalogProduct);
 }
 
-export async function fetchCatalogPage(query: CatalogQuery = {}): Promise<{ products: Product[]; total: number; page: number; limit: number; totalPages: number } | null> {
-  const response = await requestCatalog<CatalogResponse>("/catalog", query, 300);
+export async function fetchCatalogPage(
+  query: CatalogQuery = {},
+  options: { bypassNextCache?: boolean } = {},
+): Promise<{ products: Product[]; total: number; page: number; limit: number; totalPages: number } | null> {
+  const response = await requestCatalog<CatalogResponse>("/catalog", query, 3600, options.bypassNextCache);
   const catalogItems = response?.products || response?.items;
   if (!catalogItems) return response ? { products: [], total: 0, page: query.page || 1, limit: query.limit || 20, totalPages: 0 } : null;
   const total = Number(response.total ?? response.pagination?.total ?? catalogItems.length);
@@ -120,7 +143,7 @@ export async function fetchCatalogPage(query: CatalogQuery = {}): Promise<{ prod
 }
 
 export async function fetchCatalogProductBySlug(slug: string): Promise<Product | null> {
-  const response = await requestCatalog<ProductResponse>(`/product/${encodeURIComponent(slug)}`, {}, 600);
+  const response = await requestCatalog<ProductResponse>(`/product/${encodeURIComponent(slug)}`, {}, 21600, true);
   return response?.product ? mapCatalogProduct(response.product) : null;
 }
 
@@ -136,6 +159,7 @@ export async function fetchSitemapProducts(): Promise<Array<{ slug: string; last
       "/sitemap-products",
       { limit: pageSize, page },
       3600,
+      true,
     );
     if (!response?.products) return products.length ? products : response ? [] : null;
 
@@ -155,10 +179,19 @@ export async function fetchSitemapProducts(): Promise<Array<{ slug: string; last
 }
 
 export async function fetchCatalogFilters(): Promise<CatalogFilters | null> {
-  return requestCatalog<CatalogFilters>("/filters", {}, 1800);
+  // The Worker owns the catalog cache and versions it from the indexed D1
+  // catalog version. Avoid a second, long-lived Next Data Cache copy here so
+  // category edits become visible as soon as the Worker cache version rolls.
+  return requestCatalog<CatalogFilters>("/filters", {}, 21600, true);
 }
 
-async function requestCatalog<T>(path: string, query: CatalogQuery = {}, revalidate = 300): Promise<T | null> {
+export async function fetchCatalogSizeStats(): Promise<CatalogSizeStats | null> {
+  // Size distribution is aggregated once at the Worker and served from its
+  // versioned cache. This keeps guide requests from scanning product options.
+  return requestCatalog<CatalogSizeStats>("/catalog-size-stats", {}, 21600, true);
+}
+
+async function requestCatalog<T>(path: string, query: CatalogQuery = {}, revalidate = 3600, bypassNextCache = false): Promise<T | null> {
   const catalogApiBase = getCatalogApiBase();
   if (!catalogApiBase) return null;
 
@@ -170,12 +203,19 @@ async function requestCatalog<T>(path: string, query: CatalogQuery = {}, revalid
   });
 
   try {
-    const response = await fetch(url, {
+    const init: RequestInit & { next?: { revalidate: number } } = {
       headers: { Accept: "application/json" },
+    };
+    if (bypassNextCache) {
+      // This bypasses only Next's duplicate response cache. The Worker still
+      // serves its versioned edge cache, so requests do not scan the catalog.
+      init.cache = "no-store";
+    } else {
       // Public read-only catalog data. Cached in the Next.js Data Cache and
       // revalidated on a timer so repeated visits do not hit D1 every request.
-      next: { revalidate },
-    });
+      init.next = { revalidate };
+    }
+    const response = await fetch(url, init);
 
     if (!response.ok) return null;
     return (await response.json()) as T;
@@ -199,6 +239,8 @@ function mapCatalogProduct(product: CatalogProduct): Product {
   const priceGBP = toPrice(product.priceGbp ?? product.price_gbp);
   const priceEUR = toPrice(product.priceEur ?? product.price_eur) || priceGBP * 9 / 8;
   const priceUSD = toPrice(product.priceUsd ?? product.price_usd) || priceGBP * 9 / 7;
+  const productDetails = toFactList(product.productDetails ?? product.product_details);
+  const sizeFit = toFactList(product.sizeFit ?? product.size_fit);
 
   return {
     id: productCode,
@@ -206,7 +248,9 @@ function mapCatalogProduct(product: CatalogProduct): Product {
     name: title,
     category,
     style,
-    brand: cleanText(product.brand) || "CNFans UK",
+    // Keep missing source brands empty so Product JSON-LD can omit `brand`
+    // instead of mislabelling the storefront as the item's manufacturer.
+    brand: cleanText(product.brand),
     priceGBP,
     priceEUR,
     priceUSD,
@@ -215,9 +259,17 @@ function mapCatalogProduct(product: CatalogProduct): Product {
     sizes: getSizes(product.options),
     shortDescription: cleanText(product.subtitle) || cleanText(product.description) || title,
     description: cleanText(product.description) || cleanText(product.subtitle) || title,
+    ...(productDetails.length ? { productDetails } : {}),
+    ...(sizeFit.length ? { sizeFit } : {}),
+    ...(cleanText(product.material) ? { material: cleanText(product.material) } : {}),
     featured: Number(product.sort_order || 0) <= 10,
     newIn: true,
   };
+}
+
+function toFactList(value: unknown): string[] {
+  const raw = Array.isArray(value) ? value : typeof value === "string" ? value.split(/\r?\n|[•·;]/) : [];
+  return Array.from(new Set(raw.map((item) => cleanText(item).replace(/^[•·*\-–—]\s*/, "")).filter(Boolean)));
 }
 
 function getSizes(options: CatalogOption[] | null | undefined) {
