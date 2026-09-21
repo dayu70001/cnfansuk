@@ -8,6 +8,11 @@ export type PhaseThreeGuide = {
   intro: string;
   categoryHref: string;
   categoryLabel: string;
+  catalogCategory?: string;
+  catalogSubcategory?: string;
+  catalogSearch?: string;
+  subcategoryHref?: string;
+  subcategoryLabel?: string;
   blurb: string;
   sections: Array<{ heading: string; paragraphs: string[] }>;
   related: RelatedLink[];
@@ -22,9 +27,10 @@ const commonRelated: RelatedLink[] = [
 
 export const PHASE_THREE_GUIDES: PhaseThreeGuide[] = [
   {
-    path: "/cnfans-t-shirt-finds", title: "CNFans T-Shirt Finds UK | Everyday Tees & Casual Tops",
+    path: "/cnfans-t-shirt-finds", title: "Men's T-Shirts UK | Everyday Tees | CNFans UK",
     description: "Browse CNFans UK t-shirt finds, casual tops and everyday wardrobe pieces with simple sizing and styling notes for UK buyers.",
-    h1: "CNFans T-Shirt Finds UK", categoryHref: "/category/tops", categoryLabel: "Browse T-Shirts & Tops",
+    h1: "Men's T-Shirts and Everyday Tees UK", categoryHref: "/category/tops", categoryLabel: "Browse T-Shirts & Tops",
+    catalogCategory: "tops", catalogSubcategory: "t-shirts", subcategoryHref: "/category/tops/t-shirts", subcategoryLabel: "Browse Men's T-Shirts",
     blurb: "Everyday tees, casual tops and useful notes on weight, fit and layering.",
     intro: "A dependable T-shirt earns its place by working with almost everything you own. This guide looks at everyday tees and casual tops through the details that matter in real life: fabric weight, neckline, length, ease through the body and how a tee sits under another layer.",
     sections: [
@@ -36,9 +42,10 @@ export const PHASE_THREE_GUIDES: PhaseThreeGuide[] = [
     ], related: commonRelated,
   },
   {
-    path: "/cnfans-tracksuit-finds", title: "CNFans Tracksuit Finds UK | Co-ords, Sets & Casual Fits",
+    path: "/cnfans-tracksuit-finds", title: "Men's Tracksuits UK | Matching Sets | CNFans UK",
     description: "Explore CNFans UK tracksuit finds, matching sets and relaxed everyday outfits with simple style and size guidance.",
-    h1: "CNFans Tracksuit Finds UK", categoryHref: "/category/co-ords-sets", categoryLabel: "Browse Tracksuits & Sets",
+    h1: "Men's Tracksuits and Matching Sets UK", categoryHref: "/category/co-ords-sets", categoryLabel: "Browse Tracksuits & Sets",
+    catalogCategory: "co-ords-sets", catalogSubcategory: "trouser-sets", subcategoryHref: "/category/co-ords-sets/trouser-sets", subcategoryLabel: "Browse Trouser Sets",
     blurb: "Matching tracksuits, relaxed sets and practical ways to wear each piece separately.",
     intro: "A tracksuit is useful well beyond quiet weekends. The right set gives you an easy complete outfit, yet the top and bottoms should also work separately with pieces already in your wardrobe. Here we focus on proportion, fabric, comfort and simple styling rather than a single fixed look.",
     sections: [
@@ -50,9 +57,10 @@ export const PHASE_THREE_GUIDES: PhaseThreeGuide[] = [
     ], related: commonRelated,
   },
   {
-    path: "/cnfans-sweatshirt-finds", title: "CNFans Sweatshirt Finds UK | Everyday Sweatshirts & Layers",
+    path: "/cnfans-sweatshirt-finds", title: "Men's Sweatshirts UK | Everyday Layers | CNFans UK",
     description: "Find CNFans UK sweatshirt picks for daily wear, layering and relaxed fits with practical notes for UK clothing buyers.",
-    h1: "CNFans Sweatshirt Finds UK", categoryHref: "/category/tops", categoryLabel: "Browse Sweatshirts & Tops",
+    h1: "Men's Sweatshirts and Everyday Layers UK", categoryHref: "/category/tops", categoryLabel: "Browse Sweatshirts & Tops",
+    catalogCategory: "tops", catalogSubcategory: "hoodies", subcategoryHref: "/category/tops/hoodies", subcategoryLabel: "Browse Hoodies",
     blurb: "Crewnecks and relaxed layers chosen around fabric, shape and everyday use.",
     intro: "The best sweatshirt sits in the useful space between a T-shirt and a jacket. It is warm enough for a cool morning, easy beneath outerwear and relaxed without needing to look shapeless. This guide covers crewnecks, fabric weights, layering room and the details that make repeated wear comfortable.",
     sections: [
@@ -64,9 +72,10 @@ export const PHASE_THREE_GUIDES: PhaseThreeGuide[] = [
     ], related: commonRelated,
   },
   {
-    path: "/cnfans-trouser-finds", title: "CNFans Trouser Finds UK | Casual Trousers & Everyday Bottoms",
+    path: "/cnfans-trouser-finds", title: "Men's Trousers UK | Casual Bottoms | CNFans UK",
     description: "Browse CNFans UK trouser finds, everyday bottoms and relaxed fits with simple sizing and styling guidance.",
-    h1: "CNFans Trouser Finds UK", categoryHref: "/category/bottoms", categoryLabel: "Browse Trousers & Bottoms",
+    h1: "Men's Casual Trousers and Bottoms UK", categoryHref: "/category/bottoms", categoryLabel: "Browse Trousers & Bottoms",
+    catalogCategory: "bottoms", catalogSubcategory: "trousers", subcategoryHref: "/category/bottoms/trousers", subcategoryLabel: "Browse Men's Trousers",
     blurb: "Casual trousers with clear notes on rise, leg shape, fabric and length.",
     intro: "Trousers set the proportion for the whole outfit, so a useful pair needs more than the right waist number. Rise, thigh room, leg shape, fabric and finished length all affect how they feel through a normal day. These notes are designed to make those choices easier before you order.",
     sections: [
@@ -78,9 +87,10 @@ export const PHASE_THREE_GUIDES: PhaseThreeGuide[] = [
     ], related: commonRelated,
   },
   {
-    path: "/cnfans-cargo-pants-finds", title: "CNFans Cargo Pants Finds UK | Utility Bottoms & Streetwear Fits",
+    path: "/cnfans-cargo-pants-finds", title: "Men's Cargo Pants UK | Utility Trousers | CNFans UK",
     description: "Explore CNFans UK cargo pants finds, utility bottoms and streetwear-inspired fits for everyday outfits.",
-    h1: "CNFans Cargo Pants Finds UK", categoryHref: "/category/bottoms", categoryLabel: "Browse Cargo Pants & Bottoms",
+    h1: "Men's Cargo Pants and Utility Trousers UK", categoryHref: "/category/bottoms", categoryLabel: "Browse Cargo Pants & Bottoms",
+    catalogCategory: "bottoms", catalogSubcategory: "trousers", catalogSearch: "cargo", subcategoryHref: "/category/bottoms/trousers", subcategoryLabel: "Browse Cargo Trousers",
     blurb: "Utility bottoms with practical advice on pockets, cloth, shape and styling.",
     intro: "Cargo pants combine useful storage with a relaxed shape, but pocket placement, fabric and leg width decide whether a pair feels balanced or unnecessarily bulky. This guide looks at everyday utility trousers that can move between a simple weekday outfit and a more layered casual look.",
     sections: [
@@ -91,9 +101,10 @@ export const PHASE_THREE_GUIDES: PhaseThreeGuide[] = [
     ], related: commonRelated,
   },
   {
-    path: "/cnfans-jeans-finds", title: "CNFans Jeans Finds UK | Denim, Casual Fits & Everyday Styling",
+    path: "/cnfans-jeans-finds", title: "Men's Jeans UK | Everyday Denim Fits | CNFans UK",
     description: "Browse CNFans UK jeans finds, denim styles and casual bottoms with practical notes on fit, length and everyday styling.",
-    h1: "CNFans Jeans Finds UK", categoryHref: "/category/bottoms", categoryLabel: "Browse Jeans & Bottoms",
+    h1: "Men's Jeans and Everyday Denim UK", categoryHref: "/category/bottoms", categoryLabel: "Browse Jeans & Bottoms",
+    catalogCategory: "bottoms", catalogSubcategory: "jeans", subcategoryHref: "/category/bottoms/jeans", subcategoryLabel: "Browse Men's Jeans",
     blurb: "Denim fits explained through rise, wash, leg shape and finished length.",
     intro: "Jeans are simple in theory and surprisingly personal in practice. The same waist can feel completely different when the rise, thigh and denim weight change. These notes help you compare everyday denim by shape, wash and length, with an emphasis on pairs that settle naturally into a weekly wardrobe.",
     sections: [
@@ -104,9 +115,9 @@ export const PHASE_THREE_GUIDES: PhaseThreeGuide[] = [
     ], related: commonRelated,
   },
   {
-    path: "/cnfans-co-ord-finds", title: "CNFans Co-ord Finds UK | Matching Sets & Everyday Outfits",
+    path: "/cnfans-co-ord-finds", title: "Men's Co-ords UK | Matching Sets | CNFans UK",
     description: "Explore CNFans UK co-ord finds, matching sets and easy outfit combinations for casual everyday wear.",
-    h1: "CNFans Co-ord Finds UK", categoryHref: "/category/co-ords-sets", categoryLabel: "Browse Co-ords & Sets",
+    h1: "Men's Co-ords and Matching Sets UK", categoryHref: "/category/co-ords-sets", categoryLabel: "Browse Co-ords & Sets",
     blurb: "Matching sets that work together and as useful separates throughout the week.",
     intro: "A co-ord removes the hardest part of getting dressed because colour, cloth and proportion have already been considered together. The best sets also avoid becoming one-outfit purchases: each half should make sense with the clothes you own and feel comfortable across a normal day.",
     sections: [
@@ -117,9 +128,9 @@ export const PHASE_THREE_GUIDES: PhaseThreeGuide[] = [
     ], related: commonRelated,
   },
   {
-    path: "/cnfans-streetwear-finds", title: "CNFans Streetwear Finds UK | Hoodies, Jackets, Sets & Bottoms",
+    path: "/cnfans-streetwear-finds", title: "Men's Streetwear UK | Hoodies & Jackets | CNFans UK",
     description: "Browse CNFans UK streetwear finds across hoodies, jackets, sets and bottoms with simple outfit ideas for UK buyers.",
-    h1: "CNFans Streetwear Finds UK", categoryHref: "/category/new-in", categoryLabel: "Browse New Clothing Finds",
+    h1: "Men's Streetwear, Hoodies and Jackets UK", categoryHref: "/category/new-in", categoryLabel: "Browse New Clothing Finds",
     blurb: "Relaxed hoodies, outerwear, sets and bottoms brought together with balanced proportions.",
     intro: "Streetwear is most useful when it fits into real everyday dressing rather than depending on one statement piece. A good rotation brings together relaxed tops, practical outerwear and comfortable bottoms, then uses proportion and texture to make the outfit feel considered.",
     sections: [
@@ -130,9 +141,9 @@ export const PHASE_THREE_GUIDES: PhaseThreeGuide[] = [
     ], related: commonRelated,
   },
   {
-    path: "/cnfans-winter-jacket-finds", title: "CNFans Winter Jacket Finds UK | Outerwear, Coats & Layering",
+    path: "/cnfans-winter-jacket-finds", title: "Men's Winter Jackets UK | Coats & Layers | CNFans UK",
     description: "Explore CNFans UK winter jacket finds, outerwear and layering pieces for colder UK weather and everyday outfits.",
-    h1: "CNFans Winter Jacket Finds UK", categoryHref: "/category/outerwear", categoryLabel: "Browse Winter Outerwear",
+    h1: "Men's Winter Jackets and Coats UK", categoryHref: "/category/outerwear", categoryLabel: "Browse Winter Outerwear",
     blurb: "Cold-weather jackets considered through warmth, weather, layering room and daily use.",
     intro: "A winter jacket for the UK needs to manage more than low temperature. Wind, damp mornings, warm public transport and frequent changes between indoors and outside all matter. This guide focuses on sensible insulation, useful coverage and enough space for layers without unnecessary bulk.",
     sections: [
@@ -143,9 +154,9 @@ export const PHASE_THREE_GUIDES: PhaseThreeGuide[] = [
     ], related: commonRelated,
   },
   {
-    path: "/cnfans-summer-outfits", title: "CNFans Summer Outfits UK | T-Shirts, Shorts & Light Layers",
+    path: "/cnfans-summer-outfits", title: "Men's Summer Outfits UK | T-Shirts & Shorts | CNFans UK",
     description: "Browse CNFans UK summer outfit ideas, including t-shirts, light layers and easy casual pieces for warmer days.",
-    h1: "CNFans Summer Outfits UK", categoryHref: "/category/tops", categoryLabel: "Browse Summer Tops",
+    h1: "Men's Summer Outfits for the UK", categoryHref: "/category/tops", categoryLabel: "Browse Summer Tops",
     blurb: "Breathable tees, light bottoms and easy layers for warmer British days.",
     intro: "British summer dressing needs to cover warm afternoons, cooler evenings and the occasional shower in the same outfit. Breathable fabric and uncomplicated layers are more useful than buying only for the hottest day. These ideas keep comfort, proportion and repeat wear at the centre.",
     sections: [
@@ -156,9 +167,9 @@ export const PHASE_THREE_GUIDES: PhaseThreeGuide[] = [
     ], related: commonRelated,
   },
   {
-    path: "/cnfans-men-clothing-finds", title: "CNFans Men’s Clothing Finds UK | Everyday Menswear & Casual Fits",
+    path: "/cnfans-men-clothing-finds", title: "Men's Clothing UK | Everyday Menswear | CNFans UK",
     description: "Explore CNFans UK men’s clothing finds, including tops, trousers, jackets and casual outfit ideas for everyday wear.",
-    h1: "CNFans Men’s Clothing Finds UK", categoryHref: "/category/new-in", categoryLabel: "Browse Men's Clothing Finds",
+    h1: "Men's Clothing and Everyday Menswear UK", categoryHref: "/category/new-in", categoryLabel: "Browse Men's Clothing Finds",
     blurb: "Everyday menswear built around useful tops, trousers, jackets and repeatable outfits.",
     intro: "A useful menswear wardrobe is less about owning more and more about choosing pieces that connect. Comfortable trousers, dependable tops and one or two layers can cover most ordinary weeks when the colours, fabrics and proportions work together.",
     sections: [
@@ -169,9 +180,9 @@ export const PHASE_THREE_GUIDES: PhaseThreeGuide[] = [
     ], related: commonRelated,
   },
   {
-    path: "/cnfans-uk-new-in", title: "CNFans UK New In | Latest Clothing Finds & Everyday Styles",
+    path: "/cnfans-uk-new-in", title: "New Men's Clothing UK | Latest Styles | CNFans UK",
     description: "Browse CNFans UK new clothing finds, recent styles and everyday apparel picks across tops, bottoms, jackets and sets.",
-    h1: "CNFans UK New In", categoryHref: "/category/new-in", categoryLabel: "Browse New In",
+    h1: "New Men's Clothing and Latest Styles UK", categoryHref: "/category/new-in", categoryLabel: "Browse New In",
     blurb: "Recent clothing arrivals considered for fit, season and everyday wardrobe value.",
     intro: "New arrivals are easiest to shop when you know what is missing from your wardrobe. Rather than treating every recent style as a must-have, this guide helps you compare fresh tops, bottoms, jackets and sets by fit, season and how naturally they work with clothes you already wear.",
     sections: [

@@ -1,5 +1,9 @@
 import type { Metadata } from "next";
 import { PHASE_THREE_GUIDES } from "@/lib/phaseThreeGuides";
+import { PHASE_FOUR_GUIDES } from "@/lib/phaseFourGuides";
+import { PHASE_FIVE_PUBLIC_GUIDES } from "@/lib/phaseFiveGuides";
+import { PHASE_SIX_GUIDES } from "@/lib/phaseSixGuides";
+import { PHASE_EIGHT_GUIDES } from "@/lib/phaseEightGuides";
 import { SITE_NAME, SITE_URL } from "@/lib/site";
 
 // Shared metadata builder for the CNFans UK guide / landing pages.
@@ -44,6 +48,10 @@ export const GUIDE_INDEX_ITEMS = [
   { path: "/cnfans-size-guide", name: "CNFans UK Size Guide" },
   { path: "/cnfans-qc-photos", name: "CNFans QC Photos Guide" },
   ...PHASE_THREE_GUIDES.map((guide) => ({ path: guide.path, name: guide.h1 })),
+  ...PHASE_FOUR_GUIDES.map((guide) => ({ path: guide.path, name: guide.h1 })),
+  ...PHASE_FIVE_PUBLIC_GUIDES.map((guide) => ({ path: guide.path, name: guide.h1 })),
+  ...PHASE_SIX_GUIDES.map((guide) => ({ path: guide.path, name: guide.h1 })),
+  ...PHASE_EIGHT_GUIDES.map((guide) => ({ path: guide.path, name: guide.h1 })),
 ] as const;
 
 function breadcrumbSchema(items: Array<{ name: string; url: string }>) {
