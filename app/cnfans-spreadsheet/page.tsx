@@ -3,7 +3,9 @@ import Link from "next/link";
 import { JsonLd } from "@/components/JsonLd";
 import { GuideCta } from "@/components/GuideCta";
 import { GuideRelated } from "@/components/GuideRelated";
+import { FirstPartyCatalogueSnapshot } from "@/components/FirstPartyCatalogueSnapshot";
 import { buildGuideMetadata, buildGuidePageSchemas } from "@/lib/seoPage";
+import { fetchFirstPartyCatalogueData } from "@/lib/firstPartyData";
 
 export const metadata: Metadata = buildGuideMetadata({
   path: "/cnfans-spreadsheet",
@@ -12,7 +14,9 @@ export const metadata: Metadata = buildGuideMetadata({
     "Explore CNFans UK clothing finds, everyday apparel picks, size notes and product links for UK buyers looking for a simpler way to browse styles.",
 });
 
-export default function CnfansSpreadsheetPage() {
+export default async function CnfansSpreadsheetPage() {
+  const catalogueData = await fetchFirstPartyCatalogueData();
+
   return (
     <main className="seo-page">
       <JsonLd data={buildGuidePageSchemas({ path: "/cnfans-spreadsheet", name: "CNFans Spreadsheet UK", description: "A practical guide to CNFans spreadsheets, clothing finds, product links and the checks UK shoppers can make before ordering." })} />
@@ -85,6 +89,8 @@ export default function CnfansSpreadsheetPage() {
           in the right direction.
         </p>
       </section>
+
+      {catalogueData ? <FirstPartyCatalogueSnapshot data={catalogueData} /> : null}
 
       <section className="seo-section">
         <h2>Size and delivery notes</h2>

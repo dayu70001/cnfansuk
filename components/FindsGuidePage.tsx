@@ -9,15 +9,23 @@ import { buildGuidePageSchemas } from "@/lib/seoPage";
 import type { PhaseThreeGuide } from "@/lib/phaseThreeGuides";
 
 export async function FindsGuidePage({ guide }: { guide: PhaseThreeGuide }) {
-  const categorySlug = guide.categoryHref.replace(/^\/category\//, "");
-  const catalog = await fetchCatalogPage({
-    ...(categorySlug === "new-in" ? {} : { category: categorySlug }),
-    page: 1,
-    limit: 4,
-  });
-  const relatedProducts = catalog?.products.length
-    ? catalog.products
-    : getProductsByCategory(categorySlug).slice(0, 4);
+  const categorySlug = guide.catalogCategory || guide.categoryHref.replace(/^\/category\//, "");
+  const catalog = await fetchCatalogPage(
+    {
+      ...(categorySlug === "new-in" ? {} : { category: categorySlug }),
+      ...(guide.catalogSubcategory ? { subcategory: guide.catalogSubcategory } : {}),
+      ...(guide.catalogSearch ? { q: guide.catalogSearch } : {}),
+      page: 1,
+      limit: 4,
+    },
+    { bypassNextCache: true },
+  );
+  const localProducts = getProductsByCategory(categorySlug)
+    .filter((product) => !guide.catalogSubcategory || product.style === guide.catalogSubcategory)
+    .filter((product) => !guide.catalogSearch || `${product.name} ${product.shortDescription} ${product.description}`.toLowerCase().includes(guide.catalogSearch.toLowerCase()));
+  const relatedProducts = catalog ? catalog.products : localProducts.slice(0, 4);
+  const browseHref = guide.subcategoryHref || guide.categoryHref;
+  const browseLabel = guide.subcategoryLabel || guide.categoryLabel;
 
   return (
     <main className="seo-page">
@@ -77,7 +85,7 @@ export async function FindsGuidePage({ guide }: { guide: PhaseThreeGuide }) {
         </section>
       ) : null}
 
-      <GuideCta browseHref={guide.categoryHref} browseLabel={guide.categoryLabel} />
+      <GuideCta browseHref={browseHref} browseLabel={browseLabel} />
       <GuideRelated links={guide.related} />
     </main>
   );

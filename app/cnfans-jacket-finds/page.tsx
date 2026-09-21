@@ -127,7 +127,7 @@ export default function CnfansJacketFindsPage() {
         </p>
       </section>
 
-      <GuideCta browseHref="/category/outerwear" browseLabel="Browse Outerwear" />
+      <GuideCta browseHref="/category/outerwear/jackets" browseLabel="Browse Men's Jackets" />
 
       <GuideRelated
         links={[

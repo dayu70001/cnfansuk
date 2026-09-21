@@ -1,7 +1,8 @@
 "use client";
 
-import { FormEvent, useState } from "react";
-import { catalogCategories, catalogSubcategories } from "@/lib/catalogTaxonomy";
+import { FormEvent, useRef, useState } from "react";
+import { catalogCategories, catalogSubcategories, isCatalogCategory } from "@/lib/catalogTaxonomy";
+import { AdminClassificationPanel } from "@/components/AdminClassificationPanel";
 
 type AdminImage = { imageUrl?: string; image_url?: string };
 type AdminProduct = {
@@ -23,6 +24,7 @@ async function requestProducts(search: string) {
 
 export function ProductAdminPanel() {
   const [products, setProducts] = useState<AdminProduct[]>([]);
+  const savedProducts = useRef(new Map<string, AdminProduct>());
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
@@ -41,13 +43,15 @@ export function ProductAdminPanel() {
     setMessage("");
     const { response, result } = await requestProducts(cleanQuery);
     if (!response.ok) setMessage(result.error || "读取产品失败。");
-    setProducts(response.ok ? result.products || [] : []);
+    const found = response.ok ? result.products || [] : [];
+    savedProducts.current = new Map(found.map((product) => [product.product_code, product]));
+    setProducts(found);
     setLoading(false);
   }
 
   function updateProduct(productCode: string, field: "title" | "category" | "subcategory" | "brand", value: string) {
     setProducts((current) => current.map((product) => product.product_code === productCode
-      ? { ...product, [field]: value, ...(field === "category" ? { subcategory: "" } : {}) }
+      ? { ...product, [field]: value, ...(field === "category" ? { subcategory: null } : {}) }
       : product));
   }
 
@@ -58,16 +62,23 @@ export function ProductAdminPanel() {
     }
     if (!window.confirm(`确认保存“${product.title}”的标题、分类、子类目和品牌吗？`)) return;
     setMessage(`正在保存 ${product.product_code}…`);
+    const saved = savedProducts.current.get(product.product_code);
+    const classificationChanged = saved?.category !== product.category || saved?.subcategory !== product.subcategory;
     const response = await fetch(`/api/admin/products/${encodeURIComponent(product.product_code)}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ title: product.title, category: product.category, subcategory: product.subcategory || "", brand: product.brand || "" }),
+      body: JSON.stringify({
+        ...(saved?.title !== product.title ? { title: product.title } : {}),
+        ...(saved?.brand !== product.brand ? { brand: product.brand || "" } : {}),
+        ...(classificationChanged ? { category: product.category, subcategory: product.subcategory || null } : {}),
+      }),
     });
     const result = await response.json().catch(() => ({})) as { product?: AdminProduct; error?: string };
     if (!response.ok || !result.product) {
       setMessage(result.error || "保存失败，请重试。");
       return;
     }
+    savedProducts.current.set(result.product.product_code, result.product);
     setProducts((current) => current.map((item) => item.product_code === result.product?.product_code ? result.product : item));
     setMessage(`已保存到 D1 并重新读取确认：${result.product.product_code}`);
   }
@@ -91,7 +102,8 @@ export function ProductAdminPanel() {
       <div className="admin-product-results">
         {products.map((product) => {
           const image = product.images?.[0]?.imageUrl || product.images?.[0]?.image_url;
-          const availableSubcategories = catalogSubcategories[product.category] || [];
+          const availableSubcategories = isCatalogCategory(product.category) ? catalogSubcategories[product.category] : [];
+          const legacySubcategory = product.subcategory && !availableSubcategories.some((item) => item.value === product.subcategory);
           return (
             <article className="admin-product-card" key={product.product_code}>
               <a className="admin-product-image" href={`/product/${product.slug}`} target="_blank" rel="noreferrer">
@@ -104,10 +116,12 @@ export function ProductAdminPanel() {
               </div>
               <label><span>商品标题</span><input value={product.title} onChange={(event) => updateProduct(product.product_code, "title", event.target.value)} /></label>
               <label><span>产品分类</span><select value={product.category} onChange={(event) => updateProduct(product.product_code, "category", event.target.value)}>
+                {!isCatalogCategory(product.category) ? <option value={product.category} disabled>历史分类：{product.category}（保留）</option> : null}
                 {catalogCategories.map((category) => <option value={category.value} key={category.value}>{category.label}</option>)}
               </select></label>
               <label><span>子类目</span><select value={product.subcategory || ""} onChange={(event) => updateProduct(product.product_code, "subcategory", event.target.value)}>
                 <option value="">不设置子类目</option>
+                {legacySubcategory ? <option value={product.subcategory || ""} disabled>历史值：{product.subcategory}（保留，未重新分类）</option> : null}
                 {availableSubcategories.map((item) => <option value={item.value} key={item.value}>{item.label}</option>)}
               </select></label>
               <label><span>品牌</span><input value={product.brand || ""} onChange={(event) => updateProduct(product.product_code, "brand", event.target.value)} /></label>
@@ -116,6 +130,7 @@ export function ProductAdminPanel() {
           );
         })}
       </div>
+      <AdminClassificationPanel />
     </section>
   );
 }

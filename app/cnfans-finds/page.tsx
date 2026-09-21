@@ -66,7 +66,7 @@ export default function CnfansFindsPage() {
         <h2>T-Shirts</h2>
         <p>
           Plain, wearable tees that anchor the rest of your outfit. Good for building a simple daily rotation you never have
-          to think too hard about. Browse them within our <Link href="/category/tops">tops</Link> category.
+          to think too hard about. Browse them within our <Link href="/category/tops/t-shirts">tops</Link> category.
         </p>
       </section>
 
@@ -74,7 +74,7 @@ export default function CnfansFindsPage() {
         <h2>Bottoms</h2>
         <p>
           Trousers, joggers and shorts cut for comfort and everyday styling. See the full{" "}
-          <Link href="/category/bottoms">bottoms</Link> category to match them with your tops.
+          <Link href="/category/bottoms/trousers">bottoms</Link> category to match them with your tops.
         </p>
       </section>
 
@@ -82,7 +82,7 @@ export default function CnfansFindsPage() {
         <h2>Co-ords &amp; Sets</h2>
         <p>
           When you would rather not think about matching, a set does the work for you. Browse{" "}
-          <Link href="/category/co-ords-sets">co-ords and sets</Link> for a complete look in one go.
+          <Link href="/category/co-ords-sets/trouser-sets">co-ords and sets</Link> for a complete look in one go.
         </p>
       </section>
 

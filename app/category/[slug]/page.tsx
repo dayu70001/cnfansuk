@@ -2,13 +2,20 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { CatalogSearchForm } from "@/components/CatalogSearchForm";
+import { CategoryFilterDrawer, type CategoryFilterDrawerGroup, type CategoryFilterDrawerOption } from "@/components/CategoryFilterDrawer";
 import { ProductCard } from "@/components/ProductCard";
-import { FilterDropdown, type DropdownOption } from "@/components/FilterDropdown";
 import { JsonLd } from "@/components/JsonLd";
 import { getCategory } from "@/data/categories";
 import { getProductsByCategory, products } from "@/data/products";
 import { fetchCatalogFilters, fetchCatalogPage } from "@/lib/catalogApi";
 import { SITE_NAME, SITE_URL } from "@/lib/site";
+import {
+  availableCatalogSubcategories,
+  catalogSeoSubcategoryPath,
+  catalogCategories,
+  catalogSubcategories,
+  getCatalogSeoSubcategory,
+} from "@/lib/catalogTaxonomy";
 import type { Product } from "@/lib/types";
 
 // Rendered dynamically because it reads searchParams (filters/sort/page).
@@ -17,27 +24,27 @@ import type { Product } from "@/lib/types";
 
 const CATEGORY_META: Record<string, { title: string; description: string }> = {
   "new-in": {
-    title: "New In | Latest Apparel Drops | CNFans UK",
+    title: "New Men's Clothing UK | Latest Styles | CNFans UK",
     description:
       "Shop the latest CNFans UK arrivals, including hoodies, jackets, trousers, tops and matching sets for everyday wear.",
   },
   outerwear: {
-    title: "Outerwear | Jackets, Coats & Layering Pieces | CNFans UK",
+    title: "Men's Jackets & Outerwear UK | CNFans UK",
     description:
       "Shop CNFans UK outerwear, including jackets, hooded jackets, puffer jackets, vests and coats for everyday layering.",
   },
   tops: {
-    title: "Tops | T-Shirts, Hoodies, Shirts & Knitwear | CNFans UK",
+    title: "Men's Hoodies, T-Shirts & Knitwear UK | CNFans UK",
     description:
       "Shop CNFans UK tops, including T-shirts, hoodies, sweatshirts, zip hoodies, shirts and knitwear.",
   },
   bottoms: {
-    title: "Bottoms | Trousers, Joggers, Jeans & Shorts | CNFans UK",
+    title: "Men's Trousers, Joggers & Jeans UK | CNFans UK",
     description:
       "Shop CNFans UK bottoms, including trousers, joggers, cargo pants, jeans, shorts and skirts.",
   },
   "co-ords-sets": {
-    title: "Co-ords & Sets | Tracksuits & Matching Sets | CNFans UK",
+    title: "Men's Co-ords & Tracksuits UK | CNFans UK",
     description:
       "Shop CNFans UK co-ords and sets, including tracksuits, hoodie sets, T-shirt and shorts sets, knit sets and casual matching sets.",
   },
@@ -59,8 +66,10 @@ export async function generateMetadata({ params, searchParams }: CategoryParams)
   const hasNonPaginationParams = Boolean(
     cleanParam(query.q) ||
     cleanParam(query.brand) ||
+    cleanParam(query.category) ||
     cleanParam(query.subcategory) ||
     cleanParam(query.style) ||
+    cleanParam(query.price) ||
     (cleanParam(query.sort) && cleanParam(query.sort) !== "newest"),
   );
   const baseCanonical = `${SITE_URL}/category/${slug}`;
@@ -88,10 +97,12 @@ export async function generateMetadata({ params, searchParams }: CategoryParams)
 }
 
 type CategorySearchParams = {
+  category?: string | string[];
   q?: string;
-  brand?: string;
-  subcategory?: string;
+  brand?: string | string[];
+  subcategory?: string | string[];
   style?: string;
+  price?: string | string[];
   sort?: string;
   page?: string;
 };
@@ -102,66 +113,20 @@ type StyleOption = {
 };
 
 type NormalizedFilters = {
+  category?: string;
   q: string;
   brand: string;
   subcategory: string;
+  price?: string;
   sort: string;
   page: string;
 };
 
-const styleOptionsByCategory: Record<string, { allLabel: string; options: StyleOption[] }> = {
-  outerwear: {
-    allLabel: "All Outerwear",
-    options: [
-      { value: "jackets", label: "Jackets" },
-      { value: "hooded-jackets", label: "Hooded Jackets" },
-      { value: "varsity-jackets", label: "Varsity Jackets" },
-      { value: "puffer-jackets", label: "Puffer Jackets" },
-      { value: "vests", label: "Vests" },
-      { value: "coats", label: "Coats" },
-    ],
-  },
-  tops: {
-    allLabel: "All Tops",
-    options: [
-      { value: "t-shirts", label: "T-Shirts" },
-      { value: "tank-tops", label: "Tank Tops" },
-      { value: "hoodies", label: "Hoodies" },
-      { value: "sweatshirts", label: "Sweatshirts" },
-      { value: "zip-hoodies", label: "Zip Hoodies" },
-      { value: "shirts", label: "Shirts" },
-      { value: "knitwear", label: "Knitwear" },
-    ],
-  },
-  bottoms: {
-    allLabel: "All Bottoms",
-    options: [
-      { value: "trousers", label: "Trousers" },
-      { value: "joggers", label: "Joggers" },
-      { value: "cargo-pants", label: "Cargo Pants" },
-      { value: "jeans", label: "Jeans" },
-      { value: "shorts", label: "Shorts" },
-      { value: "skirts", label: "Skirts" },
-    ],
-  },
-  "co-ords-sets": {
-    allLabel: "All Sets",
-    options: [
-      { value: "tracksuits", label: "Tracksuits" },
-      { value: "hoodie-sets", label: "Hoodie Sets" },
-      { value: "t-shirt-shorts-sets", label: "T-Shirt & Shorts Sets" },
-      { value: "knit-sets", label: "Knit Sets" },
-      { value: "casual-sets", label: "Casual Sets" },
-      { value: "jacket-pants-sets", label: "Jacket & Pants Sets" },
-    ],
-  },
-};
-
-const sortOptions = [
-  { value: "newest", label: "Newest" },
-  { value: "popular", label: "Popular" },
-  { value: "price-low-high", label: "Price: Low to High" },
-  { value: "price-high-low", label: "Price: High to Low" },
+const priceOptions = [
+  { value: "under-50", label: "Under £50" },
+  { value: "50-100", label: "£50–£100" },
+  { value: "100-150", label: "£100–£150" },
+  { value: "150-plus", label: "£150+" },
 ];
 
 const legacyCategoryMap: Record<string, string> = {
@@ -188,29 +153,46 @@ export default async function CategoryPage({
     notFound();
   }
 
+  const isNewIn = slug === "new-in";
+  const categoryFilter = isNewIn ? cleanParam(query.category) : "";
   const q = cleanParam(query.q);
   const brand = cleanParam(query.brand);
   const subcategory = cleanParam(query.subcategory) || cleanParam(query.style);
+  const price = cleanParam(query.price);
   const sort = cleanParam(query.sort) || "newest";
   const page = cleanPage(query.page);
   const filterCategory = legacyCategoryMap[slug] || slug;
   const localProducts = getProductsByCategory(slug);
-  const catalogQuery = slug === "new-in" ? {} : { category: filterCategory };
+  const catalogQuery = isNewIn
+    ? { collection: "new-in", category: categoryFilter, subcategory, q, brand, price, sort, page, limit: 20 }
+    : { category: filterCategory, q, brand, subcategory, price, sort, page, limit: 20 };
   const PAGE_SIZE = 20;
-  const [catalog, filters] = await Promise.all([
-    fetchCatalogPage({ ...catalogQuery, q, brand, subcategory, sort, page, limit: PAGE_SIZE }),
-    fetchCatalogFilters(),
+  const [catalog, newInBase, filters] = await Promise.all([
+    fetchCatalogPage(catalogQuery, { bypassNextCache: true }),
+    isNewIn
+      ? fetchCatalogPage({ collection: "new-in", sort: "newest", page: 1, limit: 100 }, { bypassNextCache: true })
+      : Promise.resolve(null),
+    isNewIn ? Promise.resolve(null) : fetchCatalogFilters(),
   ]);
+  const collectionProducts = isNewIn
+    ? (newInBase?.products || localProducts).slice(0, 100)
+    : localProducts;
   const fallbackProducts = sortProducts(
-    localProducts.filter((product) => {
+    collectionProducts.filter((product) => {
       const matchesSearch = q ? `${product.name} ${product.shortDescription} ${product.description}`.toLowerCase().includes(q.toLowerCase()) : true;
-      const matchesBrand = brand ? product.brand.toLowerCase() === brand.toLowerCase() : true;
+      const selectedBrands = splitFilterValues(brand).map((value) => value.toLowerCase());
+      const matchesBrand = selectedBrands.length === 0 || selectedBrands.includes(product.brand.toLowerCase());
+      const matchesCategory = categoryFilter ? product.category === categoryFilter : true;
       const matchesStyle = subcategory ? product.style === subcategory : true;
-      return matchesSearch && matchesBrand && matchesStyle;
+      const matchesPrice = matchesPriceRange(product.priceGBP, price);
+      return matchesSearch && matchesBrand && matchesCategory && matchesStyle && matchesPrice;
     }),
     sort,
+    isNewIn,
   );
-  const paginatedProducts = catalog === null ? fallbackProducts.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE) : catalog.products;
+  const paginatedProducts = catalog === null
+    ? fallbackProducts.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
+    : catalog.products;
   const totalProducts = catalog === null ? fallbackProducts.length : catalog.total;
   const totalPages = catalog === null ? Math.ceil(totalProducts / PAGE_SIZE) : catalog.totalPages;
   if ((brand || subcategory) && totalProducts === 0) {
@@ -219,10 +201,32 @@ export default async function CategoryPage({
   if (page > 1 && totalPages > 0 && page > totalPages) {
     notFound();
   }
-  const brandOptions = filters?.brands?.length ? getBrandOptionsFromLabels(filters.brands) : getBrandOptions(localProducts);
-  const styleGroup = styleOptionsByCategory[filterCategory];
-  const hasFilters = Boolean(q || brand || subcategory || (sort && sort !== "newest") || page > 1);
-  const productCountLabel = `${totalProducts} ${totalProducts === 1 ? "style" : "styles"}`;
+  const brandOptions = isNewIn
+    ? getBrandOptions(collectionProducts)
+    : filters?.brands?.length ? getBrandOptionsFromLabels(filters.brands) : getBrandOptions(localProducts);
+  const currentFilters: NormalizedFilters = {
+    category: categoryFilter,
+    q,
+    brand,
+    subcategory,
+    price,
+    sort,
+    page: String(page),
+  };
+  const desktopFilterGroups = buildDesktopFilterGroups({
+    slug,
+    categoryFilter,
+    brand,
+    brandOptions,
+    collectionProducts,
+    currentFilters,
+    filterCategory,
+    filters,
+    price,
+    q,
+    sort,
+    subcategory,
+  });
 
   const categoryCanonical = `${SITE_URL}/category/${slug}`;
   const breadcrumbSchema = {
@@ -248,38 +252,27 @@ export default async function CategoryPage({
           <h1>{category.name}</h1>
           <p>{category.description}</p>
         </div>
-        <span className="category-count">{productCountLabel}</span>
       </div>
 
-      <CatalogSearchForm
-        action={`/category/${slug}`}
-        hiddenFields={[
-          brand ? { name: "brand", value: brand } : null,
-          subcategory ? { name: "subcategory", value: subcategory } : null,
-          sort && sort !== "newest" ? { name: "sort", value: sort } : null,
-        ].filter((field): field is { name: string; value: string } => Boolean(field))}
-        defaultQuery={q}
-        placeholder={`Search ${category.name.toLowerCase()}...`}
-        clearHref={hasFilters ? `/category/${slug}` : undefined}
-      />
-
-      <div className="category-filter-row" aria-label="Category filters">
-        <FilterDropdown
-          label={`Brand: ${brandOptions.find((option) => option.value === brand)?.label || "All"}`}
-          options={toDropdownOptions([{ value: "", label: "All Brands" }, ...brandOptions], slug, { q, brand, subcategory, sort, page: String(page) }, "brand")}
-          currentValue={brand}
+      <div className="category-desktop-filter-toolbar">
+        <CatalogSearchForm
+          action={`/category/${slug}`}
+          hiddenFields={[
+            categoryFilter ? { name: "category", value: categoryFilter } : null,
+            brand ? { name: "brand", value: brand } : null,
+            subcategory ? { name: "subcategory", value: subcategory } : null,
+            price ? { name: "price", value: price } : null,
+            sort && sort !== "newest" ? { name: "sort", value: sort } : null,
+          ].filter((field): field is { name: string; value: string } => Boolean(field))}
+          defaultQuery={q}
+          placeholder={`Search ${category.name.toLowerCase()}...`}
+          clearHref={q ? buildCategoryHref(slug, { ...currentFilters, q: "", page: "1" }) : undefined}
+          className="category-desktop-search"
         />
-        {styleGroup ? (
-          <FilterDropdown
-            label={`Style: ${styleGroup.options.find((option) => option.value === subcategory)?.label || "All"}`}
-            options={toDropdownOptions([{ value: "", label: styleGroup.allLabel }, ...styleGroup.options], slug, { q, brand, subcategory, sort, page: String(page) }, "subcategory")}
-            currentValue={subcategory}
-          />
-        ) : null}
-        <FilterDropdown
-          label={`Sort: ${sortOptions.find((option) => option.value === sort)?.label || "Newest"}`}
-          options={toDropdownOptions(sortOptions, slug, { q, brand, subcategory, sort, page: String(page) }, "sort")}
-          currentValue={sort}
+
+        <CategoryFilterDrawer
+          groups={desktopFilterGroups}
+          clearAllHref={buildCategoryHref(slug, { ...currentFilters, category: "", subcategory: "", brand: "", price: "", page: "1" })}
         />
       </div>
 
@@ -294,7 +287,7 @@ export default async function CategoryPage({
       )}
       <Pagination
         slug={slug}
-        current={{ q, brand, subcategory, sort, page: String(page) }}
+        current={currentFilters}
         page={page}
         totalPages={totalPages}
       />
@@ -303,17 +296,200 @@ export default async function CategoryPage({
   );
 }
 
-function toDropdownOptions(
-  options: StyleOption[],
-  slug: string,
-  current: NormalizedFilters,
-  param: keyof NormalizedFilters,
-): DropdownOption[] {
-  return options.map((option) => ({
-    value: option.value,
-    label: option.label,
-    href: buildCategoryHref(slug, { ...current, [param]: option.value, page: "1" }),
-  }));
+type DesktopFilterGroupArgs = {
+  slug: string;
+  categoryFilter: string;
+  brand: string;
+  brandOptions: StyleOption[];
+  collectionProducts: Product[];
+  currentFilters: NormalizedFilters;
+  filterCategory: string;
+  filters: Awaited<ReturnType<typeof fetchCatalogFilters>>;
+  price: string;
+  q: string;
+  sort: string;
+  subcategory: string;
+};
+
+function buildDesktopFilterGroups(args: DesktopFilterGroupArgs): CategoryFilterDrawerGroup[] {
+  const {
+    slug,
+    categoryFilter,
+    brand,
+    brandOptions,
+    collectionProducts,
+    currentFilters,
+    filterCategory,
+    filters,
+    price,
+    sort,
+    subcategory,
+  } = args;
+  const categoryOptions = buildDesktopCategoryOptions({
+    slug,
+    categoryFilter,
+    collectionProducts,
+    currentFilters,
+    filterCategory,
+    filters,
+    subcategory,
+  });
+  const selectedCategoryLabels = findSelectedCategoryLabels(categoryOptions);
+  const selectedBrands = splitFilterValues(brand);
+  const selectedPrices = splitFilterValues(price);
+  const selectedBrandLabels = selectedBrands
+    .map((value) => brandOptions.find((option) => option.value.toLowerCase() === value.toLowerCase())?.label)
+    .filter((label): label is string => Boolean(label));
+  const selectedPriceLabels = selectedPrices
+    .map((value) => priceOptions.find((option) => option.value === value)?.label)
+    .filter((label): label is string => Boolean(label));
+  const categoryButtonLabel = selectedCategoryLabels.length === 0
+    ? "Category"
+    : selectedCategoryLabels.length === 1
+      ? selectedCategoryLabels[0]
+      : `${selectedCategoryLabels.length} selected`;
+
+  return [
+    {
+      id: "category",
+      label: categoryButtonLabel === "Category" ? "Category" : `Category: ${categoryButtonLabel}`,
+      title: "Category",
+      multiple: slug !== "new-in",
+      options: categoryOptions,
+      clearHref: categoryFilter || subcategory
+        ? buildCategoryHref(slug, { ...currentFilters, category: "", subcategory: "", page: "1" })
+        : undefined,
+    },
+    {
+      id: "brand",
+      label: selectedBrandLabels.length === 0
+        ? "Brand"
+        : selectedBrandLabels.length === 1
+          ? `Brand: ${selectedBrandLabels[0]}`
+          : `Brand: ${selectedBrandLabels.length} selected`,
+      title: "Brand",
+      multiple: true,
+      clearHref: brand ? buildCategoryHref(slug, { ...currentFilters, brand: "", page: "1" }) : undefined,
+      options: [
+        {
+          label: "All Brands",
+          href: buildCategoryHref(slug, { ...currentFilters, brand: "", page: "1" }),
+          value: "",
+          selected: !brand,
+        },
+        ...brandOptions.map((option) => ({
+          label: option.label,
+          href: buildCategoryHref(slug, { ...currentFilters, brand: option.value, page: "1" }),
+          value: option.value,
+          selected: selectedBrands.some((value) => option.value.toLowerCase() === value.toLowerCase()),
+        })),
+      ],
+    },
+    {
+      id: "price",
+      label: selectedPriceLabels.length === 0
+        ? "Price"
+        : selectedPriceLabels.length === 1
+          ? `Price: ${selectedPriceLabels[0]}`
+          : `Price: ${selectedPriceLabels.length} selected`,
+      title: "Price",
+      multiple: true,
+      clearHref: price ? buildCategoryHref(slug, { ...currentFilters, price: "", page: "1" }) : undefined,
+      options: [
+        {
+          label: "All Prices",
+          href: buildCategoryHref(slug, { ...currentFilters, price: "", page: "1" }),
+          value: "",
+          selected: !price,
+        },
+        ...priceOptions.map((option) => ({
+          label: option.label,
+          href: buildCategoryHref(slug, { ...currentFilters, price: option.value, page: "1" }),
+          value: option.value,
+          selected: selectedPrices.includes(option.value),
+        })),
+      ],
+    },
+  ];
+}
+
+function findSelectedCategoryLabels(options: CategoryFilterDrawerOption[]): string[] {
+  const labels: string[] = [];
+  for (const option of options) {
+    if (option.selected && option.value) labels.push(option.label);
+    if (option.children?.length) labels.push(...findSelectedCategoryLabels(option.children));
+  }
+  return labels;
+}
+
+function buildDesktopCategoryOptions({
+  slug,
+  categoryFilter,
+  collectionProducts,
+  currentFilters,
+  filterCategory,
+  filters,
+  subcategory,
+}: Pick<DesktopFilterGroupArgs, "slug" | "categoryFilter" | "collectionProducts" | "currentFilters" | "filterCategory" | "filters" | "subcategory">): CategoryFilterDrawerOption[] {
+  if (slug === "new-in") {
+    const options: CategoryFilterDrawerOption[] = [
+      {
+        label: "All New In",
+        href: buildCategoryHref(slug, { ...currentFilters, category: "", subcategory: "", page: "1" }),
+        value: "",
+        selected: !categoryFilter && !subcategory,
+      },
+    ];
+    const categoryCounts = new Map<string, number>();
+    collectionProducts.forEach((product) => categoryCounts.set(product.category, (categoryCounts.get(product.category) || 0) + 1));
+    for (const parent of catalogCategories) {
+      if (!categoryCounts.get(parent.value)) continue;
+      const children = catalogSubcategories[parent.value].filter((option) =>
+        collectionProducts.some((product) => product.category === parent.value && product.style === option.value),
+      );
+      if (!children.length) continue;
+      options.push({
+        label: parent.label,
+        href: buildCategoryHref(slug, { ...currentFilters, category: parent.value, subcategory: "", page: "1" }),
+        value: parent.value,
+        selected: categoryFilter === parent.value && !subcategory,
+        children: [
+          {
+            label: `All ${parent.label}`,
+            href: buildCategoryHref(slug, { ...currentFilters, category: parent.value, subcategory: "", page: "1" }),
+            value: "",
+            selected: categoryFilter === parent.value && !subcategory,
+          },
+          ...children.map((option) => ({
+            label: option.label,
+            href: buildCategoryHref(slug, { ...currentFilters, category: parent.value, subcategory: option.value, page: "1" }),
+            value: option.value,
+            selected: categoryFilter === parent.value && splitFilterValues(subcategory).includes(option.value),
+          })),
+        ],
+      });
+    }
+    return options;
+  }
+
+  const parent = catalogCategories.find((item) => item.value === filterCategory);
+  if (!parent) return [];
+  const styleCounts = filters?.counts.subcategories || countProductStyles(collectionProducts, filterCategory);
+  const availableStyles = availableCatalogSubcategories(filterCategory, styleCounts);
+  return [
+    {
+      label: `All ${parent.label}`,
+      href: buildCategoryHref(slug, { ...currentFilters, subcategory: "", page: "1" }),
+      value: "",
+      selected: !subcategory,
+    },
+    ...availableStyles.map((option) => ({
+      label: option.label,
+      href: buildSeoSubcategoryHref(filterCategory, option.value, currentFilters),
+      value: option.value,
+      selected: splitFilterValues(subcategory).includes(option.value),
+    })),
+  ];
 }
 
 function Pagination({
@@ -356,12 +532,25 @@ function Pagination({
       ) : (
         <a href={buildCategoryHref(slug, { ...current, page: nextPage })}>Next</a>
       )}
+      <form className="category-pagination-jump" action={`/category/${slug}`} method="get">
+        <label htmlFor={`category-page-jump-${slug}`}>Go to page</label>
+        {current.category ? <input type="hidden" name="category" value={current.category} /> : null}
+        {current.q ? <input type="hidden" name="q" value={current.q} /> : null}
+        {current.brand ? <input type="hidden" name="brand" value={current.brand} /> : null}
+        {current.subcategory ? <input type="hidden" name="subcategory" value={current.subcategory} /> : null}
+        {current.price ? <input type="hidden" name="price" value={current.price} /> : null}
+        {current.sort && current.sort !== "newest" ? <input type="hidden" name="sort" value={current.sort} /> : null}
+        <input id={`category-page-jump-${slug}`} type="number" name="page" min="1" max={totalPages} inputMode="numeric" defaultValue={page} />
+        <button type="submit">GO</button>
+      </form>
     </nav>
   );
 }
 
-function cleanParam(value: string | undefined) {
-  return typeof value === "string" ? value.trim() : "";
+function cleanParam(value: string | string[] | undefined) {
+  return Array.isArray(value)
+    ? value.map((item) => item.trim()).filter(Boolean).join(",")
+    : typeof value === "string" ? value.trim() : "";
 }
 
 function cleanPage(value: string | undefined) {
@@ -393,7 +582,7 @@ function buildPaginationPages(page: number, totalPages: number): Array<number | 
   return [1, "...", page - 1, page, page + 1, "...", totalPages];
 }
 
-function sortProducts(items: Product[], sort: string) {
+function sortProducts(items: Product[], sort: string, preserveNewestOrder = false) {
   const nextItems = [...items];
   if (sort === "price-low-high") {
     return nextItems.sort((a, b) => a.priceGBP - b.priceGBP);
@@ -404,11 +593,54 @@ function sortProducts(items: Product[], sort: string) {
   if (sort === "popular") {
     return nextItems.sort((a, b) => Number(b.featured) - Number(a.featured));
   }
+  if (preserveNewestOrder) return nextItems;
   return nextItems.sort((a, b) => Number(b.newIn) - Number(a.newIn) || products.indexOf(a) - products.indexOf(b));
 }
 
+function matchesPriceRange(price: number, range: string) {
+  const ranges = splitFilterValues(range);
+  if (!ranges.length) return true;
+  return ranges.some((value) => {
+    if (value === "under-50") return price < 50;
+    if (value === "50-100") return price >= 50 && price < 100;
+    if (value === "100-150") return price >= 100 && price < 150;
+    if (value === "150-plus") return price >= 150;
+    return false;
+  });
+}
+
+function splitFilterValues(value: string | string[] | undefined): string[] {
+  const values = Array.isArray(value) ? value : [value || ""];
+  return values.flatMap((item) => item.split(",")).map((item) => item.trim()).filter(Boolean);
+}
+
+function countProductStyles(items: Product[], category: string) {
+  const counts = new Map<string, number>();
+  items.forEach((product) => {
+    if (product.category !== category || !product.style) return;
+    counts.set(product.style, (counts.get(product.style) || 0) + 1);
+  });
+  return Array.from(counts, ([subcategory, count]) => ({ category, subcategory, count }));
+}
+
 function buildCategoryHref(slug: string, params: NormalizedFilters) {
+  return buildPathHref(`/category/${slug}`, params);
+}
+
+function buildSeoSubcategoryHref(slug: string, subcategory: string, params: NormalizedFilters) {
+  return buildPathHref(catalogSeoSubcategoryPath(slug, subcategory), {
+    ...params,
+    category: "",
+    subcategory: "",
+    page: "1",
+  });
+}
+
+function buildPathHref(path: string, params: NormalizedFilters) {
   const search = new URLSearchParams();
+  if (params.category) {
+    search.set("category", params.category);
+  }
   if (params.q) {
     search.set("q", params.q);
   }
@@ -418,6 +650,9 @@ function buildCategoryHref(slug: string, params: NormalizedFilters) {
   if (params.subcategory) {
     search.set("subcategory", params.subcategory);
   }
+  if (params.price) {
+    search.set("price", params.price);
+  }
   if (params.sort && params.sort !== "newest") {
     search.set("sort", params.sort);
   }
@@ -425,5 +660,5 @@ function buildCategoryHref(slug: string, params: NormalizedFilters) {
     search.set("page", params.page);
   }
   const query = search.toString();
-  return query ? `/category/${slug}?${query}` : `/category/${slug}`;
+  return query ? `${path}?${query}` : path;
 }

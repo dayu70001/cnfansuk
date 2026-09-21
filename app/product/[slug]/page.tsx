@@ -7,7 +7,8 @@ import { fetchCatalogProductBySlug } from "@/lib/catalogApi";
 import { getCategory } from "@/data/categories";
 import { SITE_NAME, SITE_URL } from "@/lib/site";
 
-export const revalidate = 600;
+// Product pages are stable SEO pages and do not need ten-minute regeneration.
+export const revalidate = 21600;
 
 async function resolveProduct(slug: string) {
   return (await fetchCatalogProductBySlug(slug)) || getProduct(slug);
@@ -67,7 +68,8 @@ export default async function ProductPage({ params }: Params) {
   const description = product.description || product.shortDescription || product.name;
   const category = getCategory(product.category);
 
-  // Product schema: no third-party brand, no aggregateRating/review.
+  // Product schema: use the catalog brand when it is available; do not add
+  // aggregateRating/review fields unless they come from real customer data.
   const productSchema = {
     "@context": "https://schema.org",
     "@type": "Product",
@@ -75,6 +77,7 @@ export default async function ProductPage({ params }: Params) {
     ...(product.images.length ? { image: product.images } : {}),
     description,
     sku: product.id,
+    ...(product.brand ? { brand: { "@type": "Brand", name: product.brand } } : {}),
     offers: {
       "@type": "Offer",
       url: canonical,

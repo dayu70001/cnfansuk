@@ -3,7 +3,9 @@ import Link from "next/link";
 import { JsonLd } from "@/components/JsonLd";
 import { GuideCta } from "@/components/GuideCta";
 import { GuideRelated } from "@/components/GuideRelated";
+import { SizeLabelSnapshot } from "@/components/SizeLabelSnapshot";
 import { buildGuideMetadata, buildGuidePageSchemas } from "@/lib/seoPage";
+import { fetchCatalogSizeStats } from "@/lib/catalogApi";
 
 export const metadata: Metadata = buildGuideMetadata({
   path: "/cnfans-size-guide",
@@ -12,7 +14,9 @@ export const metadata: Metadata = buildGuideMetadata({
     "Check CNFans UK size guidance for hoodies, jackets, t-shirts, trousers and matching sets before placing your order.",
 });
 
-export default function CnfansSizeGuidePage() {
+export default async function CnfansSizeGuidePage() {
+  const sizeStats = await fetchCatalogSizeStats();
+
   return (
     <main className="seo-page">
       <JsonLd data={buildGuidePageSchemas({ path: "/cnfans-size-guide", name: "CNFans UK Size Guide", description: "Fit and measuring guidance for hoodies, jackets, T-shirts and bottoms from CNFans UK." })} />
@@ -45,6 +49,8 @@ export default function CnfansSizeGuidePage() {
           type of clothing tends to fit, so you can decide what suits you rather than following a label blindly.
         </p>
       </section>
+
+      {sizeStats ? <SizeLabelSnapshot stats={sizeStats} /> : null}
 
       <section className="seo-section">
         <h2>Hoodies and sweatshirts</h2>

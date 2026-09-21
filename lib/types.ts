@@ -20,6 +20,10 @@ export type Product = {
   sizes: string[];
   shortDescription: string;
   description: string;
+  /** Optional structured copy exposed by newer catalogue records. */
+  productDetails?: string[];
+  sizeFit?: string[];
+  material?: string | null;
   featured: boolean;
   newIn: boolean;
 };

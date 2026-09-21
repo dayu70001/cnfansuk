@@ -31,12 +31,12 @@ const steps = [
   {
     number: "04",
     title: "Place your order",
-    body: "Add your items to the bag, enter your delivery details and complete checkout. You will get an order number to keep.",
+    body: "Add your items to the bag, enter your delivery details and complete the GBP bank transfer shown at checkout.",
   },
   {
     number: "05",
-    title: "Track your delivery",
-    body: "We prepare and dispatch your order, then share tracking when it is available. Follow updates through your order number.",
+    title: "Confirm payment and track",
+    body: "Save your order, then contact us on WhatsApp or Telegram with the order number that is added to your message automatically.",
   },
 ];
 
@@ -111,8 +111,8 @@ export default function HowToOrderPage() {
           &mdash; a correct postcode and phone number help your parcel move smoothly.
         </p>
         <p>
-          After you place the order, an order number is shown on screen. Keep it somewhere safe; it is the quickest reference
-          if you ever need to ask us about your order.
+          The checkout displays our GBP bank account and your exact order total. After completing the transfer, save the order
+          and use the WhatsApp or Telegram button shown on screen. Your order number is included in the message automatically.
         </p>
       </section>
 

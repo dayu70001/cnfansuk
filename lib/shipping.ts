@@ -1,7 +1,7 @@
 import { convertGbpFallback } from "./cart";
 import type { CurrencyCode } from "./currency";
 
-export const FREE_SHIPPING_THRESHOLD_GBP = 120;
+export const FREE_SHIPPING_THRESHOLD_GBP = 150;
 
 export const shippingMethods = [
   { id: "royal-mail-tracked", label: "Royal Mail Tracked", priceGbp: 5, estimate: "7–12 business days" },

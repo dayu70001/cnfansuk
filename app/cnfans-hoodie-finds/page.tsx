@@ -31,7 +31,7 @@ export default function CnfansHoodieFindsPage() {
           the rest of your wardrobe, rather than loud one-off designs. That means they slot straight into your daily rotation.
         </p>
         <p>
-          Browse hoodies and sweatshirts within our <Link href="/category/tops">tops</Link> category, where they sit alongside
+          Browse hoodies and sweatshirts within our <Link href="/category/tops/hoodies">hoodies</Link> category, where they sit alongside
           tees and shirts you can layer them over.
         </p>
       </section>
@@ -128,7 +128,7 @@ export default function CnfansHoodieFindsPage() {
         </p>
       </section>
 
-      <GuideCta browseHref="/category/tops" browseLabel="Browse Hoodies & Tops" />
+      <GuideCta browseHref="/category/tops/hoodies" browseLabel="Browse Hoodies" />
 
       <GuideRelated
         links={[

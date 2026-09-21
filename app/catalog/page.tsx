@@ -3,6 +3,7 @@ import { CatalogSearchForm } from "@/components/CatalogSearchForm";
 import { ProductCard } from "@/components/ProductCard";
 import { FilterDropdown, type DropdownOption } from "@/components/FilterDropdown";
 import { fetchCatalogFilters, fetchCatalogPage } from "@/lib/catalogApi";
+import { catalogSubcategories } from "@/lib/catalogTaxonomy";
 
 // Rendered dynamically because it reads searchParams (filters/sort/page).
 // D1 load is reduced via fetch-layer revalidate in lib/catalogApi.ts, not via
@@ -38,44 +39,6 @@ const categoryOptions: Option[] = [
   { value: "co-ords-sets", label: "Co-ords & Sets" },
 ];
 
-const subcategoryOptions: Record<string, Option[]> = {
-  tops: [
-    { value: "t-shirts", label: "T-Shirts" },
-    { value: "tank-tops", label: "Tank Tops" },
-    { value: "hoodies", label: "Hoodies" },
-    { value: "sweatshirts", label: "Sweatshirts" },
-    { value: "zip-hoodies", label: "Zip Hoodies" },
-    { value: "shirts", label: "Shirts" },
-    { value: "knitwear", label: "Knitwear" },
-  ],
-  outerwear: [
-    { value: "jackets", label: "Jackets" },
-    { value: "hooded-jackets", label: "Hooded Jackets" },
-    { value: "varsity-jackets", label: "Varsity Jackets" },
-    { value: "puffer-jackets", label: "Puffer Jackets" },
-    { value: "vests", label: "Vests" },
-    { value: "coats", label: "Coats" },
-  ],
-  bottoms: [
-    { value: "trousers", label: "Trousers" },
-    { value: "joggers", label: "Joggers" },
-    { value: "cargo-pants", label: "Cargo Pants" },
-    { value: "jeans", label: "Jeans" },
-    { value: "shorts", label: "Shorts" },
-    { value: "skirts", label: "Skirts" },
-  ],
-  "co-ords-sets": [
-    { value: "tracksuits", label: "Tracksuits" },
-    { value: "hoodie-sets", label: "Hoodie Sets" },
-    { value: "t-shirt-shorts-sets", label: "T-Shirt & Shorts Sets" },
-    { value: "knit-sets", label: "Knit Sets" },
-    { value: "casual-sets", label: "Casual Sets" },
-    { value: "jacket-pants-sets", label: "Jacket & Pants Sets" },
-  ],
-};
-
-const allSubcategoryOptions = Object.values(subcategoryOptions).flat();
-
 const sortOptions: Option[] = [
   { value: "newest", label: "Newest" },
   { value: "popular", label: "Popular" },
@@ -100,9 +63,18 @@ export default async function CatalogPage({
   const page = Number(filters.page);
   const PAGE_SIZE = 20;
   const [catalog, catalogFilters] = await Promise.all([
-    fetchCatalogPage({ ...filters, page, limit: PAGE_SIZE }),
+    fetchCatalogPage({ ...filters, page, limit: PAGE_SIZE }, { bypassNextCache: true }),
     fetchCatalogFilters(),
   ]);
+  const subcategoryOptions: Record<string, Option[]> = Object.fromEntries(
+    Object.entries(catalogSubcategories).map(([category, options]) => [
+      category,
+      options.filter((option) => catalogFilters?.counts.subcategories.some((row) =>
+        row.category === category && row.subcategory === option.value && row.count > 0,
+      )),
+    ]),
+  );
+  const allSubcategoryOptions = Object.values(subcategoryOptions).flat();
   const products = catalog?.products || [];
   const brandOptions = getBrandOptions(catalogFilters?.brands || []);
   const totalPages = catalog?.totalPages || 0;
