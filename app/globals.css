@@ -7903,3 +7903,45 @@ body {
     padding-bottom: 18px;
   }
 }
+
+/* Cart drawer visual hierarchy: keep the existing drawer behaviour and
+   tighten only its heading, empty state and secondary actions. */
+.cart-drawer .cart-head {
+  padding-top: 14px;
+  padding-bottom: 14px;
+}
+
+.cart-drawer .cart-head h2 {
+  font-family: var(--sans);
+  font-size: 24px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+}
+
+.cart-drawer .empty-state {
+  display: grid;
+  gap: 12px;
+  margin: 16px max(18px, env(safe-area-inset-right)) 0 max(18px, env(safe-area-inset-left));
+  border: 0;
+  background: transparent;
+  padding: 8px 0 0;
+}
+
+.cart-drawer .empty-state p {
+  max-width: 300px;
+  color: var(--ink-soft);
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+.cart-drawer .secondary-button {
+  min-height: 42px;
+  padding: 10px 16px;
+  font-size: 12px;
+  letter-spacing: 0.04em;
+}
+
+.cart-drawer .empty-state .secondary-button {
+  width: fit-content;
+}
