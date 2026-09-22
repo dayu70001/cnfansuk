@@ -43,15 +43,34 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     }
 
     lockedScrollY.current = window.scrollY;
-    const scrollbarWidth = window.innerWidth - document.documentElement.clientWidth;
-    const previousPaddingRight = document.body.style.paddingRight;
     document.documentElement.classList.add("cart-open");
-    if (scrollbarWidth > 0) document.body.style.paddingRight = `${scrollbarWidth}px`;
+
+    const isInsideCart = (event: Event) => {
+      const target = event.target;
+      return target instanceof Element && Boolean(target.closest(".cart-drawer"));
+    };
+    const preventBackgroundScroll = (event: Event) => {
+      if (!isInsideCart(event)) event.preventDefault();
+    };
+    const keepBackgroundPosition = () => {
+      if (window.scrollY !== lockedScrollY.current) window.scrollTo(0, lockedScrollY.current);
+    };
+    const preventBackgroundKeys = (event: KeyboardEvent) => {
+      if (isInsideCart(event)) return;
+      if (["ArrowDown", "ArrowUp", "PageDown", "PageUp", "Home", "End", " "].includes(event.key)) event.preventDefault();
+    };
+
+    window.addEventListener("wheel", preventBackgroundScroll, { passive: false });
+    window.addEventListener("touchmove", preventBackgroundScroll, { passive: false });
+    window.addEventListener("scroll", keepBackgroundPosition, { passive: true });
+    document.addEventListener("keydown", preventBackgroundKeys, true);
 
     return () => {
       document.documentElement.classList.remove("cart-open");
-      if (previousPaddingRight) document.body.style.paddingRight = previousPaddingRight;
-      else document.body.style.removeProperty("padding-right");
+      window.removeEventListener("wheel", preventBackgroundScroll);
+      window.removeEventListener("touchmove", preventBackgroundScroll);
+      window.removeEventListener("scroll", keepBackgroundPosition);
+      document.removeEventListener("keydown", preventBackgroundKeys, true);
       if (window.scrollY !== lockedScrollY.current) window.scrollTo(0, lockedScrollY.current);
     };
   }, [isOpen]);

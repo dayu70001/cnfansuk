@@ -76,9 +76,7 @@ main {
   overflow-x: clip;
 }
 
-html.cart-open,
-html.cart-open body {
-  overflow: hidden;
+html.cart-open {
   overscroll-behavior: none;
 }
 
