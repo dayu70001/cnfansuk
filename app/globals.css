@@ -98,13 +98,6 @@ html.cart-open {
   --cart-drawer-top: 0px;
 }
 
-html.cart-open .site-header {
-  position: fixed;
-  top: env(safe-area-inset-top);
-  right: 0;
-  left: 0;
-}
-
 .wrap {
   max-width: 1320px;
   margin: 0 auto;

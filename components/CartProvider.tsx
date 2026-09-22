@@ -43,25 +43,16 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     }
 
     lockedScrollY.current = window.scrollY;
+    const scrollbarWidth = window.innerWidth - document.documentElement.clientWidth;
+    const previousPaddingRight = document.body.style.paddingRight;
     document.documentElement.classList.add("cart-open");
-    document.body.style.position = "fixed";
-    document.body.style.top = `-${lockedScrollY.current}px`;
-    document.body.style.right = "0";
-    document.body.style.left = "0";
-    document.body.style.width = "100%";
+    if (scrollbarWidth > 0) document.body.style.paddingRight = `${scrollbarWidth}px`;
 
     return () => {
       document.documentElement.classList.remove("cart-open");
-      document.body.style.removeProperty("position");
-      document.body.style.removeProperty("top");
-      document.body.style.removeProperty("right");
-      document.body.style.removeProperty("left");
-      document.body.style.removeProperty("width");
-
-      const previousScrollBehavior = document.documentElement.style.scrollBehavior;
-      document.documentElement.style.scrollBehavior = "auto";
-      window.scrollTo(0, lockedScrollY.current);
-      document.documentElement.style.scrollBehavior = previousScrollBehavior;
+      if (previousPaddingRight) document.body.style.paddingRight = previousPaddingRight;
+      else document.body.style.removeProperty("padding-right");
+      if (window.scrollY !== lockedScrollY.current) window.scrollTo(0, lockedScrollY.current);
     };
   }, [isOpen]);
 
