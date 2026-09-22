@@ -3568,12 +3568,12 @@ select {
   display: flex;
   grid-column: 1 / -1;
   align-items: center;
-  justify-content: space-between;
-  gap: 14px;
+  justify-content: flex-start;
+  gap: 10px;
 }
 
 .admin-order-confirm-button,
-.admin-order-cancel-button {
+.admin-order-generate-button {
   cursor: pointer;
   font-size: 13px;
   font-weight: 600;
@@ -3590,6 +3590,16 @@ select {
   background: var(--ink-soft);
 }
 
+.admin-order-generate-button {
+  border: 1px solid var(--ink);
+  background: transparent;
+  color: var(--ink);
+}
+
+.admin-order-generate-button:hover:not(:disabled) {
+  background: #f3f3ef;
+}
+
 .admin-order-cancel-button {
   border: 1px solid var(--line);
   background: transparent;
@@ -3603,6 +3613,7 @@ select {
 
 .admin-order-confirm-button:disabled,
 .admin-order-cancel-button:disabled,
+.admin-order-generate-button:disabled,
 .admin-order-delete-button:disabled {
   cursor: not-allowed;
   opacity: 0.55;

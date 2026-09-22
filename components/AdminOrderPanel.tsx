@@ -104,6 +104,7 @@ export function AdminOrderPanel() {
   const [detailLoading, setDetailLoading] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [savingPayment, setSavingPayment] = useState(false);
+  const [generatingImage, setGeneratingImage] = useState(false);
   const [message, setMessage] = useState("");
 
   async function loadOrderDetail(orderNumber: string) {
@@ -174,28 +175,6 @@ export function AdminOrderPanel() {
     setSavingPayment(false);
   }
 
-  async function cancelOrder() {
-    if (!selected || savingPayment || paymentStage(selected) === "cancelled") return;
-    if (!window.confirm(`确定取消订单 ${selected.order_number}？`)) return;
-    setSavingPayment(true);
-    setMessage("");
-    const response = await fetch(`/api/admin/orders/${encodeURIComponent(selected.order_number)}/status`, {
-      method: "PATCH",
-      headers: { Accept: "application/json", "Content-Type": "application/json" },
-      body: JSON.stringify({ status: "cancelled" }),
-    });
-    const result = await response.json().catch(() => ({})) as { order?: AdminOrder; error?: string };
-    if (!response.ok || !result.order) {
-      setMessage(result.error || "取消订单失败。");
-      setSavingPayment(false);
-      return;
-    }
-    setSelected(result.order);
-    setOrders((current) => current.map((order) => order.order_number === result.order?.order_number ? { ...order, ...result.order } : order));
-    setMessage("订单已取消。");
-    setSavingPayment(false);
-  }
-
   async function deleteOrder() {
     if (!selected || deleting) return;
     const orderNumber = selected.order_number;
@@ -217,6 +196,33 @@ export function AdminOrderPanel() {
     if (remaining.length > 0) await loadOrderDetail(remaining[0].order_number);
     setMessage(`订单 ${orderNumber} 已删除。`);
     setDeleting(false);
+  }
+
+  async function generateOrderImage() {
+    if (!selected || generatingImage) return;
+    setGeneratingImage(true);
+    setMessage("");
+    try {
+      const response = await fetch(`/api/admin/orders/${encodeURIComponent(selected.order_number)}/confirmation-image`, { cache: "no-store" });
+      if (!response.ok) {
+        setMessage("生成客户订单图片失败。");
+        return;
+      }
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `${selected.order_number}-order-confirmation.png`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+      setMessage("客户订单图片已生成。");
+    } catch {
+      setMessage("生成客户订单图片失败。");
+    } finally {
+      setGeneratingImage(false);
+    }
   }
 
   function submitSearch(event: FormEvent) {
@@ -272,15 +278,13 @@ export function AdminOrderPanel() {
               <div className="admin-order-head-actions">
                 {selectedStage !== "payment_confirmed" && selectedStage !== "cancelled" ? (
                   <button className="admin-order-confirm-button" type="button" disabled={savingPayment || deleting} onClick={() => void confirmPayment()}>
-                    {savingPayment ? "正在保存…" : "Confirm payment received"}
+                    {savingPayment ? "正在保存…" : "确认订单"}
                   </button>
                 ) : null}
-                {selectedStage !== "cancelled" ? (
-                  <button className="admin-order-cancel-button" type="button" disabled={savingPayment || deleting} onClick={() => void cancelOrder()}>
-                    Cancel order
-                  </button>
-                ) : null}
-                <button className="admin-order-delete-button" type="button" disabled={deleting || savingPayment} onClick={() => void deleteOrder()}>
+                <button className="admin-order-generate-button" type="button" disabled={generatingImage || deleting || savingPayment} onClick={() => void generateOrderImage()}>
+                  {generatingImage ? "正在生成…" : "生成订单"}
+                </button>
+                <button className="admin-order-delete-button" type="button" disabled={deleting || savingPayment || generatingImage} onClick={() => void deleteOrder()}>
                   {deleting ? "正在删除…" : "删除订单"}
                 </button>
               </div>
@@ -294,6 +298,36 @@ export function AdminOrderPanel() {
                 <div><dt>收货人地址</dt><dd>{[selected.address_line1, selected.address_line2, selected.city, selected.county, selected.postcode, selected.country_name].filter(Boolean).join("，")}</dd></div>
                 <div><dt>收货人电话</dt><dd>{selected.phone}</dd></div>
               </dl>
+            </section>
+
+            <section className="admin-order-detail-section">
+              <h3>配送信息</h3>
+              <dl className="admin-order-info-list">
+                <div><dt>配送方式</dt><dd>{selected.shipping_method_label || "—"}</dd></div>
+                <div><dt>预计时效</dt><dd>{selected.shipping_estimate || "—"}</dd></div>
+                <div><dt>配送费用</dt><dd>{formatMoney(selected.shipping_fee, selected.currency)}</dd></div>
+              </dl>
+            </section>
+
+            <section className="admin-order-detail-section admin-order-products">
+              <h3>商品明细</h3>
+              <div className="admin-order-items">
+                {(selected.items || []).map((item) => (
+                  <article key={item.id}>
+                    <a className="admin-order-item-image" href={`/product/${item.slug}`} target="_blank" rel="noreferrer">{item.image_url ? <img src={item.image_url} alt={item.title} /> : <span>暂无图片</span>}</a>
+                    <div className="admin-order-item-copy">
+                      <div className="admin-order-item-main"><h4>{item.title}</h4><strong>{formatMoney(item.line_total, selected.currency)}</strong></div>
+                      <div className="admin-order-item-options"><span>尺码：{item.size}</span><span>数量：{item.quantity}</span><span>单价：{formatMoney(item.unit_price, selected.currency)}</span>{item.color ? <span>颜色：{item.color}</span> : null}</div>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            </section>
+
+            <section className="admin-order-totals" aria-label="订单金额">
+              <div><span>商品小计</span><strong>{formatMoney(selected.subtotal, selected.currency)}</strong></div>
+              <div><span>配送费用</span><strong>{formatMoney(selected.shipping_fee, selected.currency)}</strong></div>
+              <div className="admin-order-grand-total"><span>订单总额</span><strong>{formatMoney(selected.total, selected.currency)}</strong></div>
             </section>
 
             <section className="admin-order-detail-section">
@@ -316,26 +350,6 @@ export function AdminOrderPanel() {
                 <div><dt>WhatsApp clicked</dt><dd>{formatOrderDate(selected.whatsapp_clicked_at)}</dd></div>
                 <div><dt>Payment confirmed</dt><dd>{formatOrderDate(selected.payment_confirmed_at)}</dd></div>
               </dl>
-            </section>
-
-            <section className="admin-order-detail-section admin-order-products">
-              <h3>商品明细</h3>
-              <div className="admin-order-items">
-                {(selected.items || []).map((item) => (
-                  <article key={item.id}>
-                    <a className="admin-order-item-image" href={`/product/${item.slug}`} target="_blank" rel="noreferrer">{item.image_url ? <img src={item.image_url} alt={item.title} /> : <span>暂无图片</span>}</a>
-                    <div className="admin-order-item-copy">
-                      <div className="admin-order-item-main"><h4>{item.title}</h4><strong>{formatMoney(item.line_total, selected.currency)}</strong></div>
-                      <div className="admin-order-item-options"><span>尺码：{item.size}</span><span>数量：{item.quantity}</span>{item.color ? <span>颜色：{item.color}</span> : null}</div>
-                    </div>
-                  </article>
-                ))}
-              </div>
-            </section>
-
-            <section className="admin-order-totals" aria-label="订单金额">
-              <div><span>商品小计</span><strong>{formatMoney(selected.subtotal, selected.currency)}</strong></div>
-              <div className="admin-order-grand-total"><span>订单总额</span><strong>{formatMoney(selected.total, selected.currency)}</strong></div>
             </section>
           </>
         ) : !detailLoading ? <p>点击左侧订单查看详情。</p> : null}
