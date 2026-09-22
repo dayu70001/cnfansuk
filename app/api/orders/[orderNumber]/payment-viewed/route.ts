@@ -1,14 +1,14 @@
 import { NextResponse } from "next/server";
+import { getCatalogApiBase } from "@/lib/catalogApiBase";
 
 type RouteContext = { params: Promise<{ orderNumber: string }> };
 
 function workerBaseUrl() {
-  return (process.env.CATALOG_API_BASE || process.env.NEXT_PUBLIC_CATALOG_API_BASE || "").replace(/\/+$/, "");
+  return getCatalogApiBase();
 }
 
 export async function POST(request: Request, context: RouteContext) {
   const baseUrl = workerBaseUrl();
-  if (!baseUrl) return NextResponse.json({ error: "订单服务暂不可用，请稍后重试。" }, { status: 503 });
   const { orderNumber } = await context.params;
   const response = await fetch(`${baseUrl}/orders/${encodeURIComponent(orderNumber)}/payment-viewed`, {
     method: "POST",

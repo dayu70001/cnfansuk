@@ -1,5 +1,6 @@
 import { ImageResponse } from "next/og";
 import { isAdminAuthenticated, getAdminWorkerToken } from "@/lib/adminAuth";
+import { getCatalogApiBase } from "@/lib/catalogApiBase";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -39,7 +40,7 @@ type ConfirmationOrder = {
 type RouteContext = { params: Promise<{ orderNumber: string }> };
 
 function workerBaseUrl() {
-  return (process.env.CATALOG_API_BASE || process.env.NEXT_PUBLIC_CATALOG_API_BASE || "").replace(/\/+$/, "");
+  return getCatalogApiBase();
 }
 
 function money(value: number, currency: ConfirmationOrder["currency"]) {

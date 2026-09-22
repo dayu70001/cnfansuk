@@ -1,17 +1,18 @@
 import { NextResponse } from "next/server";
 import { getAdminWorkerToken, isAdminAuthenticated } from "@/lib/adminAuth";
+import { getCatalogApiBase } from "@/lib/catalogApiBase";
 
 type RouteContext = { params: Promise<{ path: string[] }> };
 
 function workerBaseUrl() {
-  return (process.env.CATALOG_API_BASE || process.env.NEXT_PUBLIC_CATALOG_API_BASE || "").replace(/\/+$/, "");
+  return getCatalogApiBase();
 }
 
 async function proxyAdminRequest(request: Request, context: RouteContext) {
   if (!(await isAdminAuthenticated())) return NextResponse.json({ error: "未登录" }, { status: 401 });
   const secret = getAdminWorkerToken();
   const baseUrl = workerBaseUrl();
-  if (!baseUrl || !secret) return NextResponse.json({ error: "后台服务环境变量尚未配置。" }, { status: 503 });
+  if (!secret) return NextResponse.json({ error: "后台服务环境变量尚未配置。" }, { status: 503 });
 
   const { path } = await context.params;
   if (!path.length || !["products", "orders", "classification"].includes(path[0])) {

@@ -2,9 +2,10 @@ import { NextResponse } from "next/server";
 import { revalidatePath, revalidateTag } from "next/cache";
 import { getAdminWorkerToken, isAdminAuthenticated } from "@/lib/adminAuth";
 import { fetchSiteSettings, sanitizeSiteSettings, SITE_SETTINGS_CACHE_TAG } from "@/lib/siteSettings";
+import { getCatalogApiBase } from "@/lib/catalogApiBase";
 
 function workerBaseUrl() {
-  return (process.env.CATALOG_API_BASE || process.env.NEXT_PUBLIC_CATALOG_API_BASE || "").replace(/\/+$/, "");
+  return getCatalogApiBase();
 }
 
 export async function GET() {

@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getOrderPaymentStage, orderPaymentStageLabel } from "@/lib/orderStatus";
+import { getCatalogApiBase } from "@/lib/catalogApiBase";
 
 const TARGET_URL = "http://zxdexpress.com/logistic.html";
 
 function workerBaseUrl() {
-  return (process.env.CATALOG_API_BASE || process.env.NEXT_PUBLIC_CATALOG_API_BASE || "").replace(/\/+$/, "");
+  return getCatalogApiBase();
 }
 
 interface TrackEvent {
@@ -110,34 +111,32 @@ export async function GET(request: NextRequest) {
     // as missing logistics data.
     if (/^CNF-/i.test(trimmed)) {
       const baseUrl = workerBaseUrl();
-      if (baseUrl) {
-        const orderResponse = await fetch(`${baseUrl}/orders/${encodeURIComponent(trimmed)}`, { cache: "no-store" });
-        const orderResult = await orderResponse.json().catch(() => ({})) as {
-          order?: { orderNumber?: string; status?: string; paymentStage?: ReturnType<typeof getOrderPaymentStage> };
-          error?: string;
-        };
-        if (orderResponse.ok && orderResult.order?.orderNumber) {
-          const stage = orderResult.order.paymentStage || getOrderPaymentStage(orderResult.order);
-          const status = orderPaymentStageLabel(stage, "en");
-          return NextResponse.json({
-            ok: true,
-            trackingNumber: orderResult.order.orderNumber,
-            status,
-            message: stage === "created"
-              ? "Your order has been created. Tracking information will be available after dispatch."
-              : stage === "awaiting_payment"
-                ? "Payment is still due. Tracking information will be available after dispatch."
-                : stage === "payment_submitted"
-                  ? "Your transfer has been submitted. Tracking information will be available after dispatch."
-                  : stage === "cancelled"
-                    ? "This order has been cancelled."
-                    : "Payment has been confirmed. Tracking information will be available after dispatch.",
-            events: [],
-          });
-        }
-        if (orderResponse.status === 404) {
-          return NextResponse.json({ ok: false, error: "Order number not found." }, { status: 404 });
-        }
+      const orderResponse = await fetch(`${baseUrl}/orders/${encodeURIComponent(trimmed)}`, { cache: "no-store" });
+      const orderResult = await orderResponse.json().catch(() => ({})) as {
+        order?: { orderNumber?: string; status?: string; paymentStage?: ReturnType<typeof getOrderPaymentStage> };
+        error?: string;
+      };
+      if (orderResponse.ok && orderResult.order?.orderNumber) {
+        const stage = orderResult.order.paymentStage || getOrderPaymentStage(orderResult.order);
+        const status = orderPaymentStageLabel(stage, "en");
+        return NextResponse.json({
+          ok: true,
+          trackingNumber: orderResult.order.orderNumber,
+          status,
+          message: stage === "created"
+            ? "Your order has been created. Tracking information will be available after dispatch."
+            : stage === "awaiting_payment"
+              ? "Payment is still due. Tracking information will be available after dispatch."
+              : stage === "payment_submitted"
+                ? "Your transfer has been submitted. Tracking information will be available after dispatch."
+                : stage === "cancelled"
+                  ? "This order has been cancelled."
+                  : "Payment has been confirmed. Tracking information will be available after dispatch.",
+          events: [],
+        });
+      }
+      if (orderResponse.status === 404) {
+        return NextResponse.json({ ok: false, error: "Order number not found." }, { status: 404 });
       }
     }
 

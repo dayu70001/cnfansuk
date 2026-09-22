@@ -1,7 +1,6 @@
 import type { Product } from "@/lib/types";
 import { getCustomerPurchaseSizes } from "@/lib/productSizes";
-
-const DEFAULT_CATALOG_API_BASE = "https://cnfansuk-catalog-api.dayu70001.workers.dev";
+import { getCatalogApiBase } from "@/lib/catalogApiBase";
 
 export function catalogApiUrl(path: string): string {
   const normalisedPath = path.startsWith("/") ? path : `/${path}`;
@@ -223,10 +222,6 @@ async function requestCatalog<T>(path: string, query: CatalogQuery = {}, revalid
   } catch {
     return null;
   }
-}
-
-function getCatalogApiBase(): string {
-  return (process.env.NEXT_PUBLIC_CATALOG_API_BASE?.trim() || DEFAULT_CATALOG_API_BASE).replace(/\/+$/, "");
 }
 
 function mapCatalogProduct(product: CatalogProduct): Product {

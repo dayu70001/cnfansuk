@@ -1,5 +1,6 @@
 import { existsSync, readFileSync, writeFileSync } from "fs";
 import { dirname, join } from "path";
+import { getCatalogApiBase } from "@/lib/catalogApiBase";
 
 export type SiteSettings = {
   links: {
@@ -355,8 +356,7 @@ export function readSiteSettings(): SiteSettings {
 }
 
 export async function fetchSiteSettings(): Promise<SiteSettings> {
-  const baseUrl = (process.env.CATALOG_API_BASE || process.env.NEXT_PUBLIC_CATALOG_API_BASE || "").replace(/\/+$/, "");
-  if (!baseUrl) return readSiteSettings();
+  const baseUrl = getCatalogApiBase();
   try {
     const response = await fetch(`${baseUrl}/site-settings`, {
       next: { revalidate: 3600, tags: [SITE_SETTINGS_CACHE_TAG] },
