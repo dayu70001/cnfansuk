@@ -1,4 +1,5 @@
 import type { Product } from "@/lib/types";
+import { getCustomerPurchaseSizes } from "@/lib/productSizes";
 
 const DEFAULT_CATALOG_API_BASE = "https://cnfansuk-catalog-api.dayu70001.workers.dev";
 
@@ -256,7 +257,7 @@ function mapCatalogProduct(product: CatalogProduct): Product {
     priceUSD,
     images,
     colors: [],
-    sizes: getSizes(product.options),
+    sizes: getCustomerPurchaseSizes(category, getSupplierSizes(product.options)),
     shortDescription: cleanText(product.subtitle) || cleanText(product.description) || title,
     description: cleanText(product.description) || cleanText(product.subtitle) || title,
     ...(productDetails.length ? { productDetails } : {}),
@@ -272,7 +273,7 @@ function toFactList(value: unknown): string[] {
   return Array.from(new Set(raw.map((item) => cleanText(item).replace(/^[•·*\-–—]\s*/, "")).filter(Boolean)));
 }
 
-function getSizes(options: CatalogOption[] | null | undefined) {
+function getSupplierSizes(options: CatalogOption[] | null | undefined) {
   const sizes = (options || [])
     .filter((option) => cleanText(option.option_name).toLowerCase() === "size")
     .sort((a, b) => Number(a.position || 0) - Number(b.position || 0))

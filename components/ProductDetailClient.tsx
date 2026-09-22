@@ -8,6 +8,7 @@ import { getProductPrice } from "@/lib/productPrice";
 import { productToGoogleAnalyticsItem, trackGoogleAnalyticsEvent } from "@/lib/googleAnalytics";
 import { trackAddToCart, trackInitiateCheckout, trackViewContent } from "@/lib/metaPixel";
 import { useCurrency } from "@/lib/useCurrency";
+import { getCustomerPurchaseSizes } from "@/lib/productSizes";
 import type { CartItem, Product } from "@/lib/types";
 import { useCart } from "./CartProvider";
 
@@ -67,6 +68,10 @@ export function ProductDetailClient({ product }: { product: Product }) {
   const [openSection, setOpenSection] = useState<AccordionKey | null>(null);
   const [activeIndex, setActiveIndex] = useState(0);
   const defaultColor = product.colors.find((item) => item?.trim());
+  const purchaseSizes = useMemo(
+    () => getCustomerPurchaseSizes(product.category, product.sizes),
+    [product.category, product.sizes],
+  );
   const galleryItems = useMemo(() => product.images.filter((item) => item && item !== "placeholder").slice(0, 9), [product.images]);
   const currentPrice = getProductPrice(product, currency);
   const details = useMemo(() => productDetailFacts(product), [product.description, product.productDetails]);
@@ -258,7 +263,7 @@ export function ProductDetailClient({ product }: { product: Product }) {
             <span className="pdp-option-label">Size</span>
           </div>
           <div className="pdp-size-grid" aria-label="Select size">
-            {product.sizes.map((value) => (
+            {purchaseSizes.map((value) => (
               <button
                 className={value === size ? "pdp-size selected" : "pdp-size"}
                 key={value}
