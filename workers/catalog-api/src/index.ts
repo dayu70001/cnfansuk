@@ -1797,15 +1797,6 @@ function publicOrderPayload(order: OrderRow, items: OrderItemRow[]) {
     currency: order.currency,
     shippingMethod: order.shipping_method_label,
     shippingEstimate: order.shipping_estimate,
-    customer: {
-      name: order.customer_name,
-      addressLine1: order.address_line1,
-      addressLine2: order.address_line2,
-      city: order.city,
-      county: order.county,
-      postcode: order.postcode,
-      countryName: order.country_name,
-    },
     items: items.map((item) => ({
       productCode: item.product_code,
       title: item.title,

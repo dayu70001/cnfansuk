@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { formatMoney } from "@/lib/formatMoney";
+import { getOrderAccessTokenStorageKey } from "@/lib/orderAccessTokenKey";
 
 type ConfirmationOrder = {
   orderNumber: string;
@@ -20,7 +21,7 @@ type ConfirmationOrder = {
     county: string | null;
     postcode: string;
     countryName: string;
-  };
+  } | null;
   items: Array<{
     productCode: string;
     title: string;
@@ -33,20 +34,41 @@ type ConfirmationOrder = {
 
 export function OrderConfirmationDetails({ orderNumber }: { orderNumber: string }) {
   const [order, setOrder] = useState<ConfirmationOrder | null>(null);
+  const [unavailable, setUnavailable] = useState(false);
 
   useEffect(() => {
     let active = true;
-    void fetch(`/api/orders/${encodeURIComponent(orderNumber)}`, { cache: "no-store" })
-      .then((response) => response.ok
-        ? response.json() as Promise<{ order?: ConfirmationOrder }>
-        : null)
-      .then((result) => {
-        if (active && result?.order) setOrder(result.order);
-      })
-      .catch(() => undefined);
+    void Promise.resolve().then(async () => {
+      let accessToken = "";
+      try {
+        accessToken = window.sessionStorage.getItem(getOrderAccessTokenStorageKey(orderNumber)) || "";
+      } catch {
+        accessToken = "";
+      }
+      if (!active) return;
+      if (!accessToken) {
+        setUnavailable(true);
+        return;
+      }
+      try {
+        const response = await fetch(`/api/orders/${encodeURIComponent(orderNumber)}/confirmation`, {
+          cache: "no-store",
+          headers: { "X-Order-Access-Token": accessToken },
+        });
+        const result = response.ok ? await response.json() as { order?: ConfirmationOrder } : null;
+        if (!active) return;
+        if (result?.order) setOrder(result.order);
+        else setUnavailable(true);
+      } catch {
+        if (active) setUnavailable(true);
+      }
+    });
     return () => { active = false; };
   }, [orderNumber]);
 
+  if (unavailable) {
+    return <p className="success-unavailable">Order details are no longer available in this browser. Please use your order number when contacting us.</p>;
+  }
   if (!order) return <p className="success-loading">Loading your order summary…</p>;
 
   return (
@@ -65,9 +87,13 @@ export function OrderConfirmationDetails({ orderNumber }: { orderNumber: string 
       </section>
       <section className="confirmation-card" aria-label="Delivery address">
         <p className="eyebrow">Delivery address</p>
-        <p>{order.customer.name}</p>
-        <p>{[order.customer.addressLine1, order.customer.addressLine2, order.customer.city, order.customer.county, order.customer.postcode, order.customer.countryName].filter(Boolean).join(", ")}</p>
-        <p className="confirmation-delivery-note">{order.shippingMethod} · {order.shippingEstimate}</p>
+        {order.customer ? (
+          <>
+            <p>{order.customer.name}</p>
+            <p>{[order.customer.addressLine1, order.customer.addressLine2, order.customer.city, order.customer.county, order.customer.postcode, order.customer.countryName].filter(Boolean).join(", ")}</p>
+          </>
+        ) : <p>Delivery details are no longer available in this browser.</p>}
+        <p className="confirmation-delivery-note">{[order.shippingMethod, order.shippingEstimate].filter(Boolean).join(" · ")}</p>
       </section>
     </div>
   );

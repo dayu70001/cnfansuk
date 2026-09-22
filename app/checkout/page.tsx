@@ -23,6 +23,7 @@ import {
 } from "@/lib/shipping";
 import { getOrderPaymentStage, orderPaymentStageLabel, type OrderPaymentStage, type RawOrderStatus } from "@/lib/orderStatus";
 import type { CartItem, CustomerDetails } from "@/lib/types";
+import { getOrderAccessTokenStorageKey } from "@/lib/orderAccessTokenKey";
 
 type CheckoutStep = "details" | "delivery" | "payment";
 
@@ -106,6 +107,7 @@ type CheckoutOrder = {
   currency: "GBP";
   status: RawOrderStatus;
   paymentStage?: OrderPaymentStage;
+  orderAccessToken?: string | null;
 };
 
 type PersistedCheckout = {
@@ -115,7 +117,7 @@ type PersistedCheckout = {
   contact: ContactForm;
   shipping: ShippingForm;
   shippingMethodId: ShippingMethodId;
-  order: CheckoutOrder | null;
+  order: Omit<CheckoutOrder, "orderAccessToken"> | null;
 };
 
 const CHECKOUT_STORAGE_KEY = "cnfansuk-checkout-session";
@@ -167,7 +169,10 @@ export default function CheckoutPage() {
           if (saved.contact?.email !== undefined) setContact({ email: saved.contact.email });
           if (saved.shipping) setShipping((current) => ({ ...current, ...saved.shipping }));
           if (saved.shippingMethodId && shippingMethods.some((method) => method.id === saved.shippingMethodId)) setShippingMethodId(saved.shippingMethodId);
-          if (saved.order?.orderNumber) setOrder(saved.order);
+          if (saved.order?.orderNumber) {
+            const orderAccessToken = window.sessionStorage.getItem(getOrderAccessTokenStorageKey(saved.order.orderNumber));
+            setOrder({ ...saved.order, orderAccessToken });
+          }
         }
       } catch {
         // Session storage can be unavailable in privacy modes; checkout still works in-memory.
@@ -182,6 +187,9 @@ export default function CheckoutPage() {
 
   useEffect(() => {
     if (!hydrated || !checkoutSessionId) return;
+    const persistedOrder = order
+      ? Object.fromEntries(Object.entries(order).filter(([key]) => key !== "orderAccessToken")) as Omit<CheckoutOrder, "orderAccessToken">
+      : null;
     const saved: PersistedCheckout = {
       sessionId: checkoutSessionId,
       step,
@@ -189,7 +197,7 @@ export default function CheckoutPage() {
       contact,
       shipping,
       shippingMethodId,
-      order,
+      order: persistedOrder,
     };
     try {
       window.sessionStorage.setItem(CHECKOUT_STORAGE_KEY, JSON.stringify(saved));
@@ -295,6 +303,13 @@ export default function CheckoutPage() {
       if (!response.ok || !result.order?.orderNumber) {
         setSubmitError(result.error || "订单创建失败，请稍后重试。");
         return;
+      }
+      if (result.order.orderAccessToken) {
+        try {
+          window.sessionStorage.setItem(getOrderAccessTokenStorageKey(result.order.orderNumber), result.order.orderAccessToken);
+        } catch {
+          // The confirmation card will show a safe unavailable state if storage is blocked.
+        }
       }
       setOrder(result.order);
       trackGoogleAnalyticsEvent("add_shipping_info", {

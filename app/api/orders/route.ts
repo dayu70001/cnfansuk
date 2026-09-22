@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getCatalogApiBase } from "@/lib/catalogApiBase";
+import { createOrderAccessToken } from "@/lib/orderAccessToken";
 
 export async function POST(request: Request) {
   const baseUrl = getCatalogApiBase();
@@ -11,8 +12,13 @@ export async function POST(request: Request) {
     body,
     cache: "no-store",
   });
-  return new NextResponse(response.body, {
-    status: response.status,
-    headers: { "Content-Type": response.headers.get("Content-Type") || "application/json" },
-  });
+  const result = await response.json().catch(() => ({})) as { order?: { orderNumber?: string }; [key: string]: unknown };
+  if (!response.ok || !result.order?.orderNumber) {
+    return NextResponse.json(result, { status: response.status });
+  }
+  const orderAccessToken = createOrderAccessToken(result.order.orderNumber);
+  return NextResponse.json({
+    ...result,
+    order: { ...result.order, orderAccessToken },
+  }, { status: response.status });
 }
