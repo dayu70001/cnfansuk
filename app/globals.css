@@ -95,7 +95,7 @@ html.desktop-filter-drawer-open body {
 }
 
 html.cart-open {
-  --cart-drawer-top: calc(74px + env(safe-area-inset-top));
+  --cart-drawer-top: 0px;
 }
 
 html.cart-open .site-header {
@@ -4590,7 +4590,7 @@ select {
 .cart-backdrop {
   position: fixed;
   inset: 0;
-  z-index: 80;
+  z-index: 220;
   background: rgba(27, 26, 22, 0.38);
   opacity: 0;
   pointer-events: none;
@@ -4606,7 +4606,7 @@ select {
   position: fixed;
   top: var(--cart-drawer-top, 0px);
   right: 0;
-  z-index: 90;
+  z-index: 230;
   display: flex;
   width: min(420px, 100%);
   max-width: 100%;
