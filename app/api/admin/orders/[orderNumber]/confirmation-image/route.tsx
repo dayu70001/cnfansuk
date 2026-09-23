@@ -1,5 +1,6 @@
 import { timingSafeEqual } from "node:crypto";
 import { ImageResponse } from "next/og";
+import sharp from "sharp";
 import { isAdminAuthenticated, getAdminWorkerToken } from "@/lib/adminAuth";
 import { getCatalogApiBase } from "@/lib/catalogApiBase";
 
@@ -49,6 +50,9 @@ type ImageSnapshot = {
   durationMs: number;
   failure: string | null;
 };
+
+const MAX_PRODUCT_IMAGE_BYTES = 8 * 1024 * 1024;
+const MAX_PRODUCT_IMAGE_PIXELS = 30_000_000;
 
 const DIAGNOSTIC_BRANCH = "codex/fix-system-stability";
 const DIAGNOSTIC_ORDER_SENTINEL = "__cnfans_diagnostic__";
@@ -126,8 +130,34 @@ function formatDate(value?: string | null) {
   });
 }
 
-function dataUri(contentType: string, bytes: ArrayBuffer) {
-  return `data:${contentType};base64,${Buffer.from(bytes).toString("base64")}`;
+async function readImageBody(response: Response) {
+  const contentLength = Number(response.headers.get("content-length"));
+  if (Number.isFinite(contentLength) && contentLength > MAX_PRODUCT_IMAGE_BYTES) {
+    await response.body?.cancel();
+    return null;
+  }
+
+  const reader = response.body?.getReader();
+  if (!reader) return null;
+  const chunks: Buffer[] = [];
+  let totalBytes = 0;
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      totalBytes += value.byteLength;
+      if (totalBytes > MAX_PRODUCT_IMAGE_BYTES) {
+        await reader.cancel();
+        return null;
+      }
+      chunks.push(Buffer.from(value));
+    }
+  } finally {
+    reader.releaseLock();
+  }
+
+  return Buffer.concat(chunks, totalBytes);
 }
 
 async function imageSnapshot(url: string | null, imageIndex: number, diagnostic: boolean): Promise<ImageSnapshot> {
@@ -135,7 +165,7 @@ async function imageSnapshot(url: string | null, imageIndex: number, diagnostic:
   const startedAt = Date.now();
   if (diagnostic) diagnosticLog("IMG-08 image-fetch-start", startedAt, { imageIndex });
   try {
-    const response = await fetch(url, { cache: "no-store" });
+    const response = await fetch(url, { cache: "no-store", signal: AbortSignal.timeout(10_000) });
     const contentType = response.headers.get("content-type") || "";
     if (!response.ok) {
       const result = { dataUri: null, requested: true, status: response.status, contentType, bytes: 0, durationMs: Date.now() - startedAt, failure: "http-not-ok" };
@@ -147,15 +177,33 @@ async function imageSnapshot(url: string | null, imageIndex: number, diagnostic:
       if (diagnostic) diagnosticLog("IMG-09 image-fetch-pass", startedAt, { imageIndex, status: result.status, contentType, bytes: 0, fallback: true, failure: result.failure });
       return result;
     }
-    const bytes = await response.arrayBuffer();
-    const imageType = contentType.split(";")[0];
-    const result = { dataUri: dataUri(imageType, bytes), requested: true, status: response.status, contentType, bytes: bytes.byteLength, durationMs: Date.now() - startedAt, failure: null };
-    if (diagnostic) diagnosticLog("IMG-09 image-fetch-pass", startedAt, { imageIndex, status: result.status, contentType, bytes: result.bytes, fallback: false });
+    const sourceBytes = await readImageBody(response);
+    if (!sourceBytes) {
+      const result = { dataUri: null, requested: true, status: response.status, contentType, bytes: 0, durationMs: Date.now() - startedAt, failure: "image-too-large-or-empty" };
+      if (diagnostic) diagnosticLog("IMG-09 image-fetch-pass", startedAt, { imageIndex, status: result.status, contentType, bytes: 0, fallback: true, failure: result.failure });
+      return result;
+    }
+
+    const pngBytes = await sharp(sourceBytes, { failOn: "none", limitInputPixels: MAX_PRODUCT_IMAGE_PIXELS })
+      .rotate()
+      .resize({ width: 400, height: 400, fit: "inside", withoutEnlargement: true })
+      .png({ compressionLevel: 6 })
+      .toBuffer();
+    const result = {
+      dataUri: `data:image/png;base64,${pngBytes.toString("base64")}`,
+      requested: true,
+      status: response.status,
+      contentType,
+      bytes: sourceBytes.byteLength,
+      durationMs: Date.now() - startedAt,
+      failure: null,
+    };
+    if (diagnostic) diagnosticLog("IMG-09 image-fetch-pass", startedAt, { imageIndex, status: result.status, contentType, sourceBytes: result.bytes, outputBytes: pngBytes.byteLength, outputType: "image/png", fallback: false });
     return result;
   } catch (error) {
     const details = safeError(error, [url]);
-    if (diagnostic) diagnosticLog("IMG-09 image-fetch-pass", startedAt, { imageIndex, status: null, contentType: null, bytes: 0, fallback: true, failure: "fetch-error", error: details }, "error");
-    return { dataUri: null, requested: true, status: null, contentType: null, bytes: 0, durationMs: Date.now() - startedAt, failure: "fetch-error" };
+    if (diagnostic) diagnosticLog("IMG-09 image-fetch-pass", startedAt, { imageIndex, status: null, contentType: null, bytes: 0, fallback: true, failure: "fetch-or-image-decode-error", errorName: details.name }, "error");
+    return { dataUri: null, requested: true, status: null, contentType: null, bytes: 0, durationMs: Date.now() - startedAt, failure: "fetch-or-image-decode-error" };
   }
 }
 
