@@ -17,23 +17,23 @@ type ConfirmationItem = {
 
 type ConfirmationOrder = {
   order_number: string;
-  created_at: string;
-  customer_name: string;
-  email: string;
-  phone: string;
-  country_name: string;
-  address_line1: string;
-  address_line2: string | null;
-  city: string;
+  created_at?: string | null;
+  customer_name?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  country_name?: string | null;
+  address_line1?: string | null;
+  address_line2?: string | null;
+  city?: string | null;
   county: string | null;
-  postcode: string;
-  shipping_method_label: string;
-  shipping_estimate: string;
-  shipping_fee: number;
-  subtotal: number;
-  total: number;
+  postcode?: string | null;
+  shipping_method_label?: string | null;
+  shipping_estimate?: string | null;
+  shipping_fee?: number | null;
+  subtotal?: number | null;
+  total?: number | null;
   final_total?: number;
-  currency: "GBP" | "EUR" | "USD";
+  currency?: "GBP" | "EUR" | "USD" | string | null;
   items?: ConfirmationItem[];
 };
 
@@ -43,15 +43,18 @@ function workerBaseUrl() {
   return getCatalogApiBase();
 }
 
-function money(value: number, currency: ConfirmationOrder["currency"]) {
-  return new Intl.NumberFormat(currency === "USD" ? "en-US" : "en-GB", {
+function money(value: unknown, currency: ConfirmationOrder["currency"]) {
+  const safeCurrency = currency === "EUR" || currency === "USD" ? currency : "GBP";
+  return new Intl.NumberFormat(safeCurrency === "USD" ? "en-US" : "en-GB", {
     style: "currency",
-    currency,
+    currency: safeCurrency,
   }).format(Number(value || 0));
 }
 
-function formatDate(value: string) {
-  return new Date(value).toLocaleDateString("en-GB", {
+function formatDate(value?: string | null) {
+  const date = value ? new Date(value) : null;
+  if (!date || Number.isNaN(date.getTime())) return "Not specified";
+  return date.toLocaleDateString("en-GB", {
     day: "2-digit",
     month: "short",
     year: "numeric",
@@ -98,9 +101,9 @@ export async function GET(_request: Request, context: RouteContext) {
   const itemImages = await Promise.all(items.map((item) => imageSnapshot(item.image_url)));
   const address = [order.address_line1, order.address_line2, order.city, order.county, order.postcode, order.country_name]
     .filter(Boolean)
-    .join(", ");
-  const total = order.final_total ?? order.total;
-  const height = Math.max(920, 690 + Math.min(items.length, 8) * 190);
+    .join(", ") || "Not specified";
+  const total = order.final_total ?? order.total ?? 0;
+  const height = items.length <= 1 ? 920 : 1020 + (items.length - 1) * 190;
 
   return new ImageResponse(
     (
@@ -137,17 +140,17 @@ export async function GET(_request: Request, context: RouteContext) {
           <div style={{ display: "flex", flexDirection: "column", gap: 12, flex: 1 }}>
             <div style={{ fontSize: 20, fontWeight: 700, letterSpacing: 1 }}>CUSTOMER DETAILS</div>
             <div style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: 20 }}>
-              <div>Name: {order.customer_name}</div>
-              <div>Email: {order.email}</div>
-              <div>Phone: {order.phone}</div>
-              <div>Shipping Address: {address}</div>
+              <div>{`Name: ${order.customer_name || "Not specified"}`}</div>
+              <div>{`Email: ${order.email || "Not specified"}`}</div>
+              <div>{`Phone: ${order.phone || "Not specified"}`}</div>
+              <div>{`Shipping Address: ${address}`}</div>
             </div>
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 12, width: 380 }}>
             <div style={{ fontSize: 20, fontWeight: 700, letterSpacing: 1 }}>DELIVERY</div>
             <div style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: 20 }}>
-              <div>Shipping Method: {order.shipping_method_label || "Not specified"}</div>
-              {order.shipping_estimate ? <div>Estimated Delivery: {order.shipping_estimate}</div> : null}
+              <div>{`Shipping Method: ${order.shipping_method_label || "Not specified"}`}</div>
+              {order.shipping_estimate ? <div>{`Estimated Delivery: ${order.shipping_estimate}`}</div> : null}
             </div>
           </div>
         </div>
@@ -161,10 +164,10 @@ export async function GET(_request: Request, context: RouteContext) {
               </div>
               <div style={{ display: "flex", flex: 1, flexDirection: "column", gap: 7 }}>
                 <div style={{ fontSize: 23, fontWeight: 700 }}>{item.title}</div>
-                <div style={{ color: "#555550", fontSize: 19 }}>Size: {item.size || "Not specified"}</div>
-                {item.color ? <div style={{ color: "#555550", fontSize: 19 }}>Color: {item.color}</div> : null}
-                <div style={{ color: "#555550", fontSize: 19 }}>Quantity: {item.quantity}</div>
-                <div style={{ fontSize: 21, fontWeight: 700 }}>Amount: {money(item.line_total, order.currency)}</div>
+                <div style={{ color: "#555550", fontSize: 19 }}>{`Size: ${item.size || "Not specified"}`}</div>
+                {item.color ? <div style={{ color: "#555550", fontSize: 19 }}>{`Color: ${item.color}`}</div> : null}
+                <div style={{ color: "#555550", fontSize: 19 }}>{`Quantity: ${item.quantity || 0}`}</div>
+                <div style={{ fontSize: 21, fontWeight: 700 }}>{`Amount: ${money(item.line_total, order.currency)}`}</div>
               </div>
             </div>
           )) : <div style={{ color: "#6b6b67", padding: "16px 0" }}>No items recorded.</div>}
