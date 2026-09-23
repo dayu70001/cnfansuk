@@ -1,5 +1,6 @@
 import { timingSafeEqual } from "node:crypto";
-import { ADMIN_SESSION_COOKIE, createAdminSessionValue, getAdminLoginSecret } from "@/lib/adminAuth";
+import { getAdminLoginSecret, getAdminWorkerToken } from "@/lib/adminAuth";
+import { getCatalogApiBase } from "@/lib/catalogApiBase";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -55,17 +56,40 @@ export async function GET(request: Request) {
   const loginSecret = getAdminLoginSecret();
   if (!loginSecret) return Response.json({ error: "preview-admin-secret-unavailable" }, { status: 503 });
 
-  const cookieValue = createAdminSessionValue(loginSecret);
-  const cookie = `${ADMIN_SESSION_COOKIE}=${cookieValue}`;
   const origin = new URL(request.url).origin;
-  const headers = { cookie, accept: "application/json" };
 
   try {
-    const listResponse = await fetch(new URL("/api/admin/orders?limit=1", origin), { headers, cache: "no-store" });
-    if (!listResponse.ok) return Response.json({ mode, orderListStatus: listResponse.status }, { status: 502 });
-    const listPayload = await listResponse.json() as { orders?: Array<{ order_number?: string }> };
-    const orderNumber = listPayload.orders?.[0]?.order_number;
-    if (!orderNumber) return Response.json({ mode, orderListStatus: listResponse.status, existingOrderFound: false }, { status: 404 });
+    const loginResponse = await fetch(new URL("/api/admin/login", origin), {
+      method: "POST",
+      headers: { "content-type": "application/json", accept: "application/json" },
+      body: JSON.stringify({ password: loginSecret }),
+      cache: "no-store",
+    });
+    const setCookie = loginResponse.headers.get("set-cookie") || "";
+    const cookie = setCookie.split(";", 1)[0];
+    if (!loginResponse.ok || !cookie) {
+      return Response.json({ mode, adminLoginStatus: loginResponse.status, adminCookieAvailable: Boolean(cookie) }, { status: 502 });
+    }
+
+    let orderNumber = "CNF-DIAGNOSTIC-SYNTHETIC";
+    let workerOrdersStatus: number | null = null;
+    if (["A", "D", "E", "F"].includes(mode)) {
+      const workerToken = getAdminWorkerToken();
+      const workerOrders = await fetch(new URL("/admin/orders?limit=1", getCatalogApiBase()), {
+        headers: { accept: "application/json", authorization: `Bearer ${workerToken}` },
+        cache: "no-store",
+      });
+      workerOrdersStatus = workerOrders.status;
+      if (!workerOrders.ok) {
+        return Response.json({ mode, adminLoginStatus: loginResponse.status, workerOrdersStatus }, { status: 502 });
+      }
+      const orderPayload = await workerOrders.json() as { orders?: Array<{ order_number?: string }> };
+      const existingOrderNumber = orderPayload.orders?.[0]?.order_number;
+      if (!existingOrderNumber) {
+        return Response.json({ mode, adminLoginStatus: loginResponse.status, workerOrdersStatus, existingOrderFound: false }, { status: 404 });
+      }
+      orderNumber = existingOrderNumber;
+    }
 
     const runTarget = async (targetMode: DiagnosticMode) => {
       const targetStartedAt = Date.now();
@@ -84,12 +108,7 @@ export async function GET(request: Request) {
       return { response: targetResponse, ...parsed };
     };
 
-    const detailTest = await runTarget("A");
-    if (detailTest.response.status !== 200) {
-      return Response.json({ mode, orderListStatus: listResponse.status, adminDetailStatus: detailTest.response.status, adminDetailFailureStage: detailTest.result.failureStage || null }, { status: 502 });
-    }
-
-    const test = mode === "A" ? detailTest : await runTarget(mode);
+    const test = await runTarget(mode);
     if (mode === "F" && request.headers.get("x-cnfans-diagnostic-download") === "1" && test.response.ok && test.result.contentType === "image/png") {
       return new Response(test.bytes, {
         status: test.response.status,
@@ -107,8 +126,8 @@ export async function GET(request: Request) {
 
     return Response.json({
       mode,
-      orderListStatus: listResponse.status,
-      adminDetailStatus: detailTest.response.status,
+      adminLoginStatus: loginResponse.status,
+      workerOrdersStatus,
       testStatus: test.response.status,
       contentType: test.result.contentType,
       contentLengthHeader: test.result.contentLengthHeader,
