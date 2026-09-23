@@ -1811,21 +1811,27 @@ function publicOrderPayload(order: OrderRow, items: OrderItemRow[]) {
   };
 }
 
+function publicTrackingOrderPayload(order: Pick<OrderRow,
+  "order_number" | "status" | "payment_page_viewed_at" | "transfer_submitted_at" | "payment_confirmed_at"
+>) {
+  return {
+    orderNumber: order.order_number,
+    status: order.status,
+    paymentStage: getOrderPaymentStage(order),
+  };
+}
+
 async function handlePublicOrder(request: Request, env: WorkerEnv, orderNumber: string) {
-  const order = await d1First<OrderRow>(
+  const order = await d1First<Pick<OrderRow,
+    "order_number" | "status" | "payment_page_viewed_at" | "transfer_submitted_at" | "payment_confirmed_at"
+  >>(
     env,
     { endpoint: "/orders/:order_number", label: "public_order_by_number", limit: 1, offset: 0 },
-    "SELECT * FROM orders WHERE order_number = ? LIMIT 1",
+    "SELECT order_number, status, payment_page_viewed_at, transfer_submitted_at, payment_confirmed_at FROM orders WHERE order_number = ? LIMIT 1",
     [orderNumber],
   );
   if (!order) return jsonResponse(request, { error: "未找到订单" }, 404);
-  const { results: items = [] } = await d1All<OrderItemRow>(
-    env,
-    { endpoint: "/orders/:order_number", label: "public_order_items" },
-    "SELECT * FROM order_items WHERE order_id = ? ORDER BY id",
-    [order.id],
-  );
-  return jsonResponse(request, { order: publicOrderPayload(order, items) });
+  return jsonResponse(request, { order: publicTrackingOrderPayload(order) });
 }
 
 async function handlePaymentSubmitted(request: Request, env: WorkerEnv, orderNumber: string) {
