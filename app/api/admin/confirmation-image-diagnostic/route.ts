@@ -57,11 +57,14 @@ export async function GET(request: Request) {
   if (!loginSecret) return Response.json({ error: "preview-admin-secret-unavailable" }, { status: 503 });
 
   const origin = new URL(request.url).origin;
+  const protectionBypass = request.headers.get("x-cnfans-diagnostic-protection-bypass") || "";
+  const protectionHeaders: Record<string, string> = {};
+  if (protectionBypass) protectionHeaders["x-vercel-protection-bypass"] = protectionBypass;
 
   try {
     const loginResponse = await fetch(new URL("/api/admin/login", origin), {
       method: "POST",
-      headers: { "content-type": "application/json", accept: "application/json" },
+      headers: { "content-type": "application/json", accept: "application/json", ...protectionHeaders },
       body: JSON.stringify({ password: loginSecret }),
       cache: "no-store",
     });
@@ -97,6 +100,7 @@ export async function GET(request: Request) {
         headers: {
           cookie,
           accept: targetMode === "A" ? "text/plain" : "image/png",
+          ...protectionHeaders,
           "x-cnfans-diagnostic-key": request.headers.get("x-cnfans-diagnostic-key") || "",
           "x-cnfans-diagnostic-mode": targetMode,
           "x-cnfans-internal-order-number": orderNumber,
