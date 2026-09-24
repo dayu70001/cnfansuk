@@ -2,7 +2,6 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { ProductDetailClient } from "@/components/ProductDetailClient";
 import { JsonLd } from "@/components/JsonLd";
-import { getProduct } from "@/data/products";
 import { fetchCatalogProductBySlug } from "@/lib/catalogApi";
 import { getCategory } from "@/data/categories";
 import { SITE_NAME, SITE_URL } from "@/lib/site";
@@ -11,7 +10,7 @@ import { SITE_NAME, SITE_URL } from "@/lib/site";
 export const revalidate = 21600;
 
 async function resolveProduct(slug: string) {
-  return (await fetchCatalogProductBySlug(slug)) || getProduct(slug);
+  return fetchCatalogProductBySlug(slug);
 }
 
 type Params = { params: Promise<{ slug: string }> };
