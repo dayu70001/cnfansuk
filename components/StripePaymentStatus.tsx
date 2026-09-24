@@ -9,25 +9,28 @@ import {
   isStripePaymentStatus,
   type StripePaymentStatus as PaymentStatus,
 } from "@/lib/stripePaymentStatus";
+import type { StripeHandoffMode } from "@/lib/stripeCheckoutHandoff";
 
 export function StripePaymentStatus({
   order,
   sessionId,
   initialPaymentStatus,
+  mode,
 }: {
   order: string;
   sessionId: string;
   initialPaymentStatus: PaymentStatus;
+  mode: StripeHandoffMode;
 }) {
   const [paymentStatus, setPaymentStatus] = useState<PaymentStatus>(initialPaymentStatus);
   const [refreshError, setRefreshError] = useState("");
-  const orderAccessToken = readOrderAccessToken(order);
+  const orderAccessToken = mode === "test" ? readOrderAccessToken(order) : "";
   const lastRequestAt = useRef(0);
   const requestInFlight = useRef(false);
 
   const refreshStatus = useCallback(async () => {
     if (requestInFlight.current) return;
-    if (!orderAccessToken) {
+    if (mode === "test" && !orderAccessToken) {
       setRefreshError("Order access is unavailable in this browser. Please use your order number when contacting us.");
       return;
     }
@@ -42,7 +45,11 @@ export function StripePaymentStatus({
       const response = await fetch(`/api/payments/stripe/session-status?${query.toString()}`, {
         method: "GET",
         cache: "no-store",
-        headers: { Accept: "application/json", "X-Order-Access-Token": orderAccessToken },
+        credentials: "same-origin",
+        headers: {
+          Accept: "application/json",
+          ...(mode === "test" ? { "X-Order-Access-Token": orderAccessToken } : {}),
+        },
       });
       const result = response.ok
         ? await response.json() as { paymentStatus?: unknown; checkoutStatus?: unknown }
@@ -56,13 +63,13 @@ export function StripePaymentStatus({
     } finally {
       requestInFlight.current = false;
     }
-  }, [order, orderAccessToken, sessionId]);
+  }, [mode, order, orderAccessToken, sessionId]);
 
   useEffect(() => {
-    if (!orderAccessToken) return;
+    if (mode === "test" && !orderAccessToken) return;
     const initialRefresh = window.setTimeout(() => void refreshStatus(), 0);
     return () => window.clearTimeout(initialRefresh);
-  }, [orderAccessToken, refreshStatus]);
+  }, [mode, orderAccessToken, refreshStatus]);
 
   useEffect(() => {
     const onFocus = () => { void refreshStatus(); };
@@ -92,6 +99,7 @@ export function StripePaymentStatus({
         orderNumber={order}
         sessionId={sessionId}
         paymentStatus={paymentStatus}
+        mode={mode}
       />
     </section>
   );

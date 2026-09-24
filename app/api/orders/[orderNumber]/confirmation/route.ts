@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { loadAuthorizedOrder, type AuthorizedWorkerOrder } from "@/lib/authorizedOrder";
+import { getOrderAccessTokenFromCookieHeader } from "@/lib/orderAccessTokenCookie";
+import { getStripeBankTransferMode, isStripeLiveProductionRequest } from "@/lib/payments/stripeBankTransfer";
 
 type RouteContext = { params: Promise<{ orderNumber: string }> };
 
@@ -41,7 +43,13 @@ function projectConfirmationOrder(order: AuthorizedWorkerOrder) {
 
 export async function GET(request: Request, context: RouteContext) {
   const { orderNumber } = await context.params;
-  const token = request.headers.get("X-Order-Access-Token") || "";
+  const stripeMode = getStripeBankTransferMode();
+  if (stripeMode === "live" && !isStripeLiveProductionRequest(request)) {
+    return NextResponse.json({ error: "订单访问凭证无效或已过期。" }, { status: 401 });
+  }
+  const token = stripeMode === "live"
+    ? getOrderAccessTokenFromCookieHeader(request.headers.get("cookie"), orderNumber, "confirmation")
+    : request.headers.get("X-Order-Access-Token") || "";
   const result = await loadAuthorizedOrder(orderNumber, token);
   if (!result.ok) return NextResponse.json({ error: result.error }, { status: result.status });
   return NextResponse.json({ order: projectConfirmationOrder(result.order) }, { headers: { "Cache-Control": "no-store" } });

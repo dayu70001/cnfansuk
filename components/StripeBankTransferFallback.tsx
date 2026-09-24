@@ -6,15 +6,18 @@ import {
   parseLocalStripeFallback,
   shouldShowLocalStripeFallback,
 } from "@/lib/stripeCheckoutHandoff";
+import type { StripeHandoffMode } from "@/lib/stripeCheckoutHandoff";
 
 export function StripeBankTransferFallback({
   orderNumber,
   sessionId,
   paymentStatus,
+  mode,
 }: {
   orderNumber: string;
   sessionId: string;
   paymentStatus: string;
+  mode: StripeHandoffMode;
 }) {
   const storageKey = getLocalStripeFallbackStorageKey(orderNumber);
   const subscribe = useCallback((onStoreChange: () => void) => {
@@ -25,12 +28,12 @@ export function StripeBankTransferFallback({
     if (!storageKey || !sessionId) return "";
     try {
       const serialized = window.sessionStorage.getItem(storageKey);
-      return parseLocalStripeFallback(serialized, sessionId, orderNumber) || "";
+      return parseLocalStripeFallback(serialized, sessionId, orderNumber, mode) || "";
     } catch {
       // The order status and WhatsApp path remain available if storage is disabled.
       return "";
     }
-  }, [orderNumber, sessionId, storageKey]);
+  }, [mode, orderNumber, sessionId, storageKey]);
   const checkoutUrl = useSyncExternalStore(subscribe, getSnapshot, () => "");
 
   if (!shouldShowLocalStripeFallback(paymentStatus, checkoutUrl || null)) return null;

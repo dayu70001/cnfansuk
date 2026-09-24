@@ -35,9 +35,11 @@ type ConfirmationOrder = {
 export function OrderConfirmationDetails({
   orderNumber,
   localMockTotal,
+  useLiveAccessCookie = false,
 }: {
   orderNumber: string;
   localMockTotal?: number;
+  useLiveAccessCookie?: boolean;
 }) {
   const [order, setOrder] = useState<ConfirmationOrder | null>(null);
   const [unavailable, setUnavailable] = useState(false);
@@ -47,20 +49,23 @@ export function OrderConfirmationDetails({
     let active = true;
     void Promise.resolve().then(async () => {
       let accessToken = "";
-      try {
-        accessToken = window.sessionStorage.getItem(getOrderAccessTokenStorageKey(orderNumber)) || "";
-      } catch {
-        accessToken = "";
+      if (!useLiveAccessCookie) {
+        try {
+          accessToken = window.sessionStorage.getItem(getOrderAccessTokenStorageKey(orderNumber)) || "";
+        } catch {
+          accessToken = "";
+        }
       }
       if (!active) return;
-      if (!accessToken) {
+      if (!useLiveAccessCookie && !accessToken) {
         setUnavailable(true);
         return;
       }
       try {
         const response = await fetch(`/api/orders/${encodeURIComponent(orderNumber)}/confirmation`, {
           cache: "no-store",
-          headers: { "X-Order-Access-Token": accessToken },
+          credentials: "same-origin",
+          headers: useLiveAccessCookie ? {} : { "X-Order-Access-Token": accessToken },
         });
         const result = response.ok ? await response.json() as { order?: ConfirmationOrder } : null;
         if (!active) return;
@@ -71,7 +76,7 @@ export function OrderConfirmationDetails({
       }
     });
     return () => { active = false; };
-  }, [localMockTotal, orderNumber]);
+  }, [localMockTotal, orderNumber, useLiveAccessCookie]);
 
   if (localMockTotal !== undefined) {
     return (

@@ -27,11 +27,13 @@ import { getOrderAccessTokenStorageKey } from "@/lib/orderAccessTokenKey";
 import {
   buildLocalStripeSuccessUrl,
   getLocalStripeFallbackStorageKey,
+  getStripeSessionId,
+  isStripeLiveSuccessReturnUrl,
   serializeLocalStripeFallback,
 } from "@/lib/stripeCheckoutHandoff";
 
 type CheckoutStep = "details" | "delivery" | "payment";
-type LocalStripeMode = "mock" | "test";
+type LocalStripeMode = "mock" | "test" | "live";
 
 type ContactForm = {
   email: string;
@@ -122,8 +124,8 @@ type PersistedCheckout = {
   sessionId: string;
   step: CheckoutStep;
   maxStep: number;
-  contact: ContactForm;
-  shipping: ShippingForm;
+  contact?: ContactForm;
+  shipping?: ShippingForm;
   shippingMethodId: ShippingMethodId;
   localStripeMode?: LocalStripeMode;
   order: Omit<CheckoutOrder, "orderAccessToken"> | null;
@@ -181,9 +183,11 @@ export default function CheckoutPage() {
           if (saved.contact?.email !== undefined) setContact({ email: saved.contact.email });
           if (saved.shipping) setShipping((current) => ({ ...current, ...saved.shipping }));
           if (saved.shippingMethodId && shippingMethods.some((method) => method.id === saved.shippingMethodId)) setShippingMethodId(saved.shippingMethodId);
-          if (saved.localStripeMode === "mock" || saved.localStripeMode === "test") setLocalStripeMode(saved.localStripeMode);
+          if (saved.localStripeMode === "mock" || saved.localStripeMode === "test" || saved.localStripeMode === "live") setLocalStripeMode(saved.localStripeMode);
           if (saved.order?.orderNumber) {
-            const orderAccessToken = window.sessionStorage.getItem(getOrderAccessTokenStorageKey(saved.order.orderNumber));
+            const orderAccessToken = saved.localStripeMode === "live"
+              ? null
+              : window.sessionStorage.getItem(getOrderAccessTokenStorageKey(saved.order.orderNumber));
             setOrder({ ...saved.order, orderAccessToken });
           }
         }
@@ -207,8 +211,7 @@ export default function CheckoutPage() {
       sessionId: checkoutSessionId,
       step,
       maxStep,
-      contact,
-      shipping,
+      ...(localStripeMode === "live" ? {} : { contact, shipping }),
       shippingMethodId,
       localStripeMode: localStripeMode || undefined,
       order: persistedOrder,
@@ -289,16 +292,16 @@ export default function CheckoutPage() {
     setSubmitError("");
     let requestedLocalStripeMode: LocalStripeMode | null = null;
     try {
-      if (process.env.NODE_ENV === "development") {
-        let mode: string;
-        try {
-          const configResponse = await fetch("/api/payments/stripe/config", { cache: "no-store" });
-          const config = configResponse.ok ? await configResponse.json() as { mode?: string } : null;
-          mode = config?.mode || "unavailable";
-        } catch {
-          mode = "unavailable";
-        }
+      let mode = "unavailable";
+      try {
+        const configResponse = await fetch("/api/payments/stripe/config", { cache: "no-store" });
+        const config = configResponse.ok ? await configResponse.json() as { mode?: string } : null;
+        mode = config?.mode || "unavailable";
+      } catch {
+        mode = "unavailable";
+      }
 
+      if (process.env.NODE_ENV === "development") {
         // Local checkout fails closed: never fall through to the Catalog API/Production Worker.
         if (mode !== "mock" && mode !== "test") {
           setSubmitError("Local checkout is disabled. Configure a local Stripe mock or test mode to continue.");
@@ -331,7 +334,8 @@ export default function CheckoutPage() {
         requestedLocalStripeMode = "test";
         setLocalStripeMode(requestedLocalStripeMode);
       } else {
-        setLocalStripeMode(null);
+        requestedLocalStripeMode = mode === "live" ? "live" : null;
+        setLocalStripeMode(requestedLocalStripeMode);
       }
 
       if (items.length === 0) {
@@ -373,14 +377,16 @@ export default function CheckoutPage() {
         setSubmitError("Local order access could not be prepared. Check the local Worker token configuration before retrying.");
         return;
       }
-      if (result.order.orderAccessToken) {
+      if (result.order.orderAccessToken && requestedLocalStripeMode !== "live") {
         try {
           window.sessionStorage.setItem(getOrderAccessTokenStorageKey(result.order.orderNumber), result.order.orderAccessToken);
         } catch {
           // The confirmation card will show a safe unavailable state if storage is blocked.
         }
       }
-      setOrder(result.order);
+      setOrder(requestedLocalStripeMode === "live"
+        ? { ...result.order, orderAccessToken: null }
+        : result.order);
       trackGoogleAnalyticsEvent("add_shipping_info", {
         currency: "GBP",
         value: result.order.total,
@@ -452,6 +458,7 @@ export default function CheckoutPage() {
       || !localStripeMode
       || (localStripeMode === "mock" && order.orderNumber !== LOCAL_MOCK_ORDER_NUMBER)
       || (localStripeMode === "test" && (!order.orderAccessToken || !/^CNF-[A-Za-z0-9-]{1,72}$/.test(order.orderNumber)))
+      || (localStripeMode === "live" && !/^CNF-[A-Za-z0-9-]{1,72}$/.test(order.orderNumber))
       || submitting
       || localStripeRequestInFlight.current
     ) return;
@@ -461,7 +468,7 @@ export default function CheckoutPage() {
     setLocalStripeFallbackUrl("");
 
     let paymentWindow: Window | null = null;
-    if (localStripeMode === "test") {
+    if (localStripeMode === "test" || localStripeMode === "live") {
       // Open synchronously during the real click so browser popup blockers allow the later Stripe URL.
       try {
         paymentWindow = window.open("about:blank", "_blank");
@@ -485,29 +492,40 @@ export default function CheckoutPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(localStripeMode === "test"
           ? { orderNumber: order.orderNumber, orderAccessToken: order.orderAccessToken }
-          : {
+          : localStripeMode === "live"
+            ? { orderNumber: order.orderNumber }
+            : {
               orderNumber: LOCAL_MOCK_ORDER_NUMBER,
               amountMinor: Math.round(order.total * 100),
               currency: "GBP",
             }),
       });
-      const result = await response.json().catch(() => ({})) as { checkoutUrl?: string; error?: string };
+      const result = await response.json().catch(() => ({})) as { checkoutUrl?: string; returnUrl?: string; error?: string };
       const isMockUrl = result.checkoutUrl?.startsWith("/checkout/stripe-mock?") === true;
       const localSuccessUrl = localStripeMode === "test" && result.checkoutUrl
         ? buildLocalStripeSuccessUrl(result.checkoutUrl, window.location.origin, order.orderNumber)
+        : null;
+      const liveSessionId = localStripeMode === "live" ? getStripeSessionId(result.checkoutUrl, "live") : null;
+      const liveReturnUrl = localStripeMode === "live"
+        && liveSessionId
+        && isStripeLiveSuccessReturnUrl(result.returnUrl, liveSessionId, order.orderNumber)
+        ? result.returnUrl!
         : null;
       if (
         !response.ok
         || (localStripeMode === "mock" && !isMockUrl)
         || (localStripeMode === "test" && !localSuccessUrl)
+        || (localStripeMode === "live" && (!liveSessionId || !liveReturnUrl))
       ) {
         paymentWindow?.close();
-        setSubmitError(result.error || "The local payment simulation could not be started.");
+        setSubmitError(result.error || (localStripeMode === "live"
+          ? "The bank transfer could not be started. Please try again."
+          : "The local payment simulation could not be started."));
         return;
       }
-      if (localStripeMode === "test" && result.checkoutUrl && localSuccessUrl) {
+      if ((localStripeMode === "test" || localStripeMode === "live") && result.checkoutUrl && (localSuccessUrl || liveReturnUrl)) {
         const fallbackKey = getLocalStripeFallbackStorageKey(order.orderNumber);
-        const serializedFallback = serializeLocalStripeFallback(result.checkoutUrl, order.orderNumber);
+        const serializedFallback = serializeLocalStripeFallback(result.checkoutUrl, order.orderNumber, localStripeMode);
         let fallbackSaved = false;
         if (fallbackKey && serializedFallback) {
           try {
@@ -538,13 +556,15 @@ export default function CheckoutPage() {
 
         // The same validated Session is now recoverable on Order Success even if
         // this popup is blocked or the customer closes the Stripe tab later.
-        window.location.assign(localSuccessUrl);
+        window.location.assign(localSuccessUrl || liveReturnUrl!);
         return;
       }
       if (result.checkoutUrl) router.push(result.checkoutUrl);
     } catch {
       paymentWindow?.close();
-      setSubmitError("The local payment simulation could not be reached.");
+      setSubmitError(localStripeMode === "live"
+        ? "The bank transfer service could not be reached. Please try again."
+        : "The local payment simulation could not be reached.");
     } finally {
       localStripeRequestInFlight.current = false;
       setSubmitting(false);
@@ -554,6 +574,7 @@ export default function CheckoutPage() {
   const isLocalStripeOrder = process.env.NODE_ENV === "development"
     && Boolean(order)
     && (localStripeMode === "test" || (localStripeMode === "mock" && order?.orderNumber === LOCAL_MOCK_ORDER_NUMBER));
+  const isLiveStripeOrder = process.env.NODE_ENV === "production" && Boolean(order) && localStripeMode === "live";
   const summarySubtotal = step === "payment" && order ? order.subtotal : subtotal;
   const summaryShippingPrice = step === "payment" && order ? order.shippingFee : shippingPrice;
   const summaryTotal = step === "payment" && order ? order.finalTotal : total;
@@ -603,8 +624,8 @@ export default function CheckoutPage() {
           ) : null}
 
           {step === "payment" ? (
-            isLocalStripeOrder ? (
-              <LocalStripeBankTransferStep
+            isLocalStripeOrder || isLiveStripeOrder ? (
+              <StripeBankTransferStep
                 mode={localStripeMode || "mock"}
                 total={order?.total ?? total}
                 orderNumber={order?.orderNumber || ""}
@@ -890,7 +911,7 @@ function DeliveryStep({
   );
 }
 
-function LocalStripeBankTransferStep({
+function StripeBankTransferStep({
   mode,
   total,
   orderNumber,
@@ -922,9 +943,11 @@ function LocalStripeBankTransferStep({
       <p className="checkout-submit-note">
         {mode === "test"
           ? "Your bank transfer will open in a separate secure Stripe page. Keep this page open and return here after completing the transfer."
-          : "This local simulation does not create an order or start a real payment."}
+          : mode === "live"
+            ? "Complete your bank transfer securely on Stripe. Keep this page open; it will update when Stripe confirms receipt."
+            : "This local simulation does not create an order or start a real payment."}
       </p>
-      {mode === "test" ? (
+      {mode === "test" || mode === "live" ? (
         <p className="checkout-submit-note checkout-bank-transfer-followup">
           Return here to check the payment status, then confirm your order details with us on WhatsApp.
         </p>

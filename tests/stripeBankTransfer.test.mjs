@@ -27,6 +27,7 @@ function loadModule(env) {
     module: loadedModule,
     exports: loadedModule.exports,
     process: { env },
+    URL,
   });
   return loadedModule.exports;
 }
@@ -51,6 +52,52 @@ test("Stripe Test Mode is disabled for missing or live keys and outside developm
   assert.equal(loadModule({ NODE_ENV: "development", STRIPE_BANK_TRANSFER_MODE: "test" }).getLocalStripeBankTransferMode(), "disabled");
   assert.equal(loadModule({ NODE_ENV: "development", STRIPE_BANK_TRANSFER_MODE: "test", STRIPE_SECRET_KEY: "sk_live_fixture_only" }).getLocalStripeBankTransferMode(), "disabled");
   assert.equal(loadModule({ NODE_ENV: "production", STRIPE_BANK_TRANSFER_MODE: "test", STRIPE_SECRET_KEY: "sk_test_fixture_only" }).getLocalStripeBankTransferMode(), "disabled");
+});
+
+test("Stripe Live Mode requires production Vercel, an sk_live key, and the exact configured site origin", () => {
+  const live = loadModule({
+    NODE_ENV: "production",
+    VERCEL: "1",
+    VERCEL_ENV: "production",
+    STRIPE_BANK_TRANSFER_MODE: "live",
+    STRIPE_SECRET_KEY: "sk_live_fixture_only",
+    STRIPE_LIVE_SITE_ORIGIN: "https://www.cnfans.co.uk",
+  });
+  assert.equal(live.getStripeBankTransferMode(), "live");
+  assert.equal(live.getStripeLiveSiteOrigin(), "https://www.cnfans.co.uk");
+
+  const invalidEnvironments = [
+    { NODE_ENV: "development", STRIPE_BANK_TRANSFER_MODE: "live", STRIPE_SECRET_KEY: "sk_live_fixture_only", STRIPE_LIVE_SITE_ORIGIN: "https://www.cnfans.co.uk" },
+    { NODE_ENV: "production", STRIPE_BANK_TRANSFER_MODE: "test", STRIPE_SECRET_KEY: "sk_test_fixture_only" },
+    { NODE_ENV: "production", VERCEL: "1", VERCEL_ENV: "production", STRIPE_BANK_TRANSFER_MODE: "live", STRIPE_SECRET_KEY: "sk_test_fixture_only", STRIPE_LIVE_SITE_ORIGIN: "https://www.cnfans.co.uk" },
+    { NODE_ENV: "production", VERCEL: "1", VERCEL_ENV: "preview", STRIPE_BANK_TRANSFER_MODE: "live", STRIPE_SECRET_KEY: "sk_live_fixture_only", STRIPE_LIVE_SITE_ORIGIN: "https://www.cnfans.co.uk" },
+    { NODE_ENV: "production", VERCEL_ENV: "production", STRIPE_BANK_TRANSFER_MODE: "live", STRIPE_SECRET_KEY: "sk_live_fixture_only", STRIPE_LIVE_SITE_ORIGIN: "https://www.cnfans.co.uk" },
+    { NODE_ENV: "production", VERCEL: "1", VERCEL_ENV: "production", STRIPE_BANK_TRANSFER_MODE: "live", STRIPE_SECRET_KEY: "sk_live_fixture_only", STRIPE_LIVE_SITE_ORIGIN: "https://cnfans.co.uk" },
+    { NODE_ENV: "production", VERCEL: "1", VERCEL_ENV: "production", STRIPE_BANK_TRANSFER_MODE: "live", STRIPE_SECRET_KEY: "sk_live_fixture_only", STRIPE_LIVE_SITE_ORIGIN: "https://www.cnfans.co.uk:444" },
+    { NODE_ENV: "production", VERCEL: "1", VERCEL_ENV: "production", STRIPE_BANK_TRANSFER_MODE: "live", STRIPE_SECRET_KEY: "sk_live_fixture_only", STRIPE_LIVE_SITE_ORIGIN: "https://user@www.cnfans.co.uk" },
+    { NODE_ENV: "production", VERCEL: "1", VERCEL_ENV: "production", STRIPE_BANK_TRANSFER_MODE: "live", STRIPE_SECRET_KEY: "sk_live_fixture_only", STRIPE_LIVE_SITE_ORIGIN: "https://www.cnfans.co.uk/path" },
+  ];
+  for (const env of invalidEnvironments) {
+    assert.equal(loadModule(env).getStripeBankTransferMode(), "disabled");
+  }
+});
+
+test("Live request gate requires the canonical Production host and rejects Preview or alternate hosts", () => {
+  const imported = loadModule({
+    NODE_ENV: "production",
+    VERCEL: "1",
+    VERCEL_ENV: "production",
+    STRIPE_BANK_TRANSFER_MODE: "live",
+    STRIPE_SECRET_KEY: "sk_live_fixture_only",
+    STRIPE_LIVE_SITE_ORIGIN: "https://www.cnfans.co.uk",
+  });
+  const request = (url, host, origin) => ({
+    url,
+    headers: { get(name) { return ({ host, origin })[name]; } },
+  });
+  assert.equal(imported.isStripeLiveProductionRequest(request("https://www.cnfans.co.uk/api/payments/stripe/checkout", "www.cnfans.co.uk", "https://www.cnfans.co.uk")), true);
+  assert.equal(imported.isStripeLiveProductionRequest(request("https://cnfansuk.vercel.app/api/payments/stripe/checkout", "cnfansuk.vercel.app", null)), false);
+  assert.equal(imported.isStripeLiveProductionRequest(request("https://www.cnfans.co.uk/api/payments/stripe/checkout", "www.cnfans.co.uk", "https://evil.example")), false);
 });
 
 test("real Stripe Test Mode has no fixed LOCAL-CNF-TEST or £57 runtime fixture", () => {
@@ -111,7 +158,10 @@ test("Stripe Test Mode amount and currency come from the persisted order, not an
       if (id === "server-only") return {};
       if (id === "stripe") return { __esModule: true, default: FakeStripe };
       if (id === "@/lib/payments/stripeBankTransfer") {
-        return { isLocalStripeBankTransferTestEnabled: () => true };
+        return {
+          getStripeBankTransferMode: () => "test",
+          getStripeLiveSiteOrigin: () => null,
+        };
       }
       throw new Error(`Unexpected module import: ${id}`);
     },

@@ -10,6 +10,7 @@ import { fetchSiteSettings } from "@/lib/siteSettings";
 import {
   isLocalStripeBankTransferMockEnabled,
   isLocalStripeBankTransferTestEnabled,
+  isStripeLiveBankTransferEnabled,
 } from "@/lib/payments/stripeBankTransfer";
 
 export default async function OrderSuccessPage({
@@ -20,10 +21,16 @@ export default async function OrderSuccessPage({
   const { order = "CNF-UK-10023", payment, amount, session_id: sessionId } = await searchParams;
   if (payment === "mock" && !isLocalStripeBankTransferMockEnabled()) notFound();
   const isStripeTestReturn = payment === "stripe_test";
+  const isStripeLiveReturn = payment === "stripe_live";
   if (isStripeTestReturn && (
     !isLocalStripeBankTransferTestEnabled()
     || !/^CNF-[A-Za-z0-9-]{1,72}$/.test(order)
     || !/^cs_test_[A-Za-z0-9]+$/.test(sessionId || "")
+  )) notFound();
+  if (isStripeLiveReturn && (
+    !isStripeLiveBankTransferEnabled()
+    || !/^CNF-[A-Za-z0-9-]{1,72}$/.test(order)
+    || !/^cs_live_[A-Za-z0-9]+$/.test(sessionId || "")
   )) notFound();
 
   const amountMinor = Number(amount);
@@ -47,11 +54,12 @@ export default async function OrderSuccessPage({
       </div>
       <h1>{localMockTotal === undefined ? "Order placed" : "Returned to CNFANS"}</h1>
       <p className="success-order-number" title={`#${order}`}>Order #{order}</p>
-      {isStripeTestReturn ? (
+      {isStripeTestReturn || isStripeLiveReturn ? (
         <StripePaymentStatus
           order={order}
           sessionId={sessionId!}
           initialPaymentStatus="unpaid"
+          mode={isStripeLiveReturn ? "live" : "test"}
         />
       ) : (
         <p className="success-payment-status">
@@ -88,7 +96,11 @@ export default async function OrderSuccessPage({
         <Link className="chan success-track" href="/track-order">Track order →</Link>
       </div>
 
-      <OrderConfirmationDetails orderNumber={order} localMockTotal={localMockTotal} />
+      <OrderConfirmationDetails
+        orderNumber={order}
+        localMockTotal={localMockTotal}
+        useLiveAccessCookie={isStripeLiveReturn}
+      />
 
       <Link href="/" className="success-link">
         Continue shopping →
