@@ -2550,6 +2550,18 @@ select {
   gap: 18px;
 }
 
+.stripe-mock-panel {
+  max-width: 640px;
+  margin: 0 auto;
+  padding: clamp(20px, 4vw, 36px);
+  border: 1px solid var(--line);
+}
+
+.stripe-mock-panel > p {
+  max-width: 62ch;
+  line-height: 1.6;
+}
+
 .checkout-step-panel h2,
 .summary-panel h2 {
   margin: 0;

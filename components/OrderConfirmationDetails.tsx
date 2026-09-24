@@ -32,11 +32,18 @@ type ConfirmationOrder = {
   }>;
 };
 
-export function OrderConfirmationDetails({ orderNumber }: { orderNumber: string }) {
+export function OrderConfirmationDetails({
+  orderNumber,
+  localMockTotal,
+}: {
+  orderNumber: string;
+  localMockTotal?: number;
+}) {
   const [order, setOrder] = useState<ConfirmationOrder | null>(null);
   const [unavailable, setUnavailable] = useState(false);
 
   useEffect(() => {
+    if (localMockTotal !== undefined) return;
     let active = true;
     void Promise.resolve().then(async () => {
       let accessToken = "";
@@ -64,7 +71,24 @@ export function OrderConfirmationDetails({ orderNumber }: { orderNumber: string 
       }
     });
     return () => { active = false; };
-  }, [orderNumber]);
+  }, [localMockTotal, orderNumber]);
+
+  if (localMockTotal !== undefined) {
+    return (
+      <div className="order-confirmation-details">
+        <section className="confirmation-card" aria-label="Local demo order summary">
+          <p className="eyebrow">Local demo summary</p>
+          <div className="confirmation-item"><span>Example clothing item · Size M · Qty 1</span><strong>{formatMoney(localMockTotal, "GBP")}</strong></div>
+          <div className="confirmation-total-row"><span>Subtotal and delivery</span><strong>{formatMoney(localMockTotal, "GBP")}</strong></div>
+          <div className="confirmation-total-row confirmation-grand-total"><span>Demo total</span><strong>{formatMoney(localMockTotal, "GBP")}</strong></div>
+        </section>
+        <section className="confirmation-card" aria-label="Local demo delivery details">
+          <p className="eyebrow">Delivery details</p>
+          <p>Fictional local-test details only. No customer address or order has been sent or saved.</p>
+        </section>
+      </div>
+    );
+  }
 
   if (unavailable) {
     return <p className="success-unavailable">Order details are no longer available in this browser. Please use your order number when contacting us.</p>;

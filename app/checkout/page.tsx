@@ -110,6 +110,8 @@ type CheckoutOrder = {
   orderAccessToken?: string | null;
 };
 
+const LOCAL_MOCK_ORDER_NUMBER = "LOCAL-CNF-TEST";
+
 type PersistedCheckout = {
   sessionId: string;
   step: CheckoutStep;
@@ -274,6 +276,39 @@ export default function CheckoutPage() {
     setCreatingOrder(true);
     setSubmitError("");
     try {
+      if (process.env.NODE_ENV === "development") {
+        let mode: string;
+        try {
+          const configResponse = await fetch("/api/payments/stripe/config", { cache: "no-store" });
+          const config = configResponse.ok ? await configResponse.json() as { mode?: string } : null;
+          mode = config?.mode || "unavailable";
+        } catch {
+          mode = "unavailable";
+        }
+
+        // Local checkout fails closed: never fall through to the Catalog API/Production Worker.
+        if (mode !== "mock") {
+          setSubmitError("Local checkout is disabled. Start the development server with STRIPE_BANK_TRANSFER_MODE=mock to use the payment simulation.");
+          return;
+        }
+
+        setOrder({
+          orderNumber: LOCAL_MOCK_ORDER_NUMBER,
+          subtotal,
+          shippingFee: shippingPrice,
+          finalTotal: total,
+          total,
+          currency: "GBP",
+          status: "awaiting_payment",
+          paymentStage: "awaiting_payment",
+          orderAccessToken: null,
+        });
+        setStep("payment");
+        setMaxStep(2);
+        setErrors({});
+        return;
+      }
+
       const response = await fetch("/api/orders", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -338,6 +373,10 @@ export default function CheckoutPage() {
 
   async function submitPayment() {
     if (!order || submitting) return;
+    if (process.env.NODE_ENV === "development") {
+      setSubmitError("Payment submission is disabled in local development. Use the local payment simulation instead.");
+      return;
+    }
 
     trackGoogleAnalyticsEvent("add_payment_info", {
       currency: "GBP",
@@ -372,6 +411,35 @@ export default function CheckoutPage() {
       setSubmitting(false);
     }
   }
+
+  async function continueToLocalBankPayment() {
+    if (!order || order.orderNumber !== LOCAL_MOCK_ORDER_NUMBER || submitting) return;
+    setSubmitting(true);
+    setSubmitError("");
+    try {
+      const response = await fetch("/api/payments/stripe/checkout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          orderNumber: LOCAL_MOCK_ORDER_NUMBER,
+          amountMinor: Math.round(order.total * 100),
+          currency: "GBP",
+        }),
+      });
+      const result = await response.json().catch(() => ({})) as { checkoutUrl?: string; error?: string };
+      if (!response.ok || !result.checkoutUrl || !result.checkoutUrl.startsWith("/checkout/stripe-mock?")) {
+        setSubmitError(result.error || "The local payment simulation could not be started.");
+        return;
+      }
+      router.push(result.checkoutUrl);
+    } catch {
+      setSubmitError("The local payment simulation could not be reached.");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  const isLocalMockOrder = process.env.NODE_ENV === "development" && order?.orderNumber === LOCAL_MOCK_ORDER_NUMBER;
 
   return (
     <section className="checkout checkout-flow wrap">
@@ -412,20 +480,34 @@ export default function CheckoutPage() {
               onSelect={setShippingMethodId}
               onBack={() => setStep("details")}
               onContinue={continueToPayment}
+              submitError={submitError}
               submitting={creatingOrder}
             />
           ) : null}
 
           {step === "payment" ? (
-            <PaymentStep
-              total={order?.total ?? total}
-              orderNumber={order?.orderNumber || ""}
-              orderStatus={order?.paymentStage || getOrderPaymentStage(order || { status: "awaiting_payment" })}
-              submitting={submitting}
-              submitError={submitError}
-              onBack={() => setStep("delivery")}
-              onSubmit={submitPayment}
-            />
+            isLocalMockOrder ? (
+              <LocalStripeBankTransferStep
+                total={order.total}
+                orderNumber={order.orderNumber}
+                submitting={submitting}
+                submitError={submitError}
+                onBack={() => setStep("delivery")}
+                onContinue={continueToLocalBankPayment}
+              />
+            ) : process.env.NODE_ENV === "development" ? (
+              <LocalCheckoutGuardStep onBack={() => setStep("delivery")} />
+            ) : (
+              <PaymentStep
+                total={order?.total ?? total}
+                orderNumber={order?.orderNumber || ""}
+                orderStatus={order?.paymentStage || getOrderPaymentStage(order || { status: "awaiting_payment" })}
+                submitting={submitting}
+                submitError={submitError}
+                onBack={() => setStep("delivery")}
+                onSubmit={submitPayment}
+              />
+            )
           ) : null}
         </div>
 
@@ -632,6 +714,7 @@ function DeliveryStep({
   onSelect,
   onBack,
   onContinue,
+  submitError,
   submitting,
 }: {
   subtotal: number;
@@ -640,6 +723,7 @@ function DeliveryStep({
   onSelect: (methodId: ShippingMethodId) => void;
   onBack: () => void;
   onContinue: () => void | Promise<void>;
+  submitError: string;
   submitting: boolean;
 }) {
   const freeShipping = isFreeShippingApplied(selectedMethodId, subtotal);
@@ -677,8 +761,61 @@ function DeliveryStep({
           Back to Details
         </button>
         <button className="btn btn-solid" type="button" onClick={() => void onContinue()} disabled={submitting}>
-          {submitting ? "Creating order…" : "Continue to Payment"}
+          {submitting
+            ? process.env.NODE_ENV === "development" ? "Preparing local payment…" : "Creating order…"
+            : "Continue to Payment"}
         </button>
+      </div>
+      {submitError ? <p className="checkout-submit-error">{submitError}</p> : null}
+    </div>
+  );
+}
+
+function LocalStripeBankTransferStep({
+  total,
+  orderNumber,
+  submitting,
+  submitError,
+  onBack,
+  onContinue,
+}: {
+  total: number;
+  orderNumber: string;
+  submitting: boolean;
+  submitError: string;
+  onBack: () => void;
+  onContinue: () => void | Promise<void>;
+}) {
+  return (
+    <div className="checkout-step-panel">
+      <p className="eyebrow">Payment</p>
+      <h2>Bank transfer</h2>
+      <p className="checkout-submit-note">Secure bank transfer via Stripe</p>
+      <div className="checkout-payment-summary">
+        <div><span>Order</span><strong>#{orderNumber}</strong></div>
+        <div><span>Status</span><strong>Bank transfer pending</strong></div>
+        <div><span>Amount due</span><strong>{formatMoney(total, "GBP")}</strong></div>
+      </div>
+      <p className="checkout-submit-note">This local simulation does not create an order or start a real payment.</p>
+      <div className="checkout-actions">
+        <button className="checkout-back" type="button" onClick={onBack}>Back to Delivery</button>
+        <button className="btn btn-solid" type="button" onClick={onContinue} disabled={submitting}>
+          {submitting ? "Opening payment step…" : "Continue to Bank Payment"}
+        </button>
+      </div>
+      {submitError ? <p className="checkout-submit-error">{submitError}</p> : null}
+    </div>
+  );
+}
+
+function LocalCheckoutGuardStep({ onBack }: { onBack: () => void }) {
+  return (
+    <div className="checkout-step-panel">
+      <p className="eyebrow">Local checkout</p>
+      <h2>Start a fresh local payment simulation</h2>
+      <p className="checkout-submit-note">A saved order from another session is not used locally. No Production order or payment endpoint will be called.</p>
+      <div className="checkout-actions end">
+        <button className="btn btn-solid" type="button" onClick={onBack}>Back to Delivery</button>
       </div>
     </div>
   );
@@ -710,7 +847,7 @@ function PaymentStep({
   );
 
   useEffect(() => {
-    if (!orderNumber) return;
+    if (!orderNumber || process.env.NODE_ENV === "development") return;
     void fetch(`/api/orders/${encodeURIComponent(orderNumber)}/payment-viewed`, {
       method: "POST",
       headers: { Accept: "application/json" },

@@ -1,35 +1,56 @@
 import Link from "next/link";
+import { notFound } from "next/navigation";
 import { OrderConfirmationDetails } from "@/components/OrderConfirmationDetails";
 import { OrderSuccessLead } from "@/components/OrderSuccessLead";
 import { MetaPixelEventLink } from "@/components/MetaPixelEventLink";
 import { getDirectWhatsappLinkFromSettings } from "@/lib/contactLinks";
 import { getOrderPaymentStage, orderPaymentStageLabel } from "@/lib/orderStatus";
 import { fetchSiteSettings } from "@/lib/siteSettings";
+import { isLocalStripeBankTransferMockEnabled } from "@/lib/payments/stripeBankTransfer";
 
 export default async function OrderSuccessPage({
   searchParams,
 }: {
-  searchParams: Promise<{ order?: string }>;
+  searchParams: Promise<{ order?: string; payment?: string; amount?: string }>;
 }) {
-  const { order = "CNF-UK-10023" } = await searchParams;
+  const { order = "CNF-UK-10023", payment, amount } = await searchParams;
+  if (payment === "mock" && !isLocalStripeBankTransferMockEnabled()) notFound();
+  const amountMinor = Number(amount);
+  const localMockTotal = isLocalStripeBankTransferMockEnabled()
+    && payment === "mock"
+    && order === "LOCAL-CNF-TEST"
+    && Number.isSafeInteger(amountMinor)
+    && amountMinor > 0
+    ? amountMinor / 100
+    : undefined;
   const settings = await fetchSiteSettings();
   const whatsappUrl = getOrderConfirmationWhatsappUrl(settings, order);
 
   return (
     <section className="success-wrap">
-      <OrderSuccessLead order={order} />
+      {localMockTotal === undefined ? <OrderSuccessLead order={order} /> : null}
       <div className="success-check" aria-hidden="true">
         <svg width="25" height="25" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6">
           <path d="M5 12.5l4.2 4.2L19 7" />
         </svg>
       </div>
-      <h1>Order placed</h1>
+      <h1>{localMockTotal === undefined ? "Order placed" : "Returned to CNFANS"}</h1>
       <p className="success-order-number" title={`#${order}`}>Order #{order}</p>
       <p className="success-payment-status">
-        {orderPaymentStageLabel(getOrderPaymentStage({ status: "payment_submitted" }), "en")}
+        {localMockTotal === undefined
+          ? orderPaymentStageLabel(getOrderPaymentStage({ status: "payment_submitted" }), "en")
+          : "Bank transfer pending — waiting for payment confirmation"}
       </p>
-      <p className="success-copy">Please confirm your order details with us on WhatsApp.</p>
-      <p className="success-copy success-copy-secondary">We&apos;ll check your size, delivery details and payment before processing your order.</p>
+      <p className="success-copy">
+        {localMockTotal === undefined
+          ? "Please confirm your order details with us on WhatsApp."
+          : "This is a local payment simulation. No order or payment has been created."}
+      </p>
+      <p className="success-copy success-copy-secondary">
+        {localMockTotal === undefined
+          ? "We'll check your size, delivery details and payment before processing your order."
+          : "A real bank transfer would remain pending until confirmed by a verified provider notification."}
+      </p>
 
       <div className="success-actions">
         <MetaPixelEventLink
@@ -45,7 +66,7 @@ export default async function OrderSuccessPage({
             destination: "whatsapp_personal",
             order_number: order,
           }}
-          recordWhatsappClickForOrder={order}
+          {...(localMockTotal === undefined ? { recordWhatsappClickForOrder: order } : {})}
         >
           <span className="success-whatsapp-icon" aria-hidden="true">
             <WhatsappIcon />
@@ -55,7 +76,7 @@ export default async function OrderSuccessPage({
         <Link className="chan success-track" href="/track-order">Track order →</Link>
       </div>
 
-      <OrderConfirmationDetails orderNumber={order} />
+      <OrderConfirmationDetails orderNumber={order} localMockTotal={localMockTotal} />
 
       <Link href="/" className="success-link">
         Continue shopping →
