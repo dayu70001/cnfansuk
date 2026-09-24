@@ -2,6 +2,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { OrderConfirmationDetails } from "@/components/OrderConfirmationDetails";
 import { OrderSuccessLead } from "@/components/OrderSuccessLead";
+import { StripeBankTransferFallback } from "@/components/StripeBankTransferFallback";
+import { StripePaymentStatus } from "@/components/StripePaymentStatus";
 import { MetaPixelEventLink } from "@/components/MetaPixelEventLink";
 import { getDirectWhatsappLinkFromSettings } from "@/lib/contactLinks";
 import { getOrderPaymentStage, orderPaymentStageLabel } from "@/lib/orderStatus";
@@ -10,7 +12,6 @@ import {
   isLocalStripeBankTransferMockEnabled,
   isLocalStripeBankTransferTestEnabled,
 } from "@/lib/payments/stripeBankTransfer";
-import { retrieveLocalStripeTestSessionSummary } from "@/lib/payments/stripeServer";
 
 export default async function OrderSuccessPage({
   searchParams,
@@ -19,16 +20,12 @@ export default async function OrderSuccessPage({
 }) {
   const { order = "CNF-UK-10023", payment, amount, session_id: sessionId } = await searchParams;
   if (payment === "mock" && !isLocalStripeBankTransferMockEnabled()) notFound();
-  if (payment === "stripe_test" && (!isLocalStripeBankTransferTestEnabled() || order !== "LOCAL-CNF-TEST" || !sessionId)) notFound();
-
-  let stripeTestSession = null;
-  if (payment === "stripe_test" && sessionId) {
-    try {
-      stripeTestSession = await retrieveLocalStripeTestSessionSummary(sessionId);
-    } catch {
-      notFound();
-    }
-  }
+  const isStripeTestReturn = payment === "stripe_test";
+  if (isStripeTestReturn && (
+    !isLocalStripeBankTransferTestEnabled()
+    || !/^CNF-[A-Za-z0-9-]{1,72}$/.test(order)
+    || !/^cs_test_[A-Za-z0-9]+$/.test(sessionId || "")
+  )) notFound();
 
   const amountMinor = Number(amount);
   const localMockTotal = isLocalStripeBankTransferMockEnabled()
@@ -37,7 +34,7 @@ export default async function OrderSuccessPage({
     && Number.isSafeInteger(amountMinor)
     && amountMinor > 0
     ? amountMinor / 100
-    : stripeTestSession?.amountTotal === 5700 ? stripeTestSession.amountTotal / 100 : undefined;
+    : undefined;
   const settings = await fetchSiteSettings();
   const whatsappUrl = getOrderConfirmationWhatsappUrl(settings, order);
 
@@ -51,26 +48,21 @@ export default async function OrderSuccessPage({
       </div>
       <h1>{localMockTotal === undefined ? "Order placed" : "Returned to CNFANS"}</h1>
       <p className="success-order-number" title={`#${order}`}>Order #{order}</p>
-      <p className="success-payment-status">
-        {stripeTestSession
-          ? `Stripe test session ${stripeTestSession.status}; payment remains pending confirmation.`
-          : localMockTotal === undefined
+      {isStripeTestReturn ? (
+        <StripePaymentStatus
+          order={order}
+          sessionId={sessionId!}
+          initialPaymentStatus="unpaid"
+        />
+      ) : (
+        <p className="success-payment-status">
+          {localMockTotal === undefined
             ? orderPaymentStageLabel(getOrderPaymentStage({ status: "payment_submitted" }), "en")
             : "Bank transfer pending — waiting for payment confirmation"}
-      </p>
-      <p className="success-copy">
-        {stripeTestSession
-          ? "This local Stripe test did not create a CNFANS order. No payment is marked as confirmed."
-          : localMockTotal === undefined
-            ? "Please confirm your order details with us on WhatsApp."
-            : "This is a local payment simulation. No order or payment has been created."}
-      </p>
-      <p className="success-copy success-copy-secondary">
-        {stripeTestSession
-          ? `Stripe reports payment status “${stripeTestSession.paymentStatus}”. This page intentionally remains pending and does not update an order.`
-          : localMockTotal === undefined
-            ? "We'll check your size, delivery details and payment before processing your order."
-            : "A real bank transfer would remain pending until confirmed by a verified provider notification."}
+        </p>
+      )}
+      <p className="success-copy success-order-note">
+        We&apos;ll verify your order with you on WhatsApp before processing.
       </p>
 
       <div className="success-actions">
@@ -96,6 +88,8 @@ export default async function OrderSuccessPage({
         </MetaPixelEventLink>
         <Link className="chan success-track" href="/track-order">Track order →</Link>
       </div>
+
+      <StripeBankTransferFallback sessionId={isStripeTestReturn ? sessionId : undefined} />
 
       <OrderConfirmationDetails orderNumber={order} localMockTotal={localMockTotal} />
 

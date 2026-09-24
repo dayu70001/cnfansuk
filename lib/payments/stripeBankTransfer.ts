@@ -14,14 +14,6 @@ export type StripeBankTransferCheckoutInput = {
 
 export type StripeBankTransferMode = "mock" | "test" | "disabled";
 
-export const LOCAL_STRIPE_TEST_FIXTURE = {
-  orderNumber: "LOCAL-CNF-TEST",
-  amountMinor: 5700,
-  currency: "GBP",
-  customerEmail: "stripe-test@example.com",
-  lineItemName: "Order payment",
-} as const;
-
 export type StripeBankTransferSessionDraft = {
   amountMinor: number;
   currency: "GBP";
@@ -33,12 +25,6 @@ export type StripeBankTransferSessionDraft = {
   customerId?: string;
   customerEmail?: string;
 };
-
-export const stripeBankTransferAsyncEvents = [
-  "checkout.session.completed",
-  "checkout.session.async_payment_succeeded",
-  "checkout.session.async_payment_failed",
-] as const;
 
 export function getLocalStripeBankTransferMode(env: NodeJS.ProcessEnv = process.env): StripeBankTransferMode {
   if (env.NODE_ENV !== "development") return "disabled";

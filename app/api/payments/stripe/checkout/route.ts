@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { loadAuthorizedOrder } from "@/lib/authorizedOrder";
 import {
   buildStripeBankTransferSessionDraft,
   getLocalStripeBankTransferMode,
@@ -21,21 +22,39 @@ export async function POST(request: Request) {
   } catch {
     return NextResponse.json({ error: "Invalid checkout request." }, { status: 400 });
   }
-
-  if (!body || typeof body !== "object") {
+  if (!body || typeof body !== "object" || Array.isArray(body)) {
     return NextResponse.json({ error: "Invalid checkout request." }, { status: 400 });
   }
 
   const input = body as Record<string, unknown>;
-  const orderNumber = typeof input.orderNumber === "string" ? input.orderNumber : "";
+  const orderNumber = typeof input.orderNumber === "string" ? input.orderNumber.trim() : "";
 
   if (mode === "test") {
-    if (!isLocalStripeBankTransferTestEnabled() || orderNumber !== "LOCAL-CNF-TEST") {
-      return NextResponse.json({ error: "Invalid local payment fixture." }, { status: 400 });
+    if (!isLocalStripeBankTransferTestEnabled() || !isLoopbackRequest(request)) {
+      return NextResponse.json({ error: "Stripe Test Mode is only available on this local device." }, { status: 403 });
+    }
+
+    const forbiddenClientAmounts = ["amount", "amountMinor", "currency", "subtotal", "shippingFee", "total", "price", "items"];
+    if (
+      forbiddenClientAmounts.some((key) => Object.hasOwn(input, key))
+      || typeof input.orderAccessToken !== "string"
+      || input.orderAccessToken.length > 512
+      || !/^CNF-[A-Za-z0-9-]{1,72}$/.test(orderNumber)
+    ) {
+      return NextResponse.json({ error: "Invalid order payment request." }, { status: 400 });
+    }
+
+    const loadedOrder = await loadAuthorizedOrder(orderNumber, input.orderAccessToken);
+    if (!loadedOrder.ok) {
+      return NextResponse.json({ error: loadedOrder.error }, { status: loadedOrder.status });
+    }
+    if (!Number.isFinite(loadedOrder.order.final_total) || loadedOrder.order.final_total <= 0) {
+      return NextResponse.json({ error: "The saved order total is invalid." }, { status: 409 });
     }
 
     try {
-      const checkout = await createLocalStripeTestCheckout();
+      const origin = localRequestOrigin(request);
+      const checkout = await createLocalStripeTestCheckout(loadedOrder.order, origin);
       return NextResponse.json(
         {
           mode: "test",
@@ -98,6 +117,31 @@ export async function POST(request: Request) {
     { mode: "mock", checkoutUrl: `${checkoutUrl.pathname}${checkoutUrl.search}` },
     { headers: { "Cache-Control": "no-store" } },
   );
+}
+
+function localRequestOrigin(request: Request) {
+  const origin = request.headers.get("origin");
+  const candidate = origin ? new URL(origin) : new URL(request.url);
+  if (candidate.protocol !== "http:" || !isLoopbackHostname(candidate.hostname)) {
+    throw new Error("Stripe Test Mode only supports a local return URL.");
+  }
+  return candidate.origin;
+}
+
+function isLoopbackRequest(request: Request) {
+  try {
+    const requestHost = request.headers.get("host");
+    if (!requestHost || !isLoopbackHostname(new URL(`http://${requestHost}`).hostname)) return false;
+    const origin = request.headers.get("origin");
+    return !origin || isLoopbackHostname(new URL(origin).hostname);
+  } catch {
+    return false;
+  }
+}
+
+function isLoopbackHostname(hostname: string) {
+  const normalisedHostname = hostname.replace(/^\[|\]$/g, "").toLowerCase();
+  return new Set(["localhost", "127.0.0.1", "::1"]).has(normalisedHostname);
 }
 
 function safeLogValue(value: unknown) {

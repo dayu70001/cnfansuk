@@ -53,41 +53,38 @@ test("Stripe Test Mode is disabled for missing or live keys and outside developm
   assert.equal(loadModule({ NODE_ENV: "production", STRIPE_BANK_TRANSFER_MODE: "test", STRIPE_SECRET_KEY: "sk_test_fixture_only" }).getLocalStripeBankTransferMode(), "disabled");
 });
 
-test("Stripe test fixture is fixed, fictional, and server-owned", () => {
-  const { LOCAL_STRIPE_TEST_FIXTURE } = loadModule({});
-  assert.deepEqual(JSON.parse(JSON.stringify(LOCAL_STRIPE_TEST_FIXTURE)), {
-    orderNumber: "LOCAL-CNF-TEST",
-    amountMinor: 5700,
-    currency: "GBP",
-    customerEmail: "stripe-test@example.com",
-    lineItemName: "Order payment",
-  });
+test("real Stripe Test Mode has no fixed LOCAL-CNF-TEST or £57 runtime fixture", () => {
+  assert.doesNotMatch(source, /LOCAL-CNF-TEST|5700|57\.00/);
 });
 
-test("Stripe Test Mode amount stays server-fixed when an untrusted amount is supplied", async () => {
+test("Stripe Test Mode amount and currency come from the persisted order, not an untrusted amount", async () => {
   let capturedSessionParams;
-  let createdCustomer = false;
+  let capturedCustomerParams;
+  let capturedCustomerOptions;
+  let capturedSessionOptions;
 
   class FakeStripe {
     constructor(secretKey) {
       assert.equal(secretKey, "sk_test_fixture_only");
       this.customers = {
-        list: async () => ({ data: [{ id: "cus_sandbox_fixture", livemode: false }] }),
-        create: async () => {
-          createdCustomer = true;
-          throw new Error("The existing Sandbox Customer should be reused.");
+        create: async (params, options) => {
+          capturedCustomerParams = params;
+          capturedCustomerOptions = options;
+          return { id: "cus_sandbox_fixture", livemode: false };
         },
       };
       this.checkout = {
         sessions: {
-          create: async (params) => {
+          create: async (params, options) => {
             capturedSessionParams = params;
+            capturedSessionOptions = options;
             return {
               id: "cs_test_fixture",
               livemode: false,
-              amount_total: 5700,
+              mode: "payment",
+              amount_total: 11700,
               currency: "gbp",
-              client_reference_id: "LOCAL-CNF-TEST",
+              client_reference_id: "CNF-TEST-ORDER",
               payment_method_types: ["customer_balance"],
               url: "https://checkout.stripe.com/c/pay/cs_test_fixture",
             };
@@ -98,12 +95,12 @@ test("Stripe Test Mode amount stays server-fixed when an untrusted amount is sup
   }
 
   const loadedModule = { exports: {} };
-  const fixture = {
-    orderNumber: "LOCAL-CNF-TEST",
-    amountMinor: 5700,
+  const persistedOrder = {
+    order_number: "CNF-TEST-ORDER",
+    email: "customer@example.invalid",
+    final_total: 117,
     currency: "GBP",
-    customerEmail: "stripe-test@example.com",
-    lineItemName: "Order payment",
+    amountMinor: 100,
   };
   vm.runInNewContext(compiledStripeServer, {
     module: loadedModule,
@@ -114,19 +111,18 @@ test("Stripe Test Mode amount stays server-fixed when an untrusted amount is sup
       if (id === "server-only") return {};
       if (id === "stripe") return { __esModule: true, default: FakeStripe };
       if (id === "@/lib/payments/stripeBankTransfer") {
-        return {
-          isLocalStripeBankTransferTestEnabled: () => true,
-          LOCAL_STRIPE_TEST_FIXTURE: fixture,
-        };
+        return { isLocalStripeBankTransferTestEnabled: () => true };
       }
       throw new Error(`Unexpected module import: ${id}`);
     },
   });
 
   const { createLocalStripeTestCheckout } = loadedModule.exports;
-  await createLocalStripeTestCheckout({ amountMinor: 100 });
+  const checkout = await createLocalStripeTestCheckout(persistedOrder, "http://localhost:4000");
 
-  assert.equal(createdCustomer, false);
+  assert.deepEqual(JSON.parse(JSON.stringify(capturedCustomerParams)), { email: "customer@example.invalid" });
+  assert.deepEqual(JSON.parse(JSON.stringify(capturedCustomerOptions)), { idempotencyKey: "cnfans-stripe-customer:CNF-TEST-ORDER" });
+  assert.deepEqual(JSON.parse(JSON.stringify(capturedSessionOptions)), { idempotencyKey: "cnfans-stripe-checkout:CNF-TEST-ORDER" });
   assert.deepEqual(JSON.parse(JSON.stringify(Object.keys(capturedSessionParams))), [
     "mode",
     "customer",
@@ -136,12 +132,16 @@ test("Stripe Test Mode amount stays server-fixed when an untrusted amount is sup
     "cancel_url",
   ]);
   assert.equal(capturedSessionParams.customer, "cus_sandbox_fixture");
-  assert.equal(capturedSessionParams.line_items[0].price_data.unit_amount, 5700);
+  assert.equal(capturedSessionParams.line_items[0].price_data.unit_amount, 11700);
   assert.equal(capturedSessionParams.line_items[0].price_data.currency, "gbp");
   assert.equal(capturedSessionParams.line_items[0].price_data.product_data.name, "Order payment");
-  assert.equal(capturedSessionParams.client_reference_id, "LOCAL-CNF-TEST");
+  assert.equal(capturedSessionParams.client_reference_id, "CNF-TEST-ORDER");
   assert.equal(capturedSessionParams.success_url.startsWith("http://localhost:"), true);
   assert.equal(capturedSessionParams.cancel_url.startsWith("http://localhost:"), true);
+  assert.equal(checkout.amountTotal, 11700);
+  assert.equal(checkout.currency, "gbp");
+  assert.equal(checkout.clientReferenceId, "CNF-TEST-ORDER");
+  assert.deepEqual(JSON.parse(JSON.stringify(checkout.paymentMethodTypes)), ["customer_balance"]);
   assert.equal(Object.hasOwn(capturedSessionParams, "payment_method_types"), false);
   assert.equal(Object.hasOwn(capturedSessionParams, "allowed_payment_method_types"), false);
   assert.equal(Object.hasOwn(capturedSessionParams, "payment_method_configuration"), false);
@@ -151,6 +151,8 @@ test("Stripe Test Mode amount stays server-fixed when an untrusted amount is sup
     .split('if (mode === "test")')[1]
     ?.split("if (!isLocalStripeBankTransferMockEnabled())")[0];
   assert.ok(testModeRoute);
-  assert.match(testModeRoute, /createLocalStripeTestCheckout\(\)/);
-  assert.doesNotMatch(testModeRoute, /amountMinor/);
+  assert.match(testModeRoute, /loadAuthorizedOrder\(orderNumber, input\.orderAccessToken\)/);
+  assert.match(testModeRoute, /createLocalStripeTestCheckout\(loadedOrder\.order, origin\)/);
+  assert.match(testModeRoute, /forbiddenClientAmounts/);
+  assert.doesNotMatch(testModeRoute, /input\.amountMinor/);
 });

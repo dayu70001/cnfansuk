@@ -76,11 +76,12 @@ export function OrderConfirmationDetails({
   if (localMockTotal !== undefined) {
     return (
       <div className="order-confirmation-details">
-        <section className="confirmation-card" aria-label="Local demo order summary">
-          <p className="eyebrow">Local demo summary</p>
+        <section className="confirmation-card" aria-label="Local test order details">
+          <p className="eyebrow">Order details · Local test</p>
           <div className="confirmation-item"><span>Example clothing item · Size M · Qty 1</span><strong>{formatMoney(localMockTotal, "GBP")}</strong></div>
-          <div className="confirmation-total-row"><span>Subtotal and delivery</span><strong>{formatMoney(localMockTotal, "GBP")}</strong></div>
-          <div className="confirmation-total-row confirmation-grand-total"><span>Demo total</span><strong>{formatMoney(localMockTotal, "GBP")}</strong></div>
+          <div className="confirmation-total-row"><span>Subtotal</span><strong>{formatMoney(localMockTotal, "GBP")}</strong></div>
+          <div className="confirmation-total-row"><span>Shipping · local test fixture</span><strong>£0.00</strong></div>
+          <div className="confirmation-total-row confirmation-grand-total"><span>Total</span><strong>{formatMoney(localMockTotal, "GBP")}</strong></div>
         </section>
         <section className="confirmation-card" aria-label="Local demo delivery details">
           <p className="eyebrow">Delivery details</p>

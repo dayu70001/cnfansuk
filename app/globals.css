@@ -2834,6 +2834,10 @@ select {
   line-height: 1.55;
 }
 
+.checkout-bank-transfer-followup {
+  margin-top: 8px;
+}
+
 .checkout-bank-intro {
   display: grid;
   gap: 6px;
@@ -3022,6 +3026,55 @@ select {
 .success-copy-secondary {
   margin-bottom: 0;
   font-size: 13px;
+}
+
+.stripe-payment-status {
+  margin: -6px auto 14px;
+  padding: 0;
+}
+
+.stripe-payment-status .success-payment-status {
+  margin: 0 auto 8px;
+}
+
+.stripe-payment-status-error {
+  margin: 0;
+  color: #8b3b30;
+  font-size: 12px;
+}
+
+.stripe-bank-transfer-fallback {
+  max-width: 420px;
+  margin: 16px auto 0;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--paper-muted);
+  padding: 14px 16px;
+}
+
+.stripe-bank-transfer-fallback p {
+  margin: 0 0 10px;
+  color: var(--ink-soft);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.stripe-bank-transfer-fallback-link {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--ink);
+  border-radius: 8px;
+  padding: 0 16px;
+  color: var(--ink);
+  font-size: 14px;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.stripe-bank-transfer-fallback-link:hover {
+  background: var(--paper);
 }
 
 .ticket {
@@ -5686,35 +5739,43 @@ select {
   }
 
   .success-wrap {
-    padding: 34px max(16px, env(safe-area-inset-right)) calc(56px + env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
+    padding: 18px max(16px, env(safe-area-inset-right)) calc(48px + env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
   }
 
   .success-check {
-    width: 50px;
-    height: 50px;
-    margin-bottom: 16px;
+    width: 44px;
+    height: 44px;
+    margin-bottom: 10px;
   }
 
   .success-wrap h1 {
-    font-size: clamp(30px, 8vw, 32px);
+    margin: 0 0 6px;
+    font-size: clamp(29px, 7.5vw, 31px);
     line-height: 1.15;
     white-space: nowrap;
   }
 
   .success-order-number {
-    margin-bottom: 14px;
-    font-size: clamp(22px, 6vw, 24px);
+    margin-bottom: 8px;
+    font-size: clamp(21px, 5.6vw, 23px);
     line-height: 1.2;
   }
 
-  .success-copy {
-    margin-bottom: 6px;
-    font-size: 16px;
-    line-height: 1.48;
+  .success-payment-status,
+  .stripe-payment-status {
+    margin: 0 auto 10px;
   }
 
-  .success-copy-secondary {
+  .stripe-payment-status .success-payment-status {
+    margin: 0 auto;
     font-size: 14px;
+    line-height: 1.35;
+  }
+
+  .success-copy {
+    margin-bottom: 0;
+    font-size: 15px;
+    line-height: 1.4;
   }
 
   .ticket {
@@ -5887,7 +5948,8 @@ select {
 
   .success-actions {
     grid-template-columns: 1fr;
-    margin-top: 18px;
+    gap: 8px;
+    margin-top: 12px;
   }
 
   .support-band .button-row {
@@ -7961,4 +8023,35 @@ body {
 
 .cart-drawer .empty-state .secondary-button {
   width: fit-content;
+}
+
+@media (max-width: 600px) {
+  .checkout-payment-summary {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0;
+    padding: 12px 16px;
+  }
+
+  .checkout-payment-summary > div {
+    grid-template-columns: minmax(88px, 0.55fr) minmax(0, 1.45fr);
+    align-items: baseline;
+    gap: 12px;
+    border-bottom: 1px solid var(--line);
+    padding: 11px 0;
+  }
+
+  .checkout-payment-summary > div:last-child {
+    border-bottom: 0;
+  }
+
+  .checkout-payment-summary span {
+    font-size: 10px;
+  }
+
+  .checkout-payment-summary strong {
+    min-width: 0;
+    font-size: 15px;
+    line-height: 1.4;
+    overflow-wrap: anywhere;
+  }
 }
