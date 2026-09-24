@@ -2,7 +2,6 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { OrderConfirmationDetails } from "@/components/OrderConfirmationDetails";
 import { OrderSuccessLead } from "@/components/OrderSuccessLead";
-import { StripeBankTransferFallback } from "@/components/StripeBankTransferFallback";
 import { StripePaymentStatus } from "@/components/StripePaymentStatus";
 import { MetaPixelEventLink } from "@/components/MetaPixelEventLink";
 import { getDirectWhatsappLinkFromSettings } from "@/lib/contactLinks";
@@ -88,8 +87,6 @@ export default async function OrderSuccessPage({
         </MetaPixelEventLink>
         <Link className="chan success-track" href="/track-order">Track order →</Link>
       </div>
-
-      <StripeBankTransferFallback sessionId={isStripeTestReturn ? sessionId : undefined} />
 
       <OrderConfirmationDetails orderNumber={order} localMockTotal={localMockTotal} />
 

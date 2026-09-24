@@ -1,6 +1,12 @@
 export const LOCAL_STRIPE_FALLBACK_STORAGE_KEY = "cnfansuk-local-stripe-bank-transfer-fallback";
 
+export function getLocalStripeFallbackStorageKey(orderNumber: string): string | null {
+  if (!/^CNF-[A-Za-z0-9-]{1,72}$/.test(orderNumber)) return null;
+  return `${LOCAL_STRIPE_FALLBACK_STORAGE_KEY}:${orderNumber}`;
+}
+
 export type LocalStripeFallback = {
+  orderNumber: string;
   sessionId: string;
   checkoutUrl: string;
 };
@@ -10,7 +16,13 @@ export function getLocalStripeTestSessionId(checkoutUrl: string | undefined): st
 
   try {
     const url = new URL(checkoutUrl);
-    if (url.protocol !== "https:" || url.hostname !== "checkout.stripe.com") return null;
+    if (
+      url.protocol !== "https:"
+      || url.hostname !== "checkout.stripe.com"
+      || url.port
+      || url.username
+      || url.password
+    ) return null;
     const match = url.pathname.match(/^\/c\/pay\/(cs_test_[A-Za-z0-9]+)$/);
     return match?.[1] || null;
   } catch {
@@ -41,24 +53,38 @@ export function buildLocalStripeSuccessUrl(checkoutUrl: string, origin: string, 
   }
 }
 
-export function serializeLocalStripeFallback(checkoutUrl: string): string | null {
+export function serializeLocalStripeFallback(checkoutUrl: string, orderNumber: string): string | null {
   const sessionId = getLocalStripeTestSessionId(checkoutUrl);
-  return sessionId ? JSON.stringify({ sessionId, checkoutUrl }) : null;
+  if (!sessionId || !getLocalStripeFallbackStorageKey(orderNumber)) return null;
+  return JSON.stringify({ orderNumber, sessionId, checkoutUrl });
 }
 
 export function parseLocalStripeFallback(
   serialized: string | null,
   expectedSessionId: string,
+  expectedOrderNumber: string,
 ): string | null {
-  if (!serialized || !/^cs_test_[A-Za-z0-9]+$/.test(expectedSessionId)) return null;
+  if (
+    !serialized
+    || !/^cs_test_[A-Za-z0-9]+$/.test(expectedSessionId)
+    || !getLocalStripeFallbackStorageKey(expectedOrderNumber)
+  ) return null;
 
   try {
     const fallback = JSON.parse(serialized) as Partial<LocalStripeFallback>;
-    if (fallback.sessionId !== expectedSessionId || typeof fallback.checkoutUrl !== "string") return null;
+    if (
+      fallback.orderNumber !== expectedOrderNumber
+      || fallback.sessionId !== expectedSessionId
+      || typeof fallback.checkoutUrl !== "string"
+    ) return null;
     return getLocalStripeTestSessionId(fallback.checkoutUrl) === expectedSessionId
       ? fallback.checkoutUrl
       : null;
   } catch {
     return null;
   }
+}
+
+export function shouldShowLocalStripeFallback(paymentStatus: string, checkoutUrl: string | null): boolean {
+  return paymentStatus !== "paid" && checkoutUrl !== null;
 }

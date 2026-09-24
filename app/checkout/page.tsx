@@ -26,7 +26,7 @@ import type { CartItem, CustomerDetails } from "@/lib/types";
 import { getOrderAccessTokenStorageKey } from "@/lib/orderAccessTokenKey";
 import {
   buildLocalStripeSuccessUrl,
-  LOCAL_STRIPE_FALLBACK_STORAGE_KEY,
+  getLocalStripeFallbackStorageKey,
   serializeLocalStripeFallback,
 } from "@/lib/stripeCheckoutHandoff";
 
@@ -462,11 +462,6 @@ export default function CheckoutPage() {
 
     let paymentWindow: Window | null = null;
     if (localStripeMode === "test") {
-      try {
-        window.sessionStorage.removeItem(LOCAL_STRIPE_FALLBACK_STORAGE_KEY);
-      } catch {
-        // A previous fallback is optional; the current user gesture still opens Stripe when allowed.
-      }
       // Open synchronously during the real click so browser popup blockers allow the later Stripe URL.
       try {
         paymentWindow = window.open("about:blank", "_blank");
@@ -511,35 +506,38 @@ export default function CheckoutPage() {
         return;
       }
       if (localStripeMode === "test" && result.checkoutUrl && localSuccessUrl) {
-        let paymentTabReady = Boolean(paymentWindow && !paymentWindow.closed);
-        if (paymentTabReady && paymentWindow) {
+        const fallbackKey = getLocalStripeFallbackStorageKey(order.orderNumber);
+        const serializedFallback = serializeLocalStripeFallback(result.checkoutUrl, order.orderNumber);
+        let fallbackSaved = false;
+        if (fallbackKey && serializedFallback) {
+          try {
+            // Persist the validated existing Session before navigating either tab.
+            window.sessionStorage.setItem(fallbackKey, serializedFallback);
+            fallbackSaved = true;
+          } catch {
+            fallbackSaved = false;
+          }
+        }
+
+        if (paymentWindow && !paymentWindow.closed) {
           try {
             paymentWindow.location.replace(result.checkoutUrl);
           } catch {
             paymentWindow.close();
-            paymentTabReady = false;
+            paymentWindow = null;
           }
         }
 
-        if (!paymentTabReady) {
-          let fallbackSaved = false;
-          const serializedFallback = serializeLocalStripeFallback(result.checkoutUrl);
-          if (serializedFallback) {
-            try {
-              window.sessionStorage.setItem(LOCAL_STRIPE_FALLBACK_STORAGE_KEY, serializedFallback);
-              fallbackSaved = true;
-            } catch {
-              fallbackSaved = false;
-            }
-          }
-
-          if (!fallbackSaved) {
-            setLocalStripeFallbackUrl(result.checkoutUrl);
-            setSubmitError("Pop-ups were blocked. Use Open Bank Transfer below; it will reuse this Stripe session.");
-            return;
-          }
+        if (!fallbackSaved) {
+          // If sessionStorage is unavailable, stay on Checkout with the in-memory
+          // same-Session link instead of leaving the customer without recovery.
+          setLocalStripeFallbackUrl(result.checkoutUrl);
+          setSubmitError("This browser could not save a payment recovery link. Keep this tab open and use Open Bank Transfer below.");
+          return;
         }
 
+        // The same validated Session is now recoverable on Order Success even if
+        // this popup is blocked or the customer closes the Stripe tab later.
         window.location.assign(localSuccessUrl);
         return;
       }
