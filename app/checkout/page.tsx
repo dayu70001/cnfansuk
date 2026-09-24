@@ -26,6 +26,7 @@ import type { CartItem, CustomerDetails } from "@/lib/types";
 import { getOrderAccessTokenStorageKey } from "@/lib/orderAccessTokenKey";
 
 type CheckoutStep = "details" | "delivery" | "payment";
+type LocalStripeMode = "mock" | "test";
 
 type ContactForm = {
   email: string;
@@ -119,6 +120,7 @@ type PersistedCheckout = {
   contact: ContactForm;
   shipping: ShippingForm;
   shippingMethodId: ShippingMethodId;
+  localStripeMode?: LocalStripeMode;
   order: Omit<CheckoutOrder, "orderAccessToken"> | null;
 };
 
@@ -149,6 +151,7 @@ export default function CheckoutPage() {
     phone: "",
   });
   const [checkoutSessionId, setCheckoutSessionId] = useState("");
+  const [localStripeMode, setLocalStripeMode] = useState<LocalStripeMode | null>(null);
   const [order, setOrder] = useState<CheckoutOrder | null>(null);
   const [hydrated, setHydrated] = useState(false);
 
@@ -171,6 +174,7 @@ export default function CheckoutPage() {
           if (saved.contact?.email !== undefined) setContact({ email: saved.contact.email });
           if (saved.shipping) setShipping((current) => ({ ...current, ...saved.shipping }));
           if (saved.shippingMethodId && shippingMethods.some((method) => method.id === saved.shippingMethodId)) setShippingMethodId(saved.shippingMethodId);
+          if (saved.localStripeMode === "mock" || saved.localStripeMode === "test") setLocalStripeMode(saved.localStripeMode);
           if (saved.order?.orderNumber) {
             const orderAccessToken = window.sessionStorage.getItem(getOrderAccessTokenStorageKey(saved.order.orderNumber));
             setOrder({ ...saved.order, orderAccessToken });
@@ -199,6 +203,7 @@ export default function CheckoutPage() {
       contact,
       shipping,
       shippingMethodId,
+      localStripeMode: localStripeMode || undefined,
       order: persistedOrder,
     };
     try {
@@ -206,7 +211,7 @@ export default function CheckoutPage() {
     } catch {
       // Keep the in-memory checkout usable if browser storage is blocked.
     }
-  }, [checkoutSessionId, contact, hydrated, maxStep, order, shipping, shippingMethodId, step]);
+  }, [checkoutSessionId, contact, hydrated, localStripeMode, maxStep, order, shipping, shippingMethodId, step]);
 
   useEffect(() => {
     if (checkoutTracked.current || items.length === 0) return;
@@ -272,7 +277,7 @@ export default function CheckoutPage() {
   }
 
   async function continueToPayment() {
-    if (items.length === 0 || !validateDetails() || creatingOrder || !checkoutSessionId) return;
+    if ((items.length === 0 && process.env.NODE_ENV !== "development") || !validateDetails() || creatingOrder || !checkoutSessionId) return;
     setCreatingOrder(true);
     setSubmitError("");
     try {
@@ -287,17 +292,23 @@ export default function CheckoutPage() {
         }
 
         // Local checkout fails closed: never fall through to the Catalog API/Production Worker.
-        if (mode !== "mock") {
-          setSubmitError("Local checkout is disabled. Start the development server with STRIPE_BANK_TRANSFER_MODE=mock to use the payment simulation.");
+        if (mode !== "mock" && mode !== "test") {
+          setSubmitError("Local checkout is disabled. Configure a local Stripe mock or test mode to continue.");
+          return;
+        }
+        if (items.length === 0 && mode !== "test") {
+          setSubmitError("The local Stripe Test Mode fixture is required when the cart is empty.");
           return;
         }
 
+        const localTotal = mode === "test" ? 57 : total;
+        setLocalStripeMode(mode);
         setOrder({
           orderNumber: LOCAL_MOCK_ORDER_NUMBER,
-          subtotal,
-          shippingFee: shippingPrice,
-          finalTotal: total,
-          total,
+          subtotal: mode === "test" ? 57 : subtotal,
+          shippingFee: mode === "test" ? 0 : shippingPrice,
+          finalTotal: localTotal,
+          total: localTotal,
           currency: "GBP",
           status: "awaiting_payment",
           paymentStage: "awaiting_payment",
@@ -413,7 +424,7 @@ export default function CheckoutPage() {
   }
 
   async function continueToLocalBankPayment() {
-    if (!order || order.orderNumber !== LOCAL_MOCK_ORDER_NUMBER || submitting) return;
+    if (!order || order.orderNumber !== LOCAL_MOCK_ORDER_NUMBER || !localStripeMode || submitting) return;
     setSubmitting(true);
     setSubmitError("");
     try {
@@ -427,11 +438,21 @@ export default function CheckoutPage() {
         }),
       });
       const result = await response.json().catch(() => ({})) as { checkoutUrl?: string; error?: string };
-      if (!response.ok || !result.checkoutUrl || !result.checkoutUrl.startsWith("/checkout/stripe-mock?")) {
+      const isMockUrl = result.checkoutUrl?.startsWith("/checkout/stripe-mock?") === true;
+      const isStripeTestUrl = isSafeStripeCheckoutUrl(result.checkoutUrl);
+      if (
+        !response.ok
+        || (localStripeMode === "mock" && !isMockUrl)
+        || (localStripeMode === "test" && !isStripeTestUrl)
+      ) {
         setSubmitError(result.error || "The local payment simulation could not be started.");
         return;
       }
-      router.push(result.checkoutUrl);
+      if (localStripeMode === "test" && result.checkoutUrl) {
+        window.location.assign(result.checkoutUrl);
+        return;
+      }
+      if (result.checkoutUrl) router.push(result.checkoutUrl);
     } catch {
       setSubmitError("The local payment simulation could not be reached.");
     } finally {
@@ -488,6 +509,7 @@ export default function CheckoutPage() {
           {step === "payment" ? (
             isLocalMockOrder ? (
               <LocalStripeBankTransferStep
+                mode={localStripeMode || "mock"}
                 total={order.total}
                 orderNumber={order.orderNumber}
                 submitting={submitting}
@@ -772,6 +794,7 @@ function DeliveryStep({
 }
 
 function LocalStripeBankTransferStep({
+  mode,
   total,
   orderNumber,
   submitting,
@@ -779,6 +802,7 @@ function LocalStripeBankTransferStep({
   onBack,
   onContinue,
 }: {
+  mode: LocalStripeMode;
   total: number;
   orderNumber: string;
   submitting: boolean;
@@ -796,7 +820,11 @@ function LocalStripeBankTransferStep({
         <div><span>Status</span><strong>Bank transfer pending</strong></div>
         <div><span>Amount due</span><strong>{formatMoney(total, "GBP")}</strong></div>
       </div>
-      <p className="checkout-submit-note">This local simulation does not create an order or start a real payment.</p>
+      <p className="checkout-submit-note">
+        {mode === "test"
+          ? "Local Stripe Test Mode only: LOCAL-CNF-TEST is a fixed £57 fixture. It creates no CNFANS order and cannot collect a live payment."
+          : "This local simulation does not create an order or start a real payment."}
+      </p>
       <div className="checkout-actions">
         <button className="checkout-back" type="button" onClick={onBack}>Back to Delivery</button>
         <button className="btn btn-solid" type="button" onClick={onContinue} disabled={submitting}>
@@ -1054,6 +1082,16 @@ function OrderSummary({
 
 function formatDeliveryPrice(price: number) {
   return price === 0 ? "Free" : formatMoney(price, "GBP");
+}
+
+function isSafeStripeCheckoutUrl(value: string | undefined): value is string {
+  if (!value) return false;
+  try {
+    const url = new URL(value);
+    return url.protocol === "https:" && url.hostname === "checkout.stripe.com" && url.pathname.startsWith("/c/");
+  } catch {
+    return false;
+  }
 }
 
 function createCheckoutSessionId() {

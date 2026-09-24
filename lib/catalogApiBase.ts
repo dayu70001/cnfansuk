@@ -30,7 +30,8 @@ export function resolveCatalogApiBase(env: CatalogApiEnvironment): string {
   const privateBase = env.CATALOG_API_BASE?.trim();
   const publicBase = env.NEXT_PUBLIC_CATALOG_API_BASE?.trim();
 
-  if (env.NODE_ENV === "development" && env.STRIPE_BANK_TRANSFER_MODE === "mock") {
+  if (env.NODE_ENV === "development"
+    && (env.STRIPE_BANK_TRANSFER_MODE === "mock" || env.STRIPE_BANK_TRANSFER_MODE === "test")) {
     const explicitBase = privateBase || publicBase;
     if (!explicitBase || !isSafeLocalTestApiBase(explicitBase)) {
       throw new Error(LOCAL_MOCK_ISOLATION_ERROR);

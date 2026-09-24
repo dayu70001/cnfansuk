@@ -12,6 +12,16 @@ export type StripeBankTransferCheckoutInput = {
   customerEmail?: string;
 };
 
+export type StripeBankTransferMode = "mock" | "test" | "disabled";
+
+export const LOCAL_STRIPE_TEST_FIXTURE = {
+  orderNumber: "LOCAL-CNF-TEST",
+  amountMinor: 5700,
+  currency: "GBP",
+  customerEmail: "stripe-test@example.com",
+  lineItemName: "Order payment",
+} as const;
+
 export type StripeBankTransferSessionDraft = {
   amountMinor: number;
   currency: "GBP";
@@ -30,8 +40,19 @@ export const stripeBankTransferAsyncEvents = [
   "checkout.session.async_payment_failed",
 ] as const;
 
+export function getLocalStripeBankTransferMode(env: NodeJS.ProcessEnv = process.env): StripeBankTransferMode {
+  if (env.NODE_ENV !== "development") return "disabled";
+  if (env.STRIPE_BANK_TRANSFER_MODE === "mock") return "mock";
+  if (env.STRIPE_BANK_TRANSFER_MODE === "test" && env.STRIPE_SECRET_KEY?.startsWith("sk_test_")) return "test";
+  return "disabled";
+}
+
 export function isLocalStripeBankTransferMockEnabled() {
-  return process.env.NODE_ENV === "development" && process.env.STRIPE_BANK_TRANSFER_MODE === "mock";
+  return getLocalStripeBankTransferMode() === "mock";
+}
+
+export function isLocalStripeBankTransferTestEnabled() {
+  return getLocalStripeBankTransferMode() === "test";
 }
 
 /** Whitelist only payment-reference and amount data; never copy order/cart fields. */

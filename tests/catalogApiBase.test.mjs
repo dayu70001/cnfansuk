@@ -42,6 +42,29 @@ test("development Stripe mock never falls back when local upstreams are unset", 
   }), /Production fallback is blocked/);
 });
 
+test("development Stripe test mode uses an explicitly configured local upstream", () => {
+  assert.equal(resolveCatalogApiBase({
+    NODE_ENV: "development",
+    STRIPE_BANK_TRANSFER_MODE: "test",
+    CATALOG_API_BASE: "http://localhost:4001/catalog///",
+  }), "http://localhost:4001/catalog");
+});
+
+test("development Stripe test mode blocks a Production Worker upstream", () => {
+  assert.throws(() => resolveCatalogApiBase({
+    NODE_ENV: "development",
+    STRIPE_BANK_TRANSFER_MODE: "test",
+    CATALOG_API_BASE: "https://cnfansuk-catalog-api.dayu70001.workers.dev",
+  }), /Production fallback is blocked/);
+});
+
+test("development Stripe test mode never falls back when local upstreams are unset", () => {
+  assert.throws(() => resolveCatalogApiBase({
+    NODE_ENV: "development",
+    STRIPE_BANK_TRANSFER_MODE: "test",
+  }), /Production fallback is blocked/);
+});
+
 test("Production retains the existing Worker fallback", () => {
   assert.equal(resolveCatalogApiBase({ NODE_ENV: "production" }),
     "https://cnfansuk-catalog-api.dayu70001.workers.dev");

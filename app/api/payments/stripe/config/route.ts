@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server";
-import { isLocalStripeBankTransferMockEnabled } from "@/lib/payments/stripeBankTransfer";
+import { getLocalStripeBankTransferMode } from "@/lib/payments/stripeBankTransfer";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
   return NextResponse.json(
-    { mode: isLocalStripeBankTransferMockEnabled() ? "mock" : "unconfigured" },
+    { mode: getLocalStripeBankTransferMode() === "disabled" ? "unconfigured" : getLocalStripeBankTransferMode() },
     { headers: { "Cache-Control": "no-store" } },
   );
 }
