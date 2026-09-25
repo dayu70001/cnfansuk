@@ -56,7 +56,7 @@ function loadHandler(source, { modules = {}, env = { NODE_ENV: "production" }, f
   return { ...loadedModule.exports, cookies, logs };
 }
 
-test("Live order creation sends the access token only as a scoped HttpOnly cookie", async () => {
+test("Live order creation issues narrowly scoped payment and processing access cookies", async () => {
   const calls = { worker: 0, cookieName: "", cookieValue: "" };
   const route = loadHandler(orderRouteSource, {
     modules: {
@@ -70,7 +70,9 @@ test("Live order creation sends the access token only as a scoped HttpOnly cooki
         getOrderAccessTokenCookieName: (number, purpose) => `cnfans-order-access-${purpose}-${number}`,
         getOrderAccessTokenCookiePath: (number, purpose) => purpose === "stripe"
           ? "/api/payments/stripe"
-          : `/api/orders/${number}/confirmation`,
+          : purpose === "processing"
+            ? "/payments/stripe/processing"
+            : `/api/orders/${number}/confirmation`,
       },
       "@/lib/orderAccessTokenCookie": {
         buildOrderAccessTokenCookie(name, value, cookiePath) {
@@ -87,9 +89,9 @@ test("Live order creation sends the access token only as a scoped HttpOnly cooki
   });
   const response = await route.POST({ text: async () => "{}", headers: new Headers({ host: "www.cnfans.co.uk", origin: "https://www.cnfans.co.uk" }) });
   assert.equal(calls.worker, 1);
-  assert.equal(calls.cookieName, "cnfans-order-access-confirmation-CNF-260924-1234");
+  assert.equal(calls.cookieName, "cnfans-order-access-processing-CNF-260924-1234");
   assert.equal(calls.cookieValue, "scoped-order-token-fixture");
-  assert.equal(response.cookieValues.length, 2);
+  assert.equal(response.cookieValues.length, 3);
   assert.deepEqual(JSON.parse(JSON.stringify(response.cookieValues)), [
     {
       name: "cnfans-order-access-stripe-CNF-260924-1234",
@@ -109,9 +111,60 @@ test("Live order creation sends the access token only as a scoped HttpOnly cooki
       path: "/api/orders/CNF-260924-1234/confirmation",
       maxAge: 604800,
     },
+    {
+      name: "cnfans-order-access-processing-CNF-260924-1234",
+      value: "scoped-order-token-fixture",
+      httpOnly: true,
+      secure: true,
+      sameSite: "lax",
+      path: "/payments/stripe/processing",
+      maxAge: 604800,
+    },
   ]);
   assert.equal(response.body.order.orderAccessToken, undefined);
   assert.equal(JSON.stringify(response.body).includes("scoped-order-token-fixture"), false);
+});
+
+test("local Test order creation scopes the start and processing cookies to loopback", async () => {
+  const route = loadHandler(orderRouteSource, {
+    env: { NODE_ENV: "development" },
+    modules: {
+      "@/lib/catalogApiBase": { getCatalogApiBase: () => "https://catalog.example.invalid" },
+      "@/lib/orderAccessToken": { createOrderAccessToken: () => "local-signed-order-token" },
+      "@/lib/payments/stripeBankTransfer": {
+        getStripeBankTransferMode: () => "test",
+        isStripeLiveProductionRequest: () => false,
+      },
+      "@/lib/orderAccessTokenKey": {
+        getOrderAccessTokenCookieName: (number, purpose) => `cnfans-order-access-${purpose}-${number}`,
+        getOrderAccessTokenCookiePath: (number, purpose) => purpose === "stripe"
+          ? "/api/payments/stripe"
+          : purpose === "processing"
+            ? "/payments/stripe/processing"
+            : `/api/orders/${number}/confirmation`,
+      },
+      "@/lib/orderAccessTokenCookie": {
+        buildOrderAccessTokenCookie: (name, value, cookiePath) => ({ name, value, httpOnly: true, secure: false, sameSite: "lax", path: cookiePath, maxAge: 604800 }),
+      },
+    },
+    fetch: async () => ({
+      ok: true,
+      status: 201,
+      json: async () => ({ order: { orderNumber: "CNF-260924-1235", finalTotal: 117 } }),
+    }),
+  });
+  const response = await route.POST(new Request("http://localhost:4000/api/orders", {
+    method: "POST",
+    headers: { host: "localhost:4000", origin: "http://localhost:4000" },
+    body: "{}",
+  }));
+  assert.equal(response.status, 201);
+  assert.equal(response.cookieValues.length, 2);
+  assert.deepEqual(JSON.parse(JSON.stringify(response.cookieValues.map(({ name, path, httpOnly }) => ({ name, path, httpOnly })))), [
+    { name: "cnfans-order-access-stripe-CNF-260924-1235", path: "/api/payments/stripe", httpOnly: true },
+    { name: "cnfans-order-access-processing-CNF-260924-1235", path: "/payments/stripe/processing", httpOnly: true },
+  ]);
+  assert.equal(response.body.order.orderAccessToken, "local-signed-order-token");
 });
 
 test("Live Checkout authorizes from the HttpOnly order cookie and rejects client-supplied totals", async () => {
@@ -328,7 +381,9 @@ test("Live access cookie reader selects only the order-specific cookie and cooki
         getOrderAccessTokenCookieName: (number, purpose = "stripe") => `cnfans-order-access-${purpose}-${number}`,
         getOrderAccessTokenCookiePath: (number, purpose = "stripe") => purpose === "stripe"
           ? "/api/payments/stripe"
-          : `/api/orders/${number}/confirmation`,
+          : purpose === "processing"
+            ? "/payments/stripe/processing"
+            : `/api/orders/${number}/confirmation`,
       };
       throw new Error(`Unexpected module import: ${id}`);
     },

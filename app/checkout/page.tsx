@@ -24,12 +24,7 @@ import {
 import { getOrderPaymentStage, orderPaymentStageLabel, type OrderPaymentStage, type RawOrderStatus } from "@/lib/orderStatus";
 import type { CartItem, CustomerDetails } from "@/lib/types";
 import { getOrderAccessTokenStorageKey } from "@/lib/orderAccessTokenKey";
-import {
-  getStripeSessionId,
-  isStripeCheckoutUrl,
-  isStripeLiveSuccessReturnUrl,
-  isStripeTestSuccessReturnUrl,
-} from "@/lib/stripeCheckoutHandoff";
+import { openStripeStartWindow } from "@/lib/stripeCheckoutHandoff";
 
 type CheckoutStep = "details" | "delivery" | "payment";
 type LocalStripeMode = "mock" | "test" | "live";
@@ -455,8 +450,7 @@ export default function CheckoutPage() {
       !order
       || !localStripeMode
       || (localStripeMode === "mock" && order.orderNumber !== LOCAL_MOCK_ORDER_NUMBER)
-      || (localStripeMode === "test" && (!order.orderAccessToken || !/^CNF-[A-Za-z0-9-]{1,72}$/.test(order.orderNumber)))
-      || (localStripeMode === "live" && !/^CNF-[A-Za-z0-9-]{1,72}$/.test(order.orderNumber))
+      || ((localStripeMode === "test" || localStripeMode === "live") && !/^CNF-[A-Za-z0-9-]{1,72}$/.test(order.orderNumber))
       || submitting
       || localStripeRequestInFlight.current
     ) return;
@@ -464,67 +458,42 @@ export default function CheckoutPage() {
     setSubmitting(true);
     setSubmitError("");
 
+    if (localStripeMode === "test" || localStripeMode === "live") {
+      const startUrl = `/api/payments/stripe/start?order=${encodeURIComponent(order.orderNumber)}`;
+      const opened = openStripeStartWindow(startUrl, (url, target) => window.open(url, target));
+      if (!opened) {
+        localStripeRequestInFlight.current = false;
+        setSubmitting(false);
+        setSubmitError("Unable to open payment page. Please try again.");
+        return;
+      }
+      router.replace(`/payments/stripe/processing?order=${encodeURIComponent(order.orderNumber)}`);
+      return;
+    }
+
     try {
       const response = await fetch("/api/payments/stripe/checkout", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(localStripeMode === "test"
-          ? { orderNumber: order.orderNumber, orderAccessToken: order.orderAccessToken }
-          : localStripeMode === "live"
-            ? { orderNumber: order.orderNumber }
-            : {
-              orderNumber: LOCAL_MOCK_ORDER_NUMBER,
-              amountMinor: Math.round(order.total * 100),
-              currency: "GBP",
-            }),
+        body: JSON.stringify({
+          orderNumber: LOCAL_MOCK_ORDER_NUMBER,
+          amountMinor: Math.round(order.total * 100),
+          currency: "GBP",
+        }),
       });
       const result = await response.json().catch(() => ({})) as {
-        mode?: "mock" | "test" | "live";
-        sessionId?: string;
+        mode?: "mock";
         checkoutUrl?: string;
-        returnUrl?: string;
         error?: string;
       };
       const isMockUrl = result.checkoutUrl?.startsWith("/checkout/stripe-mock?") === true;
-      const sessionId = localStripeMode === "test" || localStripeMode === "live"
-        ? getStripeSessionId(result.sessionId, localStripeMode)
-        : null;
-      const localReturnUrl = localStripeMode === "test"
-        && sessionId
-        && isStripeTestSuccessReturnUrl(result.returnUrl, sessionId, order.orderNumber, window.location.origin)
-        ? result.returnUrl!
-        : null;
-      const liveReturnUrl = localStripeMode === "live"
-        && sessionId
-        && isStripeLiveSuccessReturnUrl(result.returnUrl, sessionId, order.orderNumber)
-        ? result.returnUrl!
-        : null;
-      if (
-        !response.ok
-        || (localStripeMode === "mock" && (result.mode !== "mock" || !isMockUrl))
-        || (localStripeMode === "test" && (result.mode !== "test" || !sessionId || !isStripeCheckoutUrl(result.checkoutUrl) || !localReturnUrl))
-        || (localStripeMode === "live" && (result.mode !== "live" || !sessionId || !isStripeCheckoutUrl(result.checkoutUrl) || !liveReturnUrl))
-      ) {
-        setSubmitError(result.error || (localStripeMode === "live"
-          ? "The bank transfer could not be started. Please try again."
-          : "The local payment simulation could not be started."));
-        return;
-      }
-      if (localStripeMode === "test" || localStripeMode === "live") {
-        if (!result.checkoutUrl) {
-          setSubmitError(localStripeMode === "live"
-            ? "The bank transfer could not be started. Please try again."
-            : "The local payment simulation could not be started.");
-          return;
-        }
-        window.location.assign(result.checkoutUrl);
+      if (!response.ok || result.mode !== "mock" || !isMockUrl) {
+        setSubmitError(result.error || "The local payment simulation could not be started.");
         return;
       }
       if (result.checkoutUrl) router.push(result.checkoutUrl);
     } catch {
-      setSubmitError(localStripeMode === "live"
-        ? "The bank transfer service could not be reached. Please try again."
-        : "The local payment simulation could not be reached.");
+      setSubmitError("The local payment simulation could not be reached.");
     } finally {
       localStripeRequestInFlight.current = false;
       setSubmitting(false);

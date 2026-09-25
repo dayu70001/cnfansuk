@@ -19,6 +19,30 @@ export function isStripeCheckoutUrl(value: string | undefined): boolean {
   }
 }
 
+/** Open the real same-origin start route synchronously from the user gesture. */
+export function openStripeStartWindow(
+  startUrl: string,
+  openWindow: (url: string, target: string) => WindowProxy | null,
+): boolean {
+  let paymentWindow: WindowProxy | null;
+  try {
+    paymentWindow = openWindow(startUrl, "_blank");
+  } catch {
+    return false;
+  }
+  if (!paymentWindow) return false;
+
+  try {
+    // Avoid noopener in the window.open features string: browsers may return
+    // null for it, making popup-block detection impossible.
+    paymentWindow.opener = null;
+    return true;
+  } catch {
+    try { paymentWindow.close(); } catch { /* best-effort close */ }
+    return false;
+  }
+}
+
 export function getLocalStripeTestSessionId(sessionId: string | undefined): string | null {
   return getStripeSessionId(sessionId, "test");
 }

@@ -28,14 +28,28 @@ export async function POST(request: Request) {
   const orderAccessToken = createOrderAccessToken(orderNumber);
   const stripeAccessCookieName = stripeMode === "live" ? getOrderAccessTokenCookieName(orderNumber, "stripe") : null;
   const confirmationAccessCookieName = stripeMode === "live" ? getOrderAccessTokenCookieName(orderNumber, "confirmation") : null;
+  const processingAccessCookieName = stripeMode === "live" || (stripeMode === "test" && isLoopbackRequest(request))
+    ? getOrderAccessTokenCookieName(orderNumber, "processing")
+    : null;
+  const localStripeAccessCookieName = stripeMode === "test" && isLoopbackRequest(request)
+    ? getOrderAccessTokenCookieName(orderNumber, "stripe")
+    : null;
   const stripeAccessCookiePath = stripeMode === "live" ? getOrderAccessTokenCookiePath(orderNumber, "stripe") : null;
   const confirmationAccessCookiePath = stripeMode === "live" ? getOrderAccessTokenCookiePath(orderNumber, "confirmation") : null;
+  const processingAccessCookiePath = processingAccessCookieName
+    ? getOrderAccessTokenCookiePath(orderNumber, "processing")
+    : null;
+  const localStripeAccessCookiePath = localStripeAccessCookieName
+    ? getOrderAccessTokenCookiePath(orderNumber, "stripe")
+    : null;
   if (stripeMode === "live" && (
     !orderAccessToken
     || !stripeAccessCookieName
     || !confirmationAccessCookieName
+    || !processingAccessCookieName
     || !stripeAccessCookiePath
     || !confirmationAccessCookiePath
+    || !processingAccessCookiePath
   )) {
     return NextResponse.json({ error: "Order payment access could not be prepared." }, { status: 503 });
   }
@@ -52,11 +66,40 @@ export async function POST(request: Request) {
     && orderAccessToken
     && stripeAccessCookieName
     && confirmationAccessCookieName
+    && processingAccessCookieName
     && stripeAccessCookiePath
     && confirmationAccessCookiePath
+    && processingAccessCookiePath
   ) {
     nextResponse.cookies.set(buildOrderAccessTokenCookie(stripeAccessCookieName, orderAccessToken, stripeAccessCookiePath));
     nextResponse.cookies.set(buildOrderAccessTokenCookie(confirmationAccessCookieName, orderAccessToken, confirmationAccessCookiePath));
+    nextResponse.cookies.set(buildOrderAccessTokenCookie(processingAccessCookieName, orderAccessToken, processingAccessCookiePath));
+  } else if (
+    stripeMode === "test"
+    && orderAccessToken
+    && localStripeAccessCookieName
+    && localStripeAccessCookiePath
+    && processingAccessCookieName
+    && processingAccessCookiePath
+  ) {
+    nextResponse.cookies.set(buildOrderAccessTokenCookie(localStripeAccessCookieName, orderAccessToken, localStripeAccessCookiePath));
+    nextResponse.cookies.set(buildOrderAccessTokenCookie(processingAccessCookieName, orderAccessToken, processingAccessCookiePath));
   }
   return nextResponse;
+}
+
+function isLoopbackRequest(request: Request) {
+  try {
+    const requestHost = request.headers.get("host");
+    if (!requestHost || !isLoopbackHostname(new URL(`http://${requestHost}`).hostname)) return false;
+    const origin = request.headers.get("origin");
+    return !origin || isLoopbackHostname(new URL(origin).hostname);
+  } catch {
+    return false;
+  }
+}
+
+function isLoopbackHostname(hostname: string) {
+  const normalisedHostname = hostname.replace(/^\[|\]$/g, "").toLowerCase();
+  return new Set(["localhost", "127.0.0.1", "::1"]).has(normalisedHostname);
 }

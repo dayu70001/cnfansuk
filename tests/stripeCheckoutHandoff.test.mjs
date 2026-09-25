@@ -23,6 +23,7 @@ const {
   isStripeCheckoutUrl,
   isStripeLiveSuccessReturnUrl,
   isStripeTestSuccessReturnUrl,
+  openStripeStartWindow,
 } = loadedModule.exports;
 
 test("uses the explicit server-returned Session ID and accepts secure hosted URLs, including custom domains", () => {
@@ -69,25 +70,63 @@ test("Test return URL is server supplied, loopback scoped and bound to the expli
   assert.equal(isStripeTestSuccessReturnUrl(returnUrl, "cs_test_example123", "LOCAL-CNF-TEST", "http://localhost:4000"), false);
 });
 
-test("Live/Test checkout hands off in the current tab only after all server response checks pass", () => {
+test("opens a real same-origin Stripe start URL and severs opener synchronously", () => {
+  const handle = { opener: {}, close() { this.closed = true; } };
+  let call;
+  const opened = openStripeStartWindow(
+    "/api/payments/stripe/start?order=CNF-260924-1234",
+    (url, target) => {
+      call = { url, target };
+      return handle;
+    },
+  );
+  assert.equal(opened, true);
+  assert.deepEqual(call, {
+    url: "/api/payments/stripe/start?order=CNF-260924-1234",
+    target: "_blank",
+  });
+  assert.equal(handle.opener, null);
+  assert.equal(handle.closed, undefined);
+});
+
+test("popup blocked or opener isolation failure keeps the original checkout available", () => {
+  let calls = 0;
+  assert.equal(openStripeStartWindow("/api/payments/stripe/start?order=CNF-260924-1234", () => {
+    calls += 1;
+    return null;
+  }), false);
+  assert.equal(calls, 1);
+
+  const handle = { get opener() { return {}; }, set opener(_value) { throw new Error("blocked"); }, close() { this.closed = true; } };
+  assert.equal(openStripeStartWindow("/api/payments/stripe/start?order=CNF-260924-1234", () => handle), false);
+  assert.equal(handle.closed, true);
+});
+
+test("Live/Test checkout opens the start route before async work and processing is pending-only", () => {
   const start = checkoutSource.indexOf("async function continueToLocalBankPayment()");
   const end = checkoutSource.indexOf("const isLocalStripeOrder", start);
   const handler = checkoutSource.slice(start, end);
-  const createSession = handler.indexOf('await fetch("/api/payments/stripe/checkout"');
-  const validatedSessionNavigation = handler.indexOf("window.location.assign(result.checkoutUrl)");
-  assert.ok(createSession >= 0 && validatedSessionNavigation > createSession);
-  assert.doesNotMatch(handler, /window\.open|about:blank|paymentWindow|sessionStorage|fallbackCheckoutUrl|serializeLocalStripeFallback/);
-  assert.match(handler, /getStripeSessionId\(result\.sessionId, localStripeMode\)/);
-  assert.match(handler, /isStripeCheckoutUrl\(result\.checkoutUrl\)/);
-  assert.match(handler, /isStripeTestSuccessReturnUrl\(result\.returnUrl, sessionId, order\.orderNumber, window\.location\.origin\)/);
-  assert.match(handler, /isStripeLiveSuccessReturnUrl\(result\.returnUrl, sessionId, order\.orderNumber\)/);
-  assert.ok(handler.indexOf("isStripeTestSuccessReturnUrl") < validatedSessionNavigation);
-  assert.ok(handler.indexOf("isStripeLiveSuccessReturnUrl") < validatedSessionNavigation);
-  assert.doesNotMatch(handler, /window\.location\.assign\((?:localReturnUrl|liveReturnUrl)/);
+  const startWindow = handler.indexOf("openStripeStartWindow(startUrl");
+  const processingNavigation = handler.indexOf("router.replace(`/payments/stripe/processing?order=");
+  const mockRequest = handler.indexOf('await fetch("/api/payments/stripe/checkout"');
+  assert.ok(startWindow >= 0 && processingNavigation > startWindow);
+  assert.ok(mockRequest > processingNavigation);
+  assert.match(handler, /window\.open\(url, target\)/);
+  assert.match(handler, /Unable to open payment page\. Please try again\./);
+  assert.match(handler, /if \(!opened\)[\s\S]*?return;/);
+  assert.doesNotMatch(handler, /about:blank|paymentWindow|sessionStorage|fallbackCheckoutUrl|serializeLocalStripeFallback|window\.location\.assign/);
   assert.equal((handler.match(/await fetch\("\/api\/payments\/stripe\/checkout"/g) || []).length, 1);
   assert.match(handler, /localStripeRequestInFlight\.current/);
-  assert.match(handler, /finally\s*\{\s*localStripeRequestInFlight\.current = false;/);
+  assert.match(handler, /localStripeRequestInFlight\.current = false;\s*setSubmitting\(false\);\s*setSubmitError\("Unable to open payment page/);
   assert.match(checkoutSource, /<button className="btn btn-solid" type="button" onClick=\{onContinue\} disabled=\{submitting\}>/);
+  const processingSource = fs.readFileSync(path.join(currentDirectory, "..", "app", "payments", "stripe", "processing", "page.tsx"), "utf8");
+  assert.match(processingSource, /<h1>Payment processing<\/h1>/);
+  assert.match(processingSource, /Waiting for payment confirmation\./);
+  assert.match(processingSource, /Order #\{order\}/);
+  assert.match(processingSource, /Confirm order on WhatsApp/);
+  assert.match(processingSource, /getOrderAccessTokenFromCookieHeader\([^\n]*"processing"\)/);
+  assert.match(processingSource, /loadAuthorizedOrder\(order, accessToken\)/);
+  assert.doesNotMatch(processingSource, /Payment successful|Payment completed|Order completed|StripePaymentStatus|session_id/);
   assert.doesNotMatch(checkoutSource, /Open Bank Transfer/);
   assert.doesNotMatch(checkoutSource, /separate secure Stripe page|Keep this page open/);
   assert.doesNotMatch(source, /Fallback|fallback|sessionStorage/);
@@ -98,7 +137,7 @@ test("Live/Test checkout hands off in the current tab only after all server resp
   assert.match(statusComponentSource, /addEventListener\("visibilitychange"/);
 });
 
-test("same-tab checkout navigation does not affect server Session creation or Dynamic Payment Methods", () => {
+test("new-tab checkout navigation does not affect server Session creation or Dynamic Payment Methods", () => {
   const stripeServerSource = fs.readFileSync(path.join(currentDirectory, "..", "lib", "payments", "stripeServer.ts"), "utf8");
   const sessionCreator = stripeServerSource.slice(
     stripeServerSource.indexOf("export async function createStripeBankTransferCheckout"),
