@@ -100,9 +100,9 @@ const steps: { id: CheckoutStep; label: string }[] = [
 ];
 
 const bankDetails = [
-  ["Account name", "HE SHUO"],
-  ["Sort code", "608382"],
-  ["Account number", "58500616"],
+  ["Account name", "YUANZHONG BAO"],
+  ["Sort code", "00039045"],
+  ["Account number", "040001"],
   ["Bank", "Banking Circle S.A."],
 ] as const;
 
