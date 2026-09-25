@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import test from "node:test";
@@ -92,12 +93,122 @@ function loadHelper({ sessionPages = [], sessionToRetrieve = liveSession(), conf
     Math,
     URL,
     require(id) {
+      if (id === "node:crypto") return { createHash };
       if (id === "server-only") return {};
       if (id === "stripe") return { __esModule: true, default: FakeStripe };
       throw new Error(`Unexpected helper dependency: ${id}`);
     },
   });
   return { ...loadedModule.exports, calls };
+}
+
+const comparisonWindowStart = Math.floor(Date.parse("2026-09-25T00:00:00.000Z") / 1000);
+
+function comparisonSession(id, amountTotal, overrides = {}) {
+  return {
+    id,
+    created: comparisonWindowStart + 11 * 60 * 60 + 30 * 60,
+    livemode: true,
+    mode: "payment",
+    client_reference_id: amountTotal === 2300 ? targetOrder.order_number : "CNF-CONTROL-ORDER",
+    amount_total: amountTotal,
+    currency: "gbp",
+    status: "open",
+    payment_status: "unpaid",
+    payment_intent: null,
+    customer: `customer-${id}`,
+    payment_method_types: ["customer_balance"],
+    payment_method_configuration_details: { id: "config-shared-fixture" },
+    payment_method_options: {
+      customer_balance: { funding_type: "bank_transfer", bank_transfer: { type: "gb_bank_transfer" } },
+    },
+    locale: "en-GB",
+    ui_mode: "hosted",
+    payment_method_collection: "always",
+    billing_address_collection: "auto",
+    customer_creation: "if_required",
+    submit_type: "auto",
+    ...overrides,
+  };
+}
+
+function comparisonConfiguration(id = "config-shared-fixture", overrides = {}) {
+  return {
+    id,
+    active: true,
+    is_default: true,
+    livemode: true,
+    customer_balance: {
+      available: true,
+      display_preference: { preference: "on", value: "on", overridable: true },
+    },
+    ...overrides,
+  };
+}
+
+function loadComparisonHelper({ sessions, sessionsToRetrieve = sessions, configurations = {}, balances = {}, intents = {}, events = [] }) {
+  const calls = [];
+  class FakeStripe {
+    constructor(key, options) {
+      calls.push({ operation: "client.init", key, options });
+      this.checkout = { sessions: {
+        list: async (params) => {
+          calls.push({ operation: "sessions.list", params });
+          return { data: sessions, has_more: false };
+        },
+        retrieve: async (id) => {
+          calls.push({ operation: "sessions.retrieve", id });
+          return sessionsToRetrieve.find((session) => session.id === id);
+        },
+      } };
+      this.paymentMethodConfigurations = {
+        retrieve: async (id) => {
+          calls.push({ operation: "configurations.retrieve", id });
+          return configurations[id];
+        },
+        list: async () => ({ data: [], has_more: false }),
+      };
+      this.customers = {
+        retrieveCashBalance: async (id) => {
+          calls.push({ operation: "customers.retrieveCashBalance", id });
+          return balances[id];
+        },
+      };
+      this.paymentIntents = {
+        retrieve: async (id) => {
+          calls.push({ operation: "paymentIntents.retrieve", id });
+          return intents[id];
+        },
+      };
+      this.events = {
+        list: async (params) => {
+          calls.push({ operation: "events.list", params });
+          return { data: events, has_more: false };
+        },
+      };
+    }
+  }
+  const loadedModule = { exports: {} };
+  const compiled = ts.transpile(helperSource, { module: ts.ModuleKind.CommonJS, esModuleInterop: true });
+  vm.runInNewContext(compiled, {
+    module: loadedModule,
+    exports: loadedModule.exports,
+    process: { env: {} },
+    Date,
+    Math,
+    URL,
+    require(id) {
+      if (id === "node:crypto") return { createHash };
+      if (id === "server-only") return {};
+      if (id === "stripe") return { __esModule: true, default: FakeStripe };
+      throw new Error(`Unexpected helper dependency: ${id}`);
+    },
+  });
+  const fingerprints = {
+    control: createHash("sha256").update(sessions[0].id).digest("hex"),
+    failed: createHash("sha256").update(sessions[1].id).digest("hex"),
+  };
+  return { ...loadedModule.exports, calls, fingerprints };
 }
 
 function exactPage(...sessions) {
@@ -431,4 +542,190 @@ test("route returns only the fixed-order sanitized diagnostic with no-store head
   for (const forbidden of ["cs_live_", "cus_", "pi_", "pmc_", "sk_live_", "@", "address", "phone"]) {
     assert.equal(json.includes(forbidden), false, `route response must not contain ${forbidden}`);
   }
+});
+
+test("hashed control and failed Session fingerprints match exactly and compare safe fields only", async () => {
+  const control = comparisonSession("fixture-control-session", 4100);
+  const failed = comparisonSession("fixture-failed-session", 2300, { payment_intent: "fixture-failed-intent" });
+  const noise = comparisonSession("fixture-unrelated-session", 9999, { client_reference_id: "CNF-NOISE" });
+  const failedIntent = {
+    id: "fixture-failed-intent",
+    status: "requires_payment_method",
+    livemode: true,
+    amount: 2300,
+    currency: "gbp",
+    payment_method_types: ["customer_balance"],
+    last_payment_error: {
+      type: "invalid_request_error",
+      code: "payment_intent_payment_attempt_failed",
+      decline_code: "bank_account_declined",
+      param: "payment_method_data",
+      message: "The bank declined payment for person@example.test. Reference 1234567890; https://private.example.test/x",
+    },
+    next_action: null,
+    latest_charge: null,
+  };
+  const sharedConfiguration = comparisonConfiguration();
+  const helper = loadComparisonHelper({
+    sessions: [control, failed, noise],
+    configurations: { "config-shared-fixture": sharedConfiguration },
+    balances: {
+      "customer-fixture-control-session": {
+        livemode: true, available: { gbp: 0 }, settings: { reconciliation_mode: "automatic" },
+      },
+      "customer-fixture-failed-session": {
+        livemode: true, available: { gbp: 1750 }, settings: { reconciliation_mode: "manual" },
+      },
+      "customer-fixture-unrelated-session": {
+        livemode: true, available: { gbp: 0 }, settings: { reconciliation_mode: "automatic" },
+      },
+    },
+    intents: { "fixture-failed-intent": failedIntent },
+  });
+  const stripe = createLiveTestClient(helper);
+  const result = await helper.compareExistingLiveStripeSessions(stripe, targetOrder, helper.fingerprints);
+
+  assert.equal(result.kind, "diagnosed");
+  if (result.kind !== "diagnosed") return;
+  assert.equal(result.control.role, "CONTROL_METHOD_VISIBLE");
+  assert.equal(result.failed.role, "FAILED_AFTER_PAY_CLICK");
+  assert.equal(result.control.amountTotal, 4100);
+  assert.equal(result.failed.amountTotal, 2300);
+  assert.equal(result.control.clientReference, "PRESENT");
+  assert.equal(result.failed.clientReference, "MATCHED_ORDER");
+  assert.equal(result.samePaymentMethodConfiguration, true);
+  assert.equal(result.sessionPaymentMethodSetupDifference, false);
+  assert.equal(result.customerCashBalanceDifference, true);
+  assert.equal(result.failed.paymentIntent?.lastPaymentErrorPresent, true);
+  assert.equal(result.failed.paymentIntent?.status, "requires_payment_method");
+  assert.equal(result.bankTransferConfirmationRejected, true);
+  assert.equal(result.rootCauseConfirmed, true);
+  assert.equal(result.rootCauseLayer, "FAILED_PAYMENT_INTENT_LAST_ERROR");
+  assert.ok(result.differences.some((value) => value.startsWith("amount_total:")));
+  assert.ok(result.differences.some((value) => value.startsWith("cash_balance_gbp:")));
+  assert.ok(result.differences.some((value) => value.startsWith("cash_balance_reconciliation_mode:")));
+
+  const output = JSON.stringify(result);
+  for (const forbidden of [
+    "fixture-control-session", "fixture-failed-session", "fixture-failed-intent", "customer-fixture-",
+    "config-shared-fixture", "cs_live_", "cus_", "pi_", "pm_", "pmc_", "evt_", "sk_live_",
+    "client_secret", "person@example.test", "1234567890", "https://private.example.test",
+  ]) assert.equal(output.includes(forbidden), false, `comparison response must not contain ${forbidden}`);
+
+  const operations = helper.calls.map((call) => call.operation).filter((value) => value !== "client.init");
+  assert.deepEqual(operations, [
+    "sessions.list", "sessions.retrieve", "sessions.retrieve",
+    "configurations.retrieve", "configurations.retrieve",
+    "customers.retrieveCashBalance", "customers.retrieveCashBalance", "paymentIntents.retrieve",
+  ]);
+  assert.equal(operations.some((operation) => /create|update|confirm|fund/i.test(operation)), false);
+});
+
+test("different customer cash-balance settings are reported without treating missing PaymentIntents as proof", async () => {
+  const control = comparisonSession("fixture-control-session", 4100);
+  const failed = comparisonSession("fixture-failed-session", 2300);
+  const helper = loadComparisonHelper({
+    sessions: [control, failed],
+    configurations: { "config-shared-fixture": comparisonConfiguration() },
+    balances: {
+      "customer-fixture-control-session": {
+        livemode: true, available: { gbp: 0 }, settings: { reconciliation_mode: "automatic" },
+      },
+      "customer-fixture-failed-session": {
+        livemode: true, available: { gbp: 900 }, settings: { reconciliation_mode: "manual" },
+      },
+    },
+  });
+  const result = await helper.compareExistingLiveStripeSessions(createLiveTestClient(helper), targetOrder, helper.fingerprints);
+  assert.equal(result.kind, "diagnosed");
+  if (result.kind === "diagnosed") {
+    assert.equal(result.control.paymentIntentPresent, false);
+    assert.equal(result.failed.paymentIntentPresent, false);
+    assert.equal(result.customerCashBalanceDifference, true);
+    assert.equal(result.rootCauseConfirmed, false);
+    assert.equal(result.rootCauseLayer, "INSUFFICIENT_STRIPE_EVIDENCE");
+    assert.deepEqual(JSON.parse(JSON.stringify(result.failedRelevantEvents)), []);
+  }
+});
+
+test("requires_action plus display_bank_transfer_instructions proves instructions were created", async () => {
+  const control = comparisonSession("fixture-control-session", 4100);
+  const failed = comparisonSession("fixture-failed-session", 2300, { payment_intent: "fixture-failed-intent" });
+  const intent = {
+    id: "fixture-failed-intent", status: "requires_action", livemode: true, amount: 2300, currency: "gbp",
+    payment_method_types: ["customer_balance"], last_payment_error: null,
+    next_action: { type: "display_bank_transfer_instructions", display_bank_transfer_instructions: { hosted_instructions_url: "https://private.example.test" } },
+    latest_charge: null,
+  };
+  const helper = loadComparisonHelper({
+    sessions: [control, failed],
+    configurations: { "config-shared-fixture": comparisonConfiguration() },
+    balances: {
+      "customer-fixture-control-session": { livemode: true, available: { gbp: 0 }, settings: { reconciliation_mode: "automatic" } },
+      "customer-fixture-failed-session": { livemode: true, available: { gbp: 0 }, settings: { reconciliation_mode: "automatic" } },
+    },
+    intents: { "fixture-failed-intent": intent },
+  });
+  const result = await helper.compareExistingLiveStripeSessions(createLiveTestClient(helper), targetOrder, helper.fingerprints);
+  assert.equal(result.kind, "diagnosed");
+  if (result.kind === "diagnosed") {
+    assert.equal(result.bankTransferWasCreated, true);
+    assert.equal(result.failed.paymentIntent?.nextActionType, "display_bank_transfer_instructions");
+    assert.equal(result.rootCauseLayer, "STRIPE_CHECKOUT_DISPLAY_OR_SESSION_PRESENTATION");
+  }
+  assert.equal(JSON.stringify(result).includes("hosted_instructions_url"), false);
+  assert.equal(JSON.stringify(result).includes("private.example.test"), false);
+});
+
+test("no PaymentIntent uses linked allowlisted event types only and does not expose event IDs", async () => {
+  const control = comparisonSession("fixture-control-session", 4100);
+  const failed = comparisonSession("fixture-failed-session", 2300);
+  const helper = loadComparisonHelper({
+    sessions: [control, failed],
+    configurations: { "config-shared-fixture": comparisonConfiguration() },
+    balances: {
+      "customer-fixture-control-session": { livemode: true, available: { gbp: 0 }, settings: { reconciliation_mode: "automatic" } },
+      "customer-fixture-failed-session": { livemode: true, available: { gbp: 0 }, settings: { reconciliation_mode: "automatic" } },
+    },
+    events: [
+      { id: "event-sensitive-one", type: "checkout.session.async_payment_failed", data: { object: { id: failed.id } } },
+      { id: "event-sensitive-two", type: "payment_intent.payment_failed", data: { object: { id: "unlinked-intent" } } },
+      { id: "event-sensitive-three", type: "customer.updated", data: { object: { id: failed.id } } },
+    ],
+  });
+  const result = await helper.compareExistingLiveStripeSessions(createLiveTestClient(helper), targetOrder, helper.fingerprints);
+  assert.equal(result.kind, "diagnosed");
+  if (result.kind === "diagnosed") {
+    assert.deepEqual(JSON.parse(JSON.stringify(result.failedRelevantEvents)), ["checkout.session.async_payment_failed"]);
+    assert.equal(result.failedEventSearchComplete, true);
+    assert.equal(result.rootCauseConfirmed, false);
+    assert.equal(result.rootCauseLayer, "STRIPE_EVENT_EVIDENCE_WITHOUT_PAYMENT_ERROR_DETAIL");
+  }
+  for (const forbidden of ["event-sensitive-one", "event-sensitive-two", "event-sensitive-three", "unlinked-intent"]) {
+    assert.equal(JSON.stringify(result).includes(forbidden), false);
+  }
+});
+
+test("two exact fingerprint matches are required; search and read failures stay sanitized", async () => {
+  const control = comparisonSession("fixture-control-session", 4100);
+  const failed = comparisonSession("fixture-failed-session", 2300);
+  const helper = loadComparisonHelper({
+    sessions: [control, failed, control],
+    configurations: { "config-shared-fixture": comparisonConfiguration() },
+    balances: {},
+  });
+  const result = await helper.compareExistingLiveStripeSessions(createLiveTestClient(helper), targetOrder, helper.fingerprints);
+  assert.equal(result.kind, "SESSION_MATCH_COUNT_MISMATCH");
+  if (result.kind === "SESSION_MATCH_COUNT_MISMATCH") {
+    assert.equal(result.controlMatchCount, 2);
+    assert.equal(result.failedMatchCount, 1);
+  }
+
+  const listFailure = loadComparisonHelper({ sessions: [control, failed], configurations: {}, balances: {} });
+  const stripe = createLiveTestClient(listFailure);
+  stripe.checkout.sessions.list = async () => { throw new Error("private session detail"); };
+  await assert.rejects(
+    listFailure.compareExistingLiveStripeSessions(stripe, targetOrder, listFailure.fingerprints),
+    (error) => error.stage === "STRIPE_SESSION_LIST_FAILED" && error.message === "STRIPE_SESSION_LIST_FAILED",
+  );
 });

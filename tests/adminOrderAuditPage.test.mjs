@@ -11,39 +11,66 @@ const pagePath = path.join(root, "app", "admin", "order-audit", "page.tsx");
 const pageSource = fs.readFileSync(pagePath, "utf8");
 const targetOrder = { order_number: "CNF-260925-9135", final_total: 23, currency: "GBP" };
 
+function comparisonSide(role, amountTotal) {
+  return {
+    role,
+    amountTotal,
+    currency: "gbp",
+    livemode: true,
+    mode: "payment",
+    created: 1780000000,
+    status: "open",
+    paymentStatus: "unpaid",
+    clientReference: amountTotal === 2300 ? "MATCHED_ORDER" : "PRESENT",
+    paymentMethodTypes: ["customer_balance"],
+    paymentMethodConfigurationDetails: "PRESENT",
+    paymentMethodConfigurationResolution: "SESSION_CONFIGURATION",
+    paymentMethodConfiguration: {
+      present: true,
+      active: true,
+      isDefault: true,
+      livemode: true,
+      customerBalanceAvailable: true,
+      customerBalancePreference: "on",
+      customerBalanceValue: "on",
+      customerBalanceOverridable: true,
+      methods: [],
+    },
+    customerBalanceInSession: true,
+    paymentMethodOptionKeys: ["customer_balance"],
+    customerBalanceOptionPresent: true,
+    customerBalanceFundingType: "bank_transfer",
+    customerBalanceBankTransferType: "gb_bank_transfer",
+    locale: "en-GB",
+    uiMode: "hosted",
+    paymentMethodCollection: "always",
+    billingAddressCollection: "auto",
+    customerCreation: "if_required",
+    submitType: "auto",
+    customerPresent: true,
+    cashBalance: { readSupported: true, livemode: true, availableGbp: 0, reconciliationMode: "automatic" },
+    paymentIntentPresent: false,
+    paymentIntent: null,
+  };
+}
+
 function successfulDiagnosis() {
   return {
     kind: "diagnosed",
-    diagnosis: {
-      sessionFound: true,
-      matchCount: 1,
-      livemode: true,
-      mode: "payment",
-      status: "open",
-      paymentStatus: "unpaid",
-      paymentIntent: "PRESENT",
-      paymentMethodTypes: ["customer_balance"],
-      customerBalanceInSession: true,
-      paymentMethodConfiguration: {
-        present: true,
-        active: true,
-        isDefault: true,
-        livemode: true,
-        customerBalanceAvailable: true,
-        customerBalancePreference: "on",
-        customerBalanceValue: "on",
-        methods: [],
-      },
-      paymentMethodConfigurationResolution: "SESSION_CONFIGURATION",
-      paymentMethodConfigurationDetailsPresent: true,
-      paymentMethodOptionKeys: ["customer_balance"],
-      customerBalanceOptionPresent: true,
-      customerBalanceFundingType: "bank_transfer",
-      customerBalanceBankTransferType: "gb_bank_transfer",
-      case: "D",
-      rootCauseLayer: "STRIPE_CHECKOUT_DISPLAY_OR_ELIGIBILITY",
-      missingStripeFields: [],
-    },
+    control: comparisonSide("CONTROL_METHOD_VISIBLE", 4100),
+    failed: comparisonSide("FAILED_AFTER_PAY_CLICK", 2300),
+    samePaymentMethodConfiguration: true,
+    sessionPaymentMethodSetupDifference: false,
+    customerCashBalanceDifference: false,
+    differences: ["amount_total: control=4100; failed=2300"],
+    failedRelevantEvents: [],
+    failedEventSearchComplete: null,
+    bankTransferWasCreated: false,
+    bankTransferConfirmationRejected: false,
+    mobileBrowserOnlyCause: "NO",
+    rootCauseConfirmed: false,
+    rootCauseLayer: "INSUFFICIENT_STRIPE_EVIDENCE",
+    rootCause: "No specific failure detail was available.",
   };
 }
 
@@ -92,7 +119,7 @@ function loadPage({ authenticated = true, order = targetOrder, responseOk = true
       if (id === "@/lib/payments/stripeBankTransfer") return { getStripeBankTransferMode: () => "live" };
       if (id === "@/lib/payments/stripeLiveDiagnostics") return {
         createLiveStripeDiagnosticsClient: () => { calls.stripeClient += 1; return {}; },
-        diagnoseExistingLiveStripeSession: async (_stripe, actualOrder) => {
+        compareExistingLiveStripeSessions: async (_stripe, actualOrder) => {
           calls.diagnosis += 1;
           assert.deepEqual(JSON.parse(JSON.stringify(actualOrder)), targetOrder);
           if (stripeError) throw new StageError(stripeError);
@@ -144,7 +171,7 @@ test("only the exact saved order is passed to the Stripe diagnostic helper", asy
   const valid = loadPage();
   const validPage = await valid.page();
   assert.deepEqual(valid.calls, { worker: 1, stripeClient: 1, diagnosis: 1 });
-  assert.equal(flatten(validPage).join(" ").includes("CNFANS Live Payment Audit"), true);
+  assert.equal(flatten(validPage).join(" ").includes("CNFANS Live Session Comparison"), true);
 });
 
 test("Worker read failures are rendered as a safe stage without calling Stripe", async () => {
@@ -161,11 +188,12 @@ test("safe Stripe values render while session identifiers and customer data neve
   const page = await loaded.page();
   const rendered = flatten(page).join(" ");
   for (const expected of [
-    "ORDER_MATCH YES", "SESSION_FOUND YES", "MATCH_COUNT 1", "LIVEMODE YES", "SESSION_MODE payment",
-    "CUSTOMER_BALANCE_FUNDING_TYPE bank_transfer", "CUSTOMER_BALANCE_BANK_TRANSFER_TYPE gb_bank_transfer",
-    "DYNAMIC_METHODS_PRESERVED YES", "ROOT_CAUSE_LAYER STRIPE_CHECKOUT_DISPLAY_OR_ELIGIBILITY",
+    "CONTROL_ROLE CONTROL_METHOD_VISIBLE", "CONTROL_AMOUNT_TOTAL 4100", "FAILED_ROLE FAILED_AFTER_PAY_CLICK",
+    "FAILED_AMOUNT_TOTAL 2300", "SAME_PAYMENT_METHOD_CONFIGURATION true",
+    "FAILED_CUSTOMER_BALANCE_FUNDING_TYPE bank_transfer", "FAILED_CUSTOMER_BALANCE_BANK_TRANSFER_TYPE gb_bank_transfer",
+    "MOBILE_BROWSER_ONLY_CAUSE NO", "ROOT_CAUSE_LAYER INSUFFICIENT_STRIPE_EVIDENCE",
   ]) assert.ok(rendered.includes(expected), `missing visible audit value: ${expected}`);
-  for (const forbidden of ["cs_live_", "cus_", "pi_", "pmc_", "sk_live_", "@example", "email", "Private Name", "address", "phone", "checkout.stripe.com"]) {
+  for (const forbidden of ["cs_live_", "cus_", "pi_", "pmc_", "sk_live_", "@example", "Private Name", "Private Address", "0000000000", "checkout.stripe.com"]) {
     assert.equal(rendered.toLowerCase().includes(forbidden.toLowerCase()), false, `sensitive value reached page: ${forbidden}`);
   }
 });
