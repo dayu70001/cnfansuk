@@ -8,7 +8,7 @@ import { fileURLToPath } from "node:url";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const helperSource = fs.readFileSync(path.join(root, "lib", "payments", "stripeLiveDiagnostics.ts"), "utf8");
-const routeSource = fs.readFileSync(path.join(root, "app", "api", "admin", "stripe-diagnostics", "live-session", "route.ts"), "utf8");
+const routeSource = fs.readFileSync(path.join(root, "app", "api", "admin", "payment-diagnostics", "live-session", "route.ts"), "utf8");
 const checkoutSource = fs.readFileSync(path.join(root, "lib", "payments", "stripeServer.ts"), "utf8");
 
 const targetOrder = { order_number: "CNF-260925-9135", final_total: 23, currency: "GBP" };
