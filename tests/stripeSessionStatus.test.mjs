@@ -157,10 +157,11 @@ test("Live Hosted Checkout uses only persisted GBP order data and Live-scoped id
   const stripe = loadStripeServer(validLiveSession(), "live");
   const checkout = await stripe.createStripeBankTransferCheckout(savedLiveOrder, "live");
   assert.equal(checkout.livemode, true);
+  assert.equal(checkout.sessionId, "cs_live_fixture123");
   assert.equal(checkout.amountTotal, 11700);
   assert.equal(checkout.currency, "gbp");
   assert.equal(checkout.clientReferenceId, savedLiveOrder.order_number);
-  assert.equal(checkout.successReturnUrl, "https://www.cnfans.co.uk/order-success?order=CNF-260924-1234&payment=stripe_live&session_id=cs_live_fixture123");
+  assert.equal(checkout.returnUrl, "https://www.cnfans.co.uk/order-success?order=CNF-260924-1234&payment=stripe_live&session_id=cs_live_fixture123");
   assert.deepEqual(Object.keys(stripe.calls.customerCreates[0].params), ["email"]);
   assert.deepEqual(JSON.parse(JSON.stringify(stripe.calls.customerCreates[0].options)), { idempotencyKey: "cnfans-stripe-live-customer:CNF-260924-1234" });
   assert.deepEqual(JSON.parse(JSON.stringify(stripe.calls.sessionCreates[0].options)), { idempotencyKey: "cnfans-stripe-live-checkout:CNF-260924-1234" });
@@ -178,6 +179,51 @@ test("Live Hosted Checkout uses only persisted GBP order data and Live-scoped id
     assert.equal(Object.hasOwn(sessionParams, key), false, `${key} must not be sent`);
   }
   assert.doesNotMatch(JSON.stringify(sessionParams), /Private jacket title|XL|Private customer address|\+44000000000/);
+});
+
+test("authenticated Stripe Session accepts standard and HTTPS custom Checkout domains", async () => {
+  const standard = await loadStripeServer(validLiveSession(), "live").createStripeBankTransferCheckout(savedLiveOrder, "live");
+  assert.equal(standard.checkoutUrl, "https://checkout.stripe.com/c/pay/cs_live_fixture123");
+
+  const custom = await loadStripeServer(validLiveSession({ url: "https://pay.example.test/c/pay/cs_live_fixture123" }), "live")
+    .createStripeBankTransferCheckout(savedLiveOrder, "live");
+  assert.equal(custom.checkoutUrl, "https://pay.example.test/c/pay/cs_live_fixture123");
+  assert.equal(custom.sessionId, "cs_live_fixture123");
+});
+
+test("Hosted Checkout rejects HTTP, credentialed URLs and Session invariant mismatches", async () => {
+  const mismatchCases = [
+    { overrides: { url: "http://checkout.stripe.com/c/pay/cs_live_fixture123" }, expected: "urlHttps" },
+    { overrides: { url: "https://user:pass@pay.example.test/c/pay/cs_live_fixture123" }, expected: "urlCredentialsAbsent" },
+    { overrides: { url: null }, expected: "urlPresent" },
+    { overrides: { livemode: false }, expected: "livemodeMatch" },
+    { overrides: { mode: "setup" }, expected: "modeMatch" },
+    { overrides: { amount_total: 1 }, expected: "amountMatch" },
+    { overrides: { currency: "eur" }, expected: "currencyMatch" },
+    { overrides: { client_reference_id: "CNF-OTHER-0000" }, expected: "referenceMatch" },
+    { overrides: { id: "cs_test_fixture123" }, expected: "sessionIdMatch" },
+  ];
+  for (const { overrides, expected } of mismatchCases) {
+    const error = await loadStripeServer(validLiveSession(overrides), "live")
+      .createStripeBankTransferCheckout(savedLiveOrder, "live")
+      .then(() => null, (reason) => reason);
+    assert.ok(error && typeof error === "object");
+    assert.equal(error.name, "StripeCheckoutSessionMismatchError");
+    assert.deepEqual(Object.keys(error.checks).sort(), [
+      "amountMatch", "currencyMatch", "livemodeMatch", "modeMatch", "referenceMatch", "sessionIdMatch", "urlCredentialsAbsent", "urlHttps", "urlPresent",
+    ].sort());
+    assert.equal(Object.values(error.checks).every((value) => typeof value === "boolean"), true);
+    assert.equal(error.checks[expected], false);
+    assert.equal(JSON.stringify(error.checks).includes("cs_live_fixture123"), false);
+    assert.equal(JSON.stringify(error.checks).includes("https://"), false);
+  }
+
+  const invalidTestPrefix = await loadStripeServer(validSession({ id: "cs_live_fixture123" }))
+    .createLocalStripeTestCheckout(savedOrder, "http://localhost:4000")
+    .then(() => null, (reason) => reason);
+  assert.ok(invalidTestPrefix && typeof invalidTestPrefix === "object");
+  assert.equal(invalidTestPrefix.name, "StripeCheckoutSessionMismatchError");
+  assert.equal(invalidTestPrefix.checks.sessionIdMatch, false);
 });
 
 test("Live Checkout rejects non-GBP saved orders before creating a Customer or Session", async () => {

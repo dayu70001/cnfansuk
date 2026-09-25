@@ -84,6 +84,28 @@ export function stripeCheckoutIdempotencyKey(orderNumber: string, mode: StripeRe
     : `cnfans-stripe-live-checkout:${orderNumber}`;
 }
 
+export type StripeCheckoutSessionValidationChecks = {
+  livemodeMatch: boolean;
+  modeMatch: boolean;
+  amountMatch: boolean;
+  currencyMatch: boolean;
+  referenceMatch: boolean;
+  sessionIdMatch: boolean;
+  urlPresent: boolean;
+  urlHttps: boolean;
+  urlCredentialsAbsent: boolean;
+};
+
+export class StripeCheckoutSessionMismatchError extends Error {
+  readonly checks: StripeCheckoutSessionValidationChecks;
+
+  constructor(checks: StripeCheckoutSessionValidationChecks) {
+    super("Stripe returned a Checkout Session that does not match the saved order.");
+    this.name = "StripeCheckoutSessionMismatchError";
+    this.checks = checks;
+  }
+}
+
 /** Create a minimal, server-authorized Hosted Checkout Session for Test or Live mode. */
 export async function createStripeBankTransferCheckout(
   order: AuthorizedWorkerOrder,
@@ -130,24 +152,23 @@ export async function createStripeBankTransferCheckout(
     idempotencyKey: stripeCheckoutIdempotencyKey(orderNumber, mode),
   });
 
-  if (
-    session.livemode !== expectedLivemode
-    || session.mode !== "payment"
-    || session.amount_total !== amountMinor
-    || session.currency !== order.currency.toLowerCase()
-    || session.client_reference_id !== orderNumber
-    || !session.url
-    || !isStripeHostedCheckoutUrl(session.url)
-    || !isStripeSessionIdForMode(session.id, mode)
-  ) {
-    throw new Error(`Stripe returned a Checkout Session that does not match the saved ${mode} order.`);
+  const validation = getStripeCheckoutSessionValidationChecks(
+    session,
+    expectedLivemode,
+    amountMinor,
+    order.currency.toLowerCase(),
+    orderNumber,
+    mode,
+  );
+  if (Object.values(validation).some((passed) => !passed)) {
+    throw new StripeCheckoutSessionMismatchError(validation);
   }
 
   const successReturnUrl = new URL(returnUrls.successUrl);
   successReturnUrl.searchParams.set("session_id", session.id);
   return {
-    checkoutUrl: session.url,
-    successReturnUrl: successReturnUrl.toString(),
+    checkoutUrl: session.url!,
+    returnUrl: successReturnUrl.toString(),
     sessionId: session.id,
     livemode: session.livemode,
     amountTotal: session.amount_total,
@@ -231,6 +252,34 @@ function isStripeSessionIdForMode(sessionId: string, mode: StripeRealMode) {
     : /^cs_live_[A-Za-z0-9]+$/.test(sessionId);
 }
 
+function getStripeCheckoutSessionValidationChecks(
+  session: Stripe.Checkout.Session,
+  expectedLivemode: boolean,
+  expectedAmount: number,
+  expectedCurrency: string,
+  expectedReference: string,
+  mode: StripeRealMode,
+): StripeCheckoutSessionValidationChecks {
+  let checkoutUrl: URL | null = null;
+  try {
+    checkoutUrl = session.url ? new URL(session.url) : null;
+  } catch {
+    checkoutUrl = null;
+  }
+
+  return {
+    livemodeMatch: session.livemode === expectedLivemode,
+    modeMatch: session.mode === "payment",
+    amountMatch: session.amount_total === expectedAmount,
+    currencyMatch: session.currency === expectedCurrency,
+    referenceMatch: session.client_reference_id === expectedReference,
+    sessionIdMatch: isStripeSessionIdForMode(session.id, mode),
+    urlPresent: typeof session.url === "string" && session.url.length > 0,
+    urlHttps: checkoutUrl?.protocol === "https:",
+    urlCredentialsAbsent: Boolean(checkoutUrl) && !checkoutUrl!.username && !checkoutUrl!.password,
+  };
+}
+
 function isStripePaymentStatus(value: string): value is StripeSessionSummary["paymentStatus"] {
   return value === "paid" || value === "unpaid" || value === "no_payment_required";
 }
@@ -247,7 +296,10 @@ function isLoopbackHostname(hostname: string) {
 export function isStripeHostedCheckoutUrl(value: string): boolean {
   try {
     const url = new URL(value);
-    return url.protocol === "https:" && url.hostname === "checkout.stripe.com" && url.pathname.startsWith("/c/");
+    return url.protocol === "https:"
+      && Boolean(url.hostname)
+      && !url.username
+      && !url.password;
   } catch {
     return false;
   }

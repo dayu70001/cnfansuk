@@ -13,60 +13,67 @@ export type LocalStripeFallback = {
   mode: StripeHandoffMode;
 };
 
-export function getStripeSessionId(checkoutUrl: string | undefined, mode: StripeHandoffMode): string | null {
-  if (!checkoutUrl) return null;
+export function getStripeSessionId(sessionId: string | undefined, mode: StripeHandoffMode): string | null {
+  if (!sessionId) return null;
+  const prefix = mode === "test" ? "cs_test_" : "cs_live_";
+  return new RegExp(`^${prefix}[A-Za-z0-9]+$`).test(sessionId) ? sessionId : null;
+}
 
+export function isStripeCheckoutUrl(value: string | undefined): boolean {
+  if (!value) return false;
   try {
-    const url = new URL(checkoutUrl);
-    if (
-      url.protocol !== "https:"
-      || url.hostname !== "checkout.stripe.com"
-      || url.port
-      || url.username
-      || url.password
-    ) return null;
-    const prefix = mode === "test" ? "cs_test_" : "cs_live_";
-    const match = url.pathname.match(new RegExp(`^/c/pay/(${prefix}[A-Za-z0-9]+)$`));
-    return match?.[1] || null;
+    const url = new URL(value);
+    return url.protocol === "https:"
+      && Boolean(url.hostname)
+      && !url.username
+      && !url.password;
   } catch {
-    return null;
+    return false;
   }
 }
 
-export function getLocalStripeTestSessionId(checkoutUrl: string | undefined): string | null {
-  return getStripeSessionId(checkoutUrl, "test");
+export function getLocalStripeTestSessionId(sessionId: string | undefined): string | null {
+  return getStripeSessionId(sessionId, "test");
 }
 
-export function getLiveStripeSessionId(checkoutUrl: string | undefined): string | null {
-  return getStripeSessionId(checkoutUrl, "live");
+export function getLiveStripeSessionId(sessionId: string | undefined): string | null {
+  return getStripeSessionId(sessionId, "live");
 }
 
-export function buildLocalStripeSuccessUrl(checkoutUrl: string, origin: string, orderNumber: string): string | null {
-  const sessionId = getStripeSessionId(checkoutUrl, "test");
-  if (!sessionId || !/^CNF-[A-Za-z0-9-]{1,72}$/.test(orderNumber)) return null;
-
+export function isStripeTestSuccessReturnUrl(
+  value: string | undefined,
+  sessionId: string,
+  orderNumber: string,
+  expectedOrigin: string,
+): boolean {
+  if (!getStripeSessionId(sessionId, "test") || !/^CNF-[A-Za-z0-9-]{1,72}$/.test(orderNumber)) return false;
   try {
-    const localOrigin = new URL(origin);
-    const hostname = localOrigin.hostname.toLowerCase().replace(/^\[|\]$/g, "");
-    const isLoopback = hostname === "localhost"
-      || hostname === "127.0.0.1"
-      || hostname === "::1"
-      || hostname.endsWith(".localhost");
-    if (localOrigin.protocol !== "http:" || !isLoopback) return null;
-
-    const successUrl = new URL("/order-success", localOrigin);
-    successUrl.searchParams.set("order", orderNumber);
-    successUrl.searchParams.set("payment", "stripe_test");
-    successUrl.searchParams.set("session_id", sessionId);
-    return successUrl.toString();
+    const expected = new URL(expectedOrigin);
+    const url = new URL(value || "");
+    if (
+      expected.protocol !== "http:"
+      || !isLoopbackHostname(expected.hostname)
+      || expected.username
+      || expected.password
+      || url.origin !== expected.origin
+      || url.pathname !== "/order-success"
+      || url.username
+      || url.password
+      || url.hash
+      || url.searchParams.size !== 3
+      || url.searchParams.get("order") !== orderNumber
+      || url.searchParams.get("payment") !== "stripe_test"
+      || url.searchParams.get("session_id") !== sessionId
+    ) return false;
+    return true;
   } catch {
-    return null;
+    return false;
   }
 }
 
 /** Validate the server-provided Live return URL; never construct it from browser host data. */
 export function isStripeLiveSuccessReturnUrl(value: string | undefined, sessionId: string, orderNumber: string): boolean {
-  if (!value || !/^cs_live_[A-Za-z0-9]+$/.test(sessionId) || !/^CNF-[A-Za-z0-9-]{1,72}$/.test(orderNumber)) return false;
+  if (!value || !getStripeSessionId(sessionId, "live") || !/^CNF-[A-Za-z0-9-]{1,72}$/.test(orderNumber)) return false;
   try {
     const url = new URL(value);
     return value.startsWith("https://www.cnfans.co.uk/")
@@ -87,11 +94,11 @@ export function isStripeLiveSuccessReturnUrl(value: string | undefined, sessionI
 
 export function serializeLocalStripeFallback(
   checkoutUrl: string,
+  sessionId: string,
   orderNumber: string,
   mode: StripeHandoffMode = "test",
 ): string | null {
-  const sessionId = getStripeSessionId(checkoutUrl, mode);
-  if (!sessionId || !getLocalStripeFallbackStorageKey(orderNumber)) return null;
+  if (!getStripeSessionId(sessionId, mode) || !isStripeCheckoutUrl(checkoutUrl) || !getLocalStripeFallbackStorageKey(orderNumber)) return null;
   return JSON.stringify({ orderNumber, sessionId, checkoutUrl, mode });
 }
 
@@ -115,10 +122,9 @@ export function parseLocalStripeFallback(
       || fallback.sessionId !== expectedSessionId
       || fallback.mode !== mode
       || typeof fallback.checkoutUrl !== "string"
+      || !isStripeCheckoutUrl(fallback.checkoutUrl)
     ) return null;
-    return getStripeSessionId(fallback.checkoutUrl, mode) === expectedSessionId
-      ? fallback.checkoutUrl
-      : null;
+    return fallback.checkoutUrl;
   } catch {
     return null;
   }
@@ -126,4 +132,9 @@ export function parseLocalStripeFallback(
 
 export function shouldShowLocalStripeFallback(paymentStatus: string, checkoutUrl: string | null): boolean {
   return paymentStatus !== "paid" && checkoutUrl !== null;
+}
+
+function isLoopbackHostname(hostname: string) {
+  const normalisedHostname = hostname.replace(/^\[|\]$/g, "").toLowerCase();
+  return new Set(["localhost", "127.0.0.1", "::1"]).has(normalisedHostname);
 }

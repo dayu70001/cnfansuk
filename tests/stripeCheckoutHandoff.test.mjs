@@ -21,28 +21,30 @@ vm.runInNewContext(compiled, {
   URL,
 });
 const {
-  buildLocalStripeSuccessUrl,
   getLocalStripeFallbackStorageKey,
   getLiveStripeSessionId,
   getLocalStripeTestSessionId,
+  isStripeCheckoutUrl,
   isStripeLiveSuccessReturnUrl,
+  isStripeTestSuccessReturnUrl,
   parseLocalStripeFallback,
   serializeLocalStripeFallback,
   shouldShowLocalStripeFallback,
 } = loadedModule.exports;
 
-test("only accepts a Stripe Test Checkout URL with a test session ID", () => {
-  assert.equal(getLocalStripeTestSessionId("https://checkout.stripe.com/c/pay/cs_test_example123#fragment"), "cs_test_example123");
-  assert.equal(getLocalStripeTestSessionId("https://checkout.stripe.com/c/pay/cs_live_example123"), null);
-  assert.equal(getLocalStripeTestSessionId("https://evil.example/c/pay/cs_test_example123"), null);
-  assert.equal(getLocalStripeTestSessionId("https://checkout.stripe.com/redirect?url=https://evil.example"), null);
+test("uses the explicit server-returned Session ID and accepts secure hosted URLs, including custom domains", () => {
+  assert.equal(getLocalStripeTestSessionId("cs_test_example123"), "cs_test_example123");
+  assert.equal(getLocalStripeTestSessionId("cs_live_example123"), null);
+  assert.equal(getLiveStripeSessionId("cs_live_example123"), "cs_live_example123");
+  assert.equal(getLiveStripeSessionId("cs_test_example123"), null);
+  assert.equal(isStripeCheckoutUrl("https://checkout.stripe.com/c/pay/cs_live_example123"), true);
+  assert.equal(isStripeCheckoutUrl("https://pay.example.test/c/pay/cs_live_example123"), true);
+  assert.equal(isStripeCheckoutUrl("http://checkout.stripe.com/c/pay/cs_live_example123"), false);
+  assert.equal(isStripeCheckoutUrl("https://user:pass@pay.example.test/c/pay/cs_live_example123"), false);
+  assert.equal(getLocalStripeTestSessionId(undefined), null);
 });
 
 test("Test and Live fallback validators accept only their matching session prefixes", () => {
-  const liveUrl = "https://checkout.stripe.com/c/pay/cs_live_example123";
-  assert.equal(getLiveStripeSessionId(liveUrl), "cs_live_example123");
-  assert.equal(getLocalStripeTestSessionId(liveUrl), null);
-  assert.equal(getLiveStripeSessionId("https://checkout.stripe.com/c/pay/cs_test_example123"), null);
   assert.equal(isStripeLiveSuccessReturnUrl(
     "https://www.cnfans.co.uk/order-success?order=CNF-260924-1234&payment=stripe_live&session_id=cs_live_example123",
     "cs_live_example123",
@@ -65,21 +67,16 @@ test("Test and Live fallback validators accept only their matching session prefi
   ), false);
 });
 
-test("builds the local pending return URL from the trusted Stripe test session", () => {
-  const result = buildLocalStripeSuccessUrl(
-    "https://checkout.stripe.com/c/pay/cs_test_example123#fragment",
-    "http://localhost:4000",
-    "CNF-260924-1234",
-  );
-  assert.equal(
-    result,
-    "http://localhost:4000/order-success?order=CNF-260924-1234&payment=stripe_test&session_id=cs_test_example123",
-  );
-  assert.equal(buildLocalStripeSuccessUrl("https://checkout.stripe.com/c/pay/cs_test_example123", "https://www.cnfans.co.uk", "CNF-260924-1234"), null);
-  assert.equal(buildLocalStripeSuccessUrl("https://checkout.stripe.com/c/pay/cs_test_example123", "http://localhost:4000", "LOCAL-CNF-TEST"), null);
+test("Test return URL is server supplied, loopback scoped and bound to the explicit Session ID", () => {
+  const returnUrl = "http://localhost:4000/order-success?order=CNF-260924-1234&payment=stripe_test&session_id=cs_test_example123";
+  assert.equal(isStripeTestSuccessReturnUrl(returnUrl, "cs_test_example123", "CNF-260924-1234", "http://localhost:4000"), true);
+  assert.equal(isStripeTestSuccessReturnUrl(returnUrl, "cs_test_other456", "CNF-260924-1234", "http://localhost:4000"), false);
+  assert.equal(isStripeTestSuccessReturnUrl(returnUrl, "cs_test_example123", "CNF-260924-1234", "https://www.cnfans.co.uk"), false);
+  assert.equal(isStripeTestSuccessReturnUrl("https://evil.example/order-success?order=CNF-260924-1234&payment=stripe_test&session_id=cs_test_example123", "cs_test_example123", "CNF-260924-1234", "http://localhost:4000"), false);
+  assert.equal(isStripeTestSuccessReturnUrl(returnUrl, "cs_test_example123", "LOCAL-CNF-TEST", "http://localhost:4000"), false);
 });
 
-test("fallback reuses only the matching existing Checkout URL", () => {
+test("fallback reuses only the same explicit Session, mode, order and secure existing Checkout URL", () => {
   const value = JSON.stringify({
     orderNumber: "CNF-260924-1234",
     sessionId: "cs_test_example123",
@@ -96,24 +93,26 @@ test("fallback reuses only the matching existing Checkout URL", () => {
   }), "cs_test_example123", "CNF-260924-1234"), null);
   assert.equal(parseLocalStripeFallback("not-json", "cs_test_example123", "CNF-260924-1234"), null);
   assert.equal(
-    serializeLocalStripeFallback("https://checkout.stripe.com/c/pay/cs_test_example123", "CNF-260924-1234"),
+    serializeLocalStripeFallback("https://checkout.stripe.com/c/pay/cs_test_example123", "cs_test_example123", "CNF-260924-1234"),
     value,
   );
-  const liveValue = serializeLocalStripeFallback("https://checkout.stripe.com/c/pay/cs_live_example123", "CNF-260924-1234", "live");
+  const customDomainValue = serializeLocalStripeFallback("https://pay.example.test/c/pay/cs_live_example123", "cs_live_example123", "CNF-260924-1234", "live");
+  assert.equal(parseLocalStripeFallback(customDomainValue, "cs_live_example123", "CNF-260924-1234", "live"), "https://pay.example.test/c/pay/cs_live_example123");
+  const liveValue = serializeLocalStripeFallback("https://checkout.stripe.com/c/pay/cs_live_example123", "cs_live_example123", "CNF-260924-1234", "live");
   assert.equal(parseLocalStripeFallback(liveValue, "cs_live_example123", "CNF-260924-1234", "live"), "https://checkout.stripe.com/c/pay/cs_live_example123");
   assert.equal(parseLocalStripeFallback(value, "cs_test_example123", "CNF-260924-1234", "live"), null);
   assert.equal(parseLocalStripeFallback(liveValue, "cs_live_example123", "CNF-260924-1234", "test"), null);
-  assert.equal(serializeLocalStripeFallback("https://checkout.stripe.com.evil.example/c/pay/cs_test_example123", "CNF-260924-1234"), null);
-  assert.equal(serializeLocalStripeFallback("https://checkout.stripe.com:444/c/pay/cs_test_example123", "CNF-260924-1234"), null);
-  assert.equal(serializeLocalStripeFallback("https://evil.example/c/pay/cs_test_example123", "CNF-260924-1234"), null);
-  assert.equal(serializeLocalStripeFallback("https://checkout.stripe.com/c/pay/cs_test_example123", "LOCAL-CNF-TEST"), null);
+  assert.equal(serializeLocalStripeFallback("http://checkout.stripe.com/c/pay/cs_test_example123", "cs_test_example123", "CNF-260924-1234"), null);
+  assert.equal(serializeLocalStripeFallback("https://user:pass@pay.example.test/c/pay/cs_test_example123", "cs_test_example123", "CNF-260924-1234"), null);
+  assert.equal(serializeLocalStripeFallback("https://checkout.stripe.com/c/pay/cs_test_example123", "cs_live_example123", "CNF-260924-1234"), null);
+  assert.equal(serializeLocalStripeFallback("https://checkout.stripe.com/c/pay/cs_test_example123", "cs_test_example123", "LOCAL-CNF-TEST"), null);
   assert.equal(getLocalStripeFallbackStorageKey("CNF-260924-1234"), "cnfansuk-local-stripe-bank-transfer-fallback:CNF-260924-1234");
   assert.equal(getLocalStripeFallbackStorageKey("LOCAL-CNF-TEST"), null);
 });
 
 test("paid hides the saved fallback while unpaid keeps it available", () => {
-  assert.equal(shouldShowLocalStripeFallback("unpaid", "https://checkout.stripe.com/c/pay/cs_test_example123"), true);
-  assert.equal(shouldShowLocalStripeFallback("paid", "https://checkout.stripe.com/c/pay/cs_test_example123"), false);
+  assert.equal(shouldShowLocalStripeFallback("unpaid", "https://pay.example.test/c/pay/cs_test_example123"), true);
+  assert.equal(shouldShowLocalStripeFallback("paid", "https://pay.example.test/c/pay/cs_test_example123"), false);
   assert.equal(shouldShowLocalStripeFallback("unpaid", null), false);
 });
 
@@ -125,11 +124,13 @@ test("Stripe tab is opened synchronously before creating its Checkout Session", 
   const createSession = handler.indexOf('await fetch("/api/payments/stripe/checkout"');
   assert.ok(openTab >= 0 && createSession > openTab);
   const persistFallback = handler.indexOf('window.sessionStorage.setItem(fallbackKey, serializedFallback)');
-  const navigateOriginalTab = handler.indexOf("window.location.assign(localSuccessUrl || liveReturnUrl!)");
+  const navigateOriginalTab = handler.indexOf("window.location.assign(localReturnUrl || liveReturnUrl!)");
   assert.ok(persistFallback >= createSession && navigateOriginalTab > persistFallback);
-  assert.match(handler, /window\.location\.assign\(localSuccessUrl \|\| liveReturnUrl!\)/);
   assert.doesNotMatch(handler, /window\.location\.assign\(result\.checkoutUrl\)/);
-  assert.match(handler, /serializeLocalStripeFallback\(result\.checkoutUrl, order\.orderNumber, localStripeMode\)/);
+  assert.match(handler, /getStripeSessionId\(result\.sessionId, localStripeMode\)/);
+  assert.match(handler, /serializeLocalStripeFallback\(result\.checkoutUrl, sessionId, order\.orderNumber, localStripeMode\)/);
+  assert.doesNotMatch(handler, /getStripeSessionId\(result\.checkoutUrl/);
+  assert.match(handler, /window\.location\.assign\(localReturnUrl \|\| liveReturnUrl!/);
   assert.equal((handler.match(/await fetch\("\/api\/payments\/stripe\/checkout"/g) || []).length, 1);
 });
 

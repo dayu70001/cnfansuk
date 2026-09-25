@@ -8,7 +8,11 @@ import {
   isLocalStripeBankTransferTestEnabled,
   isLocalStripeBankTransferMockEnabled,
 } from "@/lib/payments/stripeBankTransfer";
-import { createLocalStripeTestCheckout, createStripeBankTransferCheckout } from "@/lib/payments/stripeServer";
+import {
+  createLocalStripeTestCheckout,
+  createStripeBankTransferCheckout,
+  StripeCheckoutSessionMismatchError,
+} from "@/lib/payments/stripeServer";
 
 export const dynamic = "force-dynamic";
 
@@ -60,13 +64,22 @@ export async function POST(request: Request) {
       return NextResponse.json(
         {
           mode: "test",
+          sessionId: checkout.sessionId,
           checkoutUrl: checkout.checkoutUrl,
+          returnUrl: checkout.returnUrl,
           livemode: checkout.livemode,
           paymentMethodTypes: checkout.paymentMethodTypes,
         },
         { headers: { "Cache-Control": "no-store" } },
       );
     } catch (error) {
+      if (error instanceof StripeCheckoutSessionMismatchError) {
+        console.error("Stripe Test Checkout Session validation failed", error.checks);
+        return NextResponse.json(
+          { error: "Bank transfer is temporarily unavailable. Please try again." },
+          { status: 502, headers: { "Cache-Control": "no-store" } },
+        );
+      }
       const details = error && typeof error === "object" ? error as Record<string, unknown> : {};
       console.error("Stripe Test Checkout creation failed", {
         type: safeLogValue(details.type),
@@ -110,12 +123,20 @@ export async function POST(request: Request) {
       return NextResponse.json(
         {
           mode: "live",
+          sessionId: checkout.sessionId,
           checkoutUrl: checkout.checkoutUrl,
-          returnUrl: checkout.successReturnUrl,
+          returnUrl: checkout.returnUrl,
         },
         { headers: { "Cache-Control": "no-store" } },
       );
     } catch (error) {
+      if (error instanceof StripeCheckoutSessionMismatchError) {
+        console.error("Stripe Live Checkout Session validation failed", error.checks);
+        return NextResponse.json(
+          { error: "Bank transfer is temporarily unavailable. Please try again." },
+          { status: 502, headers: { "Cache-Control": "no-store" } },
+        );
+      }
       const details = error && typeof error === "object" ? error as Record<string, unknown> : {};
       console.error("Stripe Live Checkout creation failed", {
         type: safeLogValue(details.type),

@@ -17,10 +17,18 @@ const confirmationComponentSource = fs.readFileSync(path.join(root, "components"
 const cookieHelperSource = fs.readFileSync(path.join(root, "lib", "orderAccessTokenCookie.ts"), "utf8");
 const orderAccessTokenSource = fs.readFileSync(path.join(root, "lib", "orderAccessToken.ts"), "utf8");
 
+class StripeCheckoutSessionMismatchError extends Error {
+  constructor(checks) {
+    super("Stripe returned a Checkout Session that does not match the saved order.");
+    this.checks = checks;
+  }
+}
+
 function loadHandler(source, { modules = {}, env = { NODE_ENV: "production" }, fetch = async () => { throw new Error("Unexpected fetch"); } } = {}) {
   const compiled = ts.transpile(source, { module: ts.ModuleKind.CommonJS, esModuleInterop: true });
   const loadedModule = { exports: {} };
   const cookies = [];
+  const logs = [];
   const nextResponse = {
     json(body, init = {}) {
       return {
@@ -37,7 +45,7 @@ function loadHandler(source, { modules = {}, env = { NODE_ENV: "production" }, f
     exports: loadedModule.exports,
     process: { env },
     URL,
-    console: { error() {} },
+    console: { error(...args) { logs.push(args); } },
     fetch,
     require(id) {
       if (id === "next/server") return { NextResponse: nextResponse };
@@ -45,7 +53,7 @@ function loadHandler(source, { modules = {}, env = { NODE_ENV: "production" }, f
       throw new Error(`Unexpected module import: ${id}`);
     },
   });
-  return { ...loadedModule.exports, cookies };
+  return { ...loadedModule.exports, cookies, logs };
 }
 
 test("Live order creation sends the access token only as a scoped HttpOnly cookie", async () => {
@@ -126,6 +134,7 @@ test("Live Checkout authorizes from the HttpOnly order cookie and rejects client
         isLocalStripeBankTransferMockEnabled: () => false,
       },
       "@/lib/payments/stripeServer": {
+        StripeCheckoutSessionMismatchError,
         createLocalStripeTestCheckout: async () => { throw new Error("Test path should not run"); },
         createStripeBankTransferCheckout: async (order, mode) => {
           calls.stripe += 1;
@@ -133,8 +142,9 @@ test("Live Checkout authorizes from the HttpOnly order cookie and rejects client
           assert.equal(order.currency, "GBP");
           assert.equal(mode, "live");
           return {
+            sessionId: "cs_live_fixture123",
             checkoutUrl: "https://checkout.stripe.com/c/pay/cs_live_fixture123",
-            successReturnUrl: "https://www.cnfans.co.uk/order-success?order=CNF-260924-1234&payment=stripe_live&session_id=cs_live_fixture123",
+            returnUrl: "https://www.cnfans.co.uk/order-success?order=CNF-260924-1234&payment=stripe_live&session_id=cs_live_fixture123",
           };
         },
       },
@@ -152,6 +162,7 @@ test("Live Checkout authorizes from the HttpOnly order cookie and rejects client
   assert.equal(calls.stripe, 1);
   assert.deepEqual(JSON.parse(JSON.stringify(response.body)), {
     mode: "live",
+    sessionId: "cs_live_fixture123",
     checkoutUrl: "https://checkout.stripe.com/c/pay/cs_live_fixture123",
     returnUrl: "https://www.cnfans.co.uk/order-success?order=CNF-260924-1234&payment=stripe_live&session_id=cs_live_fixture123",
   });
@@ -163,6 +174,52 @@ test("Live Checkout authorizes from the HttpOnly order cookie and rejects client
   });
   assert.equal((await route.POST(invalidRequest)).status, 400);
   assert.equal(calls.stripe, 1);
+});
+
+test("Live Session mismatch logs booleans only and returns the generic checkout error", async () => {
+  const checks = {
+    livemodeMatch: true,
+    modeMatch: true,
+    amountMatch: false,
+    currencyMatch: true,
+    referenceMatch: true,
+    sessionIdMatch: true,
+    urlPresent: true,
+    urlHttps: true,
+    urlCredentialsAbsent: true,
+  };
+  const route = loadHandler(checkoutRouteSource, {
+    modules: {
+      "@/lib/authorizedOrder": {
+        loadAuthorizedOrder: async () => ({ ok: true, order: { order_number: "CNF-260924-1234", email: "buyer@example.invalid", final_total: 117, currency: "GBP" } }),
+      },
+      "@/lib/orderAccessTokenCookie": { getOrderAccessTokenFromCookieHeader: () => "scoped-order-token-fixture" },
+      "@/lib/payments/stripeBankTransfer": {
+        buildStripeBankTransferSessionDraft() {},
+        getStripeBankTransferMode: () => "live",
+        isStripeLiveProductionRequest: () => true,
+        isLocalStripeBankTransferTestEnabled: () => false,
+        isLocalStripeBankTransferMockEnabled: () => false,
+      },
+      "@/lib/payments/stripeServer": {
+        StripeCheckoutSessionMismatchError,
+        createLocalStripeTestCheckout: async () => { throw new Error("Unexpected test path"); },
+        createStripeBankTransferCheckout: async () => { throw new StripeCheckoutSessionMismatchError(checks); },
+      },
+    },
+  });
+  const response = await route.POST(new Request("https://www.cnfans.co.uk/api/payments/stripe/checkout", {
+    method: "POST",
+    headers: { host: "www.cnfans.co.uk", origin: "https://www.cnfans.co.uk", cookie: "fixture=1" },
+    body: JSON.stringify({ orderNumber: "CNF-260924-1234" }),
+  }));
+  assert.equal(response.status, 502);
+  assert.deepEqual(JSON.parse(JSON.stringify(response.body)), { error: "Bank transfer is temporarily unavailable. Please try again." });
+  assert.equal(route.logs.length, 1);
+  assert.equal(route.logs[0][0], "Stripe Live Checkout Session validation failed");
+  assert.deepEqual(JSON.parse(JSON.stringify(route.logs[0][1])), checks);
+  assert.equal(JSON.stringify(route.logs).includes("cs_live_"), false);
+  assert.equal(JSON.stringify(route.logs).includes("checkout.stripe.com"), false);
 });
 
 test("Live session status is cookie-authorized, read-only and exposes only two status fields", async () => {

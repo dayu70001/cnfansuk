@@ -25,10 +25,11 @@ import { getOrderPaymentStage, orderPaymentStageLabel, type OrderPaymentStage, t
 import type { CartItem, CustomerDetails } from "@/lib/types";
 import { getOrderAccessTokenStorageKey } from "@/lib/orderAccessTokenKey";
 import {
-  buildLocalStripeSuccessUrl,
   getLocalStripeFallbackStorageKey,
   getStripeSessionId,
+  isStripeCheckoutUrl,
   isStripeLiveSuccessReturnUrl,
+  isStripeTestSuccessReturnUrl,
   serializeLocalStripeFallback,
 } from "@/lib/stripeCheckoutHandoff";
 
@@ -500,22 +501,32 @@ export default function CheckoutPage() {
               currency: "GBP",
             }),
       });
-      const result = await response.json().catch(() => ({})) as { checkoutUrl?: string; returnUrl?: string; error?: string };
+      const result = await response.json().catch(() => ({})) as {
+        mode?: "mock" | "test" | "live";
+        sessionId?: string;
+        checkoutUrl?: string;
+        returnUrl?: string;
+        error?: string;
+      };
       const isMockUrl = result.checkoutUrl?.startsWith("/checkout/stripe-mock?") === true;
-      const localSuccessUrl = localStripeMode === "test" && result.checkoutUrl
-        ? buildLocalStripeSuccessUrl(result.checkoutUrl, window.location.origin, order.orderNumber)
+      const sessionId = localStripeMode === "test" || localStripeMode === "live"
+        ? getStripeSessionId(result.sessionId, localStripeMode)
         : null;
-      const liveSessionId = localStripeMode === "live" ? getStripeSessionId(result.checkoutUrl, "live") : null;
+      const localReturnUrl = localStripeMode === "test"
+        && sessionId
+        && isStripeTestSuccessReturnUrl(result.returnUrl, sessionId, order.orderNumber, window.location.origin)
+        ? result.returnUrl!
+        : null;
       const liveReturnUrl = localStripeMode === "live"
-        && liveSessionId
-        && isStripeLiveSuccessReturnUrl(result.returnUrl, liveSessionId, order.orderNumber)
+        && sessionId
+        && isStripeLiveSuccessReturnUrl(result.returnUrl, sessionId, order.orderNumber)
         ? result.returnUrl!
         : null;
       if (
         !response.ok
-        || (localStripeMode === "mock" && !isMockUrl)
-        || (localStripeMode === "test" && !localSuccessUrl)
-        || (localStripeMode === "live" && (!liveSessionId || !liveReturnUrl))
+        || (localStripeMode === "mock" && (result.mode !== "mock" || !isMockUrl))
+        || (localStripeMode === "test" && (result.mode !== "test" || !sessionId || !isStripeCheckoutUrl(result.checkoutUrl) || !localReturnUrl))
+        || (localStripeMode === "live" && (result.mode !== "live" || !sessionId || !isStripeCheckoutUrl(result.checkoutUrl) || !liveReturnUrl))
       ) {
         paymentWindow?.close();
         setSubmitError(result.error || (localStripeMode === "live"
@@ -523,9 +534,9 @@ export default function CheckoutPage() {
           : "The local payment simulation could not be started."));
         return;
       }
-      if ((localStripeMode === "test" || localStripeMode === "live") && result.checkoutUrl && (localSuccessUrl || liveReturnUrl)) {
+      if ((localStripeMode === "test" || localStripeMode === "live") && result.checkoutUrl && sessionId && (localReturnUrl || liveReturnUrl)) {
         const fallbackKey = getLocalStripeFallbackStorageKey(order.orderNumber);
-        const serializedFallback = serializeLocalStripeFallback(result.checkoutUrl, order.orderNumber, localStripeMode);
+        const serializedFallback = serializeLocalStripeFallback(result.checkoutUrl, sessionId, order.orderNumber, localStripeMode);
         let fallbackSaved = false;
         if (fallbackKey && serializedFallback) {
           try {
@@ -556,7 +567,7 @@ export default function CheckoutPage() {
 
         // The same validated Session is now recoverable on Order Success even if
         // this popup is blocked or the customer closes the Stripe tab later.
-        window.location.assign(localSuccessUrl || liveReturnUrl!);
+        window.location.assign(localReturnUrl || liveReturnUrl!);
         return;
       }
       if (result.checkoutUrl) router.push(result.checkoutUrl);
