@@ -5,6 +5,8 @@ import Stripe from "stripe";
 
 const TARGET_ORDER_NUMBER = "CNF-260925-9135";
 const TARGET_AMOUNT_MINOR = 2300;
+const CONTROL_EXPECTED_AMOUNT_MINOR = 4100;
+const FAILED_EXPECTED_AMOUNT_MINOR = 2300;
 const TARGET_CURRENCY = "gbp";
 const SESSION_CREATED_FROM = Math.floor(Date.parse("2026-09-25T11:25:00.000Z") / 1000);
 const SESSION_CREATED_UNTIL = Math.floor(Date.parse("2026-09-25T11:36:00.000Z") / 1000);
@@ -123,7 +125,7 @@ export type LiveStripeComparisonSide = {
   created: number | null;
   status: string | null;
   paymentStatus: string | null;
-  clientReference: "MATCHED_ORDER" | "PRESENT" | "ABSENT";
+  clientReference: "PRESENT" | "ABSENT";
   paymentMethodTypes: string[];
   paymentMethodConfigurationDetails: "PRESENT" | "ABSENT";
   paymentMethodConfigurationResolution: string;
@@ -177,12 +179,13 @@ export type LiveStripeSessionComparisonResult =
     currency: string | null;
     livemode: boolean | null;
     mode: string | null;
-    clientReference: "MATCHED_ORDER" | "PRESENT" | "ABSENT";
+    clientReference: "PRESENT" | "ABSENT";
   }
   | {
     kind: "diagnosed";
     control: LiveStripeComparisonSide;
     failed: LiveStripeComparisonSide;
+    clientReferencesSame: "YES" | "NO" | "UNKNOWN";
     samePaymentMethodConfiguration: boolean | null;
     sessionPaymentMethodSetupDifference: boolean;
     customerCashBalanceDifference: boolean | "UNKNOWN";
@@ -356,20 +359,11 @@ export async function diagnoseExistingLiveStripeSession(
  */
 export async function compareExistingLiveStripeSessions(
   stripe: Stripe,
-  order: LiveStripeDiagnosticOrder,
   fingerprints: { control: string; failed: string } = {
     control: CONTROL_SESSION_FINGERPRINT,
     failed: FAILED_SESSION_FINGERPRINT,
   },
 ): Promise<LiveStripeSessionComparisonResult> {
-  if (
-    order.order_number !== TARGET_ORDER_NUMBER
-    || !Number.isFinite(order.final_total)
-    || Math.round(order.final_total * 100) !== TARGET_AMOUNT_MINOR
-    || Math.abs(order.final_total * 100 - TARGET_AMOUNT_MINOR) > 0.00001
-    || order.currency.toUpperCase() !== TARGET_CURRENCY.toUpperCase()
-  ) throw new Error("The fixed diagnostic order does not match its approved amount and currency.");
-
   if (!isSha256Fingerprint(fingerprints.control) || !isSha256Fingerprint(fingerprints.failed)) {
     throw new Error("The approved session fingerprints are invalid.");
   }
@@ -446,10 +440,11 @@ export async function compareExistingLiveStripeSessions(
     retrieveComparisonSession(stripe, listedFailed, fingerprints.failed),
   ]);
 
-  const controlReference = clientReferenceStatus(controlSession.client_reference_id, order.order_number);
-  const failedReference = clientReferenceStatus(failedSession.client_reference_id, order.order_number);
-  const mismatch = (session: Stripe.Checkout.Session, expectedAmount: number, side: "CONTROL" | "FAILED") => {
-    const clientReference = clientReferenceStatus(session.client_reference_id, order.order_number);
+  const controlClientReference = internalClientReference(controlSession.client_reference_id);
+  const failedClientReference = internalClientReference(failedSession.client_reference_id);
+  const controlReference = comparisonClientReferenceStatus(controlClientReference);
+  const failedReference = comparisonClientReferenceStatus(failedClientReference);
+  const mismatch = (session: Stripe.Checkout.Session, expectedAmount: number) => {
     return (
       session.created < COMPARISON_CREATED_FROM
       || session.created >= COMPARISON_CREATED_UNTIL
@@ -457,11 +452,10 @@ export async function compareExistingLiveStripeSessions(
       || session.mode !== "payment"
       || session.amount_total !== expectedAmount
       || session.currency !== TARGET_CURRENCY
-      || (side === "FAILED" && clientReference !== "MATCHED_ORDER")
     );
   };
 
-  if (mismatch(controlSession, 4100, "CONTROL")) {
+  if (mismatch(controlSession, CONTROL_EXPECTED_AMOUNT_MINOR)) {
     return {
       kind: "SESSION_EXPECTATION_MISMATCH",
       side: "CONTROL",
@@ -472,7 +466,7 @@ export async function compareExistingLiveStripeSessions(
       clientReference: controlReference,
     };
   }
-  if (mismatch(failedSession, TARGET_AMOUNT_MINOR, "FAILED")) {
+  if (mismatch(failedSession, FAILED_EXPECTED_AMOUNT_MINOR)) {
     return {
       kind: "SESSION_EXPECTATION_MISMATCH",
       side: "FAILED",
@@ -485,8 +479,8 @@ export async function compareExistingLiveStripeSessions(
   }
 
   const [controlRead, failedRead] = await Promise.all([
-    readComparisonSession(stripe, controlSession, "CONTROL_METHOD_VISIBLE", order.order_number),
-    readComparisonSession(stripe, failedSession, "FAILED_AFTER_PAY_CLICK", order.order_number),
+    readComparisonSession(stripe, controlSession, "CONTROL_METHOD_VISIBLE"),
+    readComparisonSession(stripe, failedSession, "FAILED_AFTER_PAY_CLICK"),
   ]);
   const samePaymentMethodConfiguration = compareConfigurationIdentity(
     controlRead.configurationIdentity,
@@ -499,7 +493,7 @@ export async function compareExistingLiveStripeSessions(
   let failedEventSearchComplete: boolean | null = null;
   const failedIntent = failedRead.summary.paymentIntent;
   if (!failedIntent || !failedIntent.lastPaymentErrorPresent) {
-    const eventResult = await readFailedSessionEvents(stripe, failedSession, failedRead.paymentIntentId, order.order_number);
+    const eventResult = await readFailedSessionEvents(stripe, failedSession, failedRead.paymentIntentId, failedClientReference);
     failedRelevantEvents = eventResult.types;
     failedEventSearchComplete = eventResult.complete;
   }
@@ -542,6 +536,7 @@ export async function compareExistingLiveStripeSessions(
     kind: "diagnosed",
     control: controlRead.summary,
     failed: failedRead.summary,
+    clientReferencesSame: compareClientReferences(controlClientReference, failedClientReference),
     samePaymentMethodConfiguration,
     sessionPaymentMethodSetupDifference,
     customerCashBalanceDifference,
@@ -565,9 +560,17 @@ function isSha256Fingerprint(value: string) {
   return /^[a-f0-9]{64}$/.test(value);
 }
 
-function clientReferenceStatus(value: unknown, expectedOrder: string): "MATCHED_ORDER" | "PRESENT" | "ABSENT" {
-  if (value === expectedOrder) return "MATCHED_ORDER";
-  return typeof value === "string" && value.length > 0 ? "PRESENT" : "ABSENT";
+function internalClientReference(value: unknown): string | null {
+  return typeof value === "string" && value.length > 0 ? value : null;
+}
+
+function comparisonClientReferenceStatus(value: string | null): "PRESENT" | "ABSENT" {
+  return value === null ? "ABSENT" : "PRESENT";
+}
+
+function compareClientReferences(control: string | null, failed: string | null): "YES" | "NO" | "UNKNOWN" {
+  if (control === null || failed === null) return "UNKNOWN";
+  return control === failed ? "YES" : "NO";
 }
 
 async function retrieveComparisonSession(stripe: Stripe, listed: Stripe.Checkout.Session, expectedFingerprint: string) {
@@ -587,7 +590,6 @@ async function readComparisonSession(
   stripe: Stripe,
   session: Stripe.Checkout.Session,
   role: LiveStripeComparisonSide["role"],
-  expectedOrder: string,
 ) {
   const configurationDetailsId = session.payment_method_configuration_details?.id;
   let resolution: Awaited<ReturnType<typeof resolvePaymentMethodConfiguration>>;
@@ -620,7 +622,7 @@ async function readComparisonSession(
     created: Number.isInteger(session.created) ? session.created : null,
     status: safeStripeStatus(session.status),
     paymentStatus: safeStripeStatus(session.payment_status),
-    clientReference: clientReferenceStatus(session.client_reference_id, expectedOrder),
+    clientReference: comparisonClientReferenceStatus(internalClientReference(session.client_reference_id)),
     paymentMethodTypes: methodTypes,
     paymentMethodConfigurationDetails: configurationDetailsId ? "PRESENT" : "ABSENT",
     paymentMethodConfigurationResolution: resolution.resolution,
@@ -717,7 +719,12 @@ async function readComparisonPaymentIntent(stripe: Stripe, paymentIntentId: stri
   };
 }
 
-async function readFailedSessionEvents(stripe: Stripe, failedSession: Stripe.Checkout.Session, paymentIntentId: string | null, expectedOrder: string) {
+async function readFailedSessionEvents(
+  stripe: Stripe,
+  failedSession: Stripe.Checkout.Session,
+  paymentIntentId: string | null,
+  failedClientReference: string | null,
+) {
   const from = Math.max(COMPARISON_CREATED_FROM, failedSession.created - 15 * 60);
   const until = Math.min(COMPARISON_CREATED_UNTIL, failedSession.created + 2 * 60 * 60);
   const types: string[] = [];
@@ -745,9 +752,9 @@ async function readFailedSessionEvents(stripe: Stripe, failedSession: Stripe.Che
       const metadata = asRecord(eventObject?.metadata);
       const linkedToFailedSession = eventObjectId === failedSession.id
         || (eventObjectId !== null && paymentIntentId !== null && eventObjectId === paymentIntentId)
-        || eventObject?.client_reference_id === expectedOrder
-        || metadata?.order_number === expectedOrder
-        || metadata?.orderNumber === expectedOrder;
+        || (failedClientReference !== null && eventObject?.client_reference_id === failedClientReference)
+        || (failedClientReference !== null && metadata?.order_number === failedClientReference)
+        || (failedClientReference !== null && metadata?.orderNumber === failedClientReference);
       if (linkedToFailedSession && !types.includes(event.type)) types.push(event.type);
     }
 

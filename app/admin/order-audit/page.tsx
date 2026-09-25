@@ -13,13 +13,6 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-const TARGET_ORDER_NUMBER = "CNF-260925-9135";
-const TARGET_ORDER = {
-  order_number: TARGET_ORDER_NUMBER,
-  final_total: 23,
-  currency: "GBP",
-} as const;
-
 type AuditRow = { label: string; value: string };
 
 function renderRows(rows: AuditRow[]) {
@@ -135,6 +128,7 @@ function resultRows(result: LiveStripeSessionComparisonResult): AuditRow[] {
   addSideRows(rows, "CONTROL", result.control);
   addSideRows(rows, "FAILED", result.failed);
   rows.push(
+    { label: "CLIENT_REFERENCES_SAME", value: printable(result.clientReferencesSame) },
     { label: "SAME_PAYMENT_METHOD_CONFIGURATION", value: printable(result.samePaymentMethodConfiguration) },
     { label: "SESSION_PAYMENT_METHOD_SETUP_DIFFERENCE", value: printable(result.sessionPaymentMethodSetupDifference) },
     { label: "CUSTOMER_CASH_BALANCE_DIFFERENCE", value: printable(result.customerCashBalanceDifference) },
@@ -165,7 +159,7 @@ export default async function OrderAuditPage() {
 
   try {
     const stripe = createLiveStripeDiagnosticsClient();
-    const result = await compareExistingLiveStripeSessions(stripe, TARGET_ORDER);
+    const result = await compareExistingLiveStripeSessions(stripe);
     return renderRows(resultRows(result));
   } catch (error) {
     const errorClass = error instanceof LiveStripeDiagnosticsStageError ? error.stage : "OTHER";

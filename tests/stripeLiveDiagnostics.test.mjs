@@ -546,7 +546,11 @@ test("route returns only the fixed-order sanitized diagnostic with no-store head
 
 test("hashed control and failed Session fingerprints match exactly and compare safe fields only", async () => {
   const control = comparisonSession("fixture-control-session", 4100);
-  const failed = comparisonSession("fixture-failed-session", 2300, { payment_intent: "fixture-failed-intent" });
+  const failedReference = "actual-failed-order-reference-fixture";
+  const failed = comparisonSession("fixture-failed-session", 2300, {
+    client_reference_id: failedReference,
+    payment_intent: "fixture-failed-intent",
+  });
   const noise = comparisonSession("fixture-unrelated-session", 9999, { client_reference_id: "CNF-NOISE" });
   const failedIntent = {
     id: "fixture-failed-intent",
@@ -583,7 +587,7 @@ test("hashed control and failed Session fingerprints match exactly and compare s
     intents: { "fixture-failed-intent": failedIntent },
   });
   const stripe = createLiveTestClient(helper);
-  const result = await helper.compareExistingLiveStripeSessions(stripe, targetOrder, helper.fingerprints);
+  const result = await helper.compareExistingLiveStripeSessions(stripe, helper.fingerprints);
 
   assert.equal(result.kind, "diagnosed");
   if (result.kind !== "diagnosed") return;
@@ -592,7 +596,8 @@ test("hashed control and failed Session fingerprints match exactly and compare s
   assert.equal(result.control.amountTotal, 4100);
   assert.equal(result.failed.amountTotal, 2300);
   assert.equal(result.control.clientReference, "PRESENT");
-  assert.equal(result.failed.clientReference, "MATCHED_ORDER");
+  assert.equal(result.failed.clientReference, "PRESENT");
+  assert.equal(result.clientReferencesSame, "NO");
   assert.equal(result.samePaymentMethodConfiguration, true);
   assert.equal(result.sessionPaymentMethodSetupDifference, false);
   assert.equal(result.customerCashBalanceDifference, true);
@@ -610,6 +615,7 @@ test("hashed control and failed Session fingerprints match exactly and compare s
     "fixture-control-session", "fixture-failed-session", "fixture-failed-intent", "customer-fixture-",
     "config-shared-fixture", "cs_live_", "cus_", "pi_", "pm_", "pmc_", "evt_", "sk_live_",
     "client_secret", "person@example.test", "1234567890", "https://private.example.test",
+    failedReference, targetOrder.order_number,
   ]) assert.equal(output.includes(forbidden), false, `comparison response must not contain ${forbidden}`);
 
   const operations = helper.calls.map((call) => call.operation).filter((value) => value !== "client.init");
@@ -619,6 +625,48 @@ test("hashed control and failed Session fingerprints match exactly and compare s
     "customers.retrieveCashBalance", "customers.retrieveCashBalance", "paymentIntents.retrieve",
   ]);
   assert.equal(operations.some((operation) => /create|update|confirm|fund/i.test(operation)), false);
+  assert.equal(JSON.stringify(helper.calls).includes(failedReference), false);
+});
+
+test("comparison enforces each Session's amount, currency, livemode, mode, and fingerprint without an order reference", async () => {
+  const cases = [
+    { name: "control amount", control: comparisonSession("control-bad-amount", 4000), failed: comparisonSession("failed-valid-amount", 2300), side: "CONTROL" },
+    { name: "failed amount", control: comparisonSession("control-valid-amount", 4100), failed: comparisonSession("failed-bad-amount", 2400), side: "FAILED" },
+    { name: "currency", control: comparisonSession("control-valid-currency", 4100), failed: comparisonSession("failed-bad-currency", 2300, { currency: "eur" }), side: "FAILED" },
+    { name: "livemode", control: comparisonSession("control-valid-livemode", 4100), failed: comparisonSession("failed-test-mode", 2300, { livemode: false }), side: "FAILED" },
+    { name: "mode", control: comparisonSession("control-valid-mode", 4100), failed: comparisonSession("failed-setup-mode", 2300, { mode: "setup" }), side: "FAILED" },
+  ];
+
+  for (const sample of cases) {
+    const helper = loadComparisonHelper({
+      sessions: [sample.control, sample.failed],
+      configurations: { "config-shared-fixture": comparisonConfiguration() },
+    });
+    const result = await helper.compareExistingLiveStripeSessions(createLiveTestClient(helper), helper.fingerprints);
+    assert.equal(result.kind, "SESSION_EXPECTATION_MISMATCH", `${sample.name} must fail closed`);
+    if (result.kind === "SESSION_EXPECTATION_MISMATCH") {
+      assert.equal(result.side, sample.side);
+      assert.equal(result.clientReference, "PRESENT");
+    }
+    const operations = helper.calls.map((call) => call.operation).filter((value) => value !== "client.init");
+    assert.deepEqual(operations, ["sessions.list", "sessions.retrieve", "sessions.retrieve"]);
+  }
+});
+
+test("a wrong Session fingerprint is rejected before either Session is retrieved", async () => {
+  const control = comparisonSession("fixture-control-session", 4100);
+  const failed = comparisonSession("fixture-failed-session", 2300, { client_reference_id: "different-failed-reference" });
+  const helper = loadComparisonHelper({ sessions: [control, failed] });
+  const result = await helper.compareExistingLiveStripeSessions(createLiveTestClient(helper), {
+    control: helper.fingerprints.control,
+    failed: "f".repeat(64),
+  });
+  assert.equal(result.kind, "SESSION_MATCH_COUNT_MISMATCH");
+  if (result.kind === "SESSION_MATCH_COUNT_MISMATCH") {
+    assert.equal(result.controlMatchCount, 1);
+    assert.equal(result.failedMatchCount, 0);
+  }
+  assert.deepEqual(helper.calls.map((call) => call.operation).filter((value) => value !== "client.init"), ["sessions.list"]);
 });
 
 test("different customer cash-balance settings are reported without treating missing PaymentIntents as proof", async () => {
@@ -636,7 +684,7 @@ test("different customer cash-balance settings are reported without treating mis
       },
     },
   });
-  const result = await helper.compareExistingLiveStripeSessions(createLiveTestClient(helper), targetOrder, helper.fingerprints);
+  const result = await helper.compareExistingLiveStripeSessions(createLiveTestClient(helper), helper.fingerprints);
   assert.equal(result.kind, "diagnosed");
   if (result.kind === "diagnosed") {
     assert.equal(result.control.paymentIntentPresent, false);
@@ -666,7 +714,7 @@ test("requires_action plus display_bank_transfer_instructions proves instruction
     },
     intents: { "fixture-failed-intent": intent },
   });
-  const result = await helper.compareExistingLiveStripeSessions(createLiveTestClient(helper), targetOrder, helper.fingerprints);
+  const result = await helper.compareExistingLiveStripeSessions(createLiveTestClient(helper), helper.fingerprints);
   assert.equal(result.kind, "diagnosed");
   if (result.kind === "diagnosed") {
     assert.equal(result.bankTransferWasCreated, true);
@@ -677,9 +725,13 @@ test("requires_action plus display_bank_transfer_instructions proves instruction
   assert.equal(JSON.stringify(result).includes("private.example.test"), false);
 });
 
-test("no PaymentIntent uses linked allowlisted event types only and does not expose event IDs", async () => {
+test("failed Session actual reference links allowlisted events without leaking references or event IDs", async () => {
   const control = comparisonSession("fixture-control-session", 4100);
-  const failed = comparisonSession("fixture-failed-session", 2300);
+  const failedReference = "private-failed-reference-fixture";
+  const failed = comparisonSession("fixture-failed-session", 2300, {
+    client_reference_id: failedReference,
+    payment_intent: "fixture-linked-intent",
+  });
   const helper = loadComparisonHelper({
     sessions: [control, failed],
     configurations: { "config-shared-fixture": comparisonConfiguration() },
@@ -687,23 +739,40 @@ test("no PaymentIntent uses linked allowlisted event types only and does not exp
       "customer-fixture-control-session": { livemode: true, available: { gbp: 0 }, settings: { reconciliation_mode: "automatic" } },
       "customer-fixture-failed-session": { livemode: true, available: { gbp: 0 }, settings: { reconciliation_mode: "automatic" } },
     },
+    intents: {
+      "fixture-linked-intent": {
+        id: "fixture-linked-intent", status: "processing", livemode: true, amount: 2300, currency: "gbp",
+        payment_method_types: ["customer_balance"], last_payment_error: null, next_action: null, latest_charge: null,
+      },
+    },
     events: [
       { id: "event-sensitive-one", type: "checkout.session.async_payment_failed", data: { object: { id: failed.id } } },
-      { id: "event-sensitive-two", type: "payment_intent.payment_failed", data: { object: { id: "unlinked-intent" } } },
+      { id: "event-sensitive-two", type: "payment_intent.payment_failed", data: { object: { id: "unlinked-intent", client_reference_id: failedReference } } },
+      { id: "event-sensitive-four", type: "payment_intent.created", data: { object: { id: "another-unlinked-intent", metadata: { order_number: failedReference } } } },
+      { id: "event-sensitive-six", type: "payment_intent.requires_action", data: { object: { id: "fixture-linked-intent" } } },
+      { id: "event-sensitive-five", type: "payment_intent.processing", data: { object: { id: "wrong-reference-intent", client_reference_id: "different-reference-fixture" } } },
       { id: "event-sensitive-three", type: "customer.updated", data: { object: { id: failed.id } } },
     ],
   });
-  const result = await helper.compareExistingLiveStripeSessions(createLiveTestClient(helper), targetOrder, helper.fingerprints);
+  const result = await helper.compareExistingLiveStripeSessions(createLiveTestClient(helper), helper.fingerprints);
   assert.equal(result.kind, "diagnosed");
   if (result.kind === "diagnosed") {
-    assert.deepEqual(JSON.parse(JSON.stringify(result.failedRelevantEvents)), ["checkout.session.async_payment_failed"]);
+    assert.equal(result.failed.clientReference, "PRESENT");
+    assert.equal(result.clientReferencesSame, "NO");
+    assert.deepEqual(JSON.parse(JSON.stringify(result.failedRelevantEvents)), [
+      "checkout.session.async_payment_failed",
+      "payment_intent.payment_failed",
+      "payment_intent.created",
+      "payment_intent.requires_action",
+    ]);
     assert.equal(result.failedEventSearchComplete, true);
     assert.equal(result.rootCauseConfirmed, false);
     assert.equal(result.rootCauseLayer, "STRIPE_EVENT_EVIDENCE_WITHOUT_PAYMENT_ERROR_DETAIL");
   }
-  for (const forbidden of ["event-sensitive-one", "event-sensitive-two", "event-sensitive-three", "unlinked-intent"]) {
+  for (const forbidden of ["event-sensitive-one", "event-sensitive-two", "event-sensitive-three", "event-sensitive-four", "event-sensitive-five", "event-sensitive-six", "unlinked-intent", "fixture-linked-intent", failedReference]) {
     assert.equal(JSON.stringify(result).includes(forbidden), false);
   }
+  assert.equal(JSON.stringify(helper.calls).includes(failedReference), false);
 });
 
 test("two exact fingerprint matches are required; search and read failures stay sanitized", async () => {
@@ -714,7 +783,7 @@ test("two exact fingerprint matches are required; search and read failures stay 
     configurations: { "config-shared-fixture": comparisonConfiguration() },
     balances: {},
   });
-  const result = await helper.compareExistingLiveStripeSessions(createLiveTestClient(helper), targetOrder, helper.fingerprints);
+  const result = await helper.compareExistingLiveStripeSessions(createLiveTestClient(helper), helper.fingerprints);
   assert.equal(result.kind, "SESSION_MATCH_COUNT_MISMATCH");
   if (result.kind === "SESSION_MATCH_COUNT_MISMATCH") {
     assert.equal(result.controlMatchCount, 2);
@@ -725,7 +794,7 @@ test("two exact fingerprint matches are required; search and read failures stay 
   const stripe = createLiveTestClient(listFailure);
   stripe.checkout.sessions.list = async () => { throw new Error("private session detail"); };
   await assert.rejects(
-    listFailure.compareExistingLiveStripeSessions(stripe, targetOrder, listFailure.fingerprints),
+    listFailure.compareExistingLiveStripeSessions(stripe, listFailure.fingerprints),
     (error) => error.stage === "STRIPE_SESSION_LIST_FAILED" && error.message === "STRIPE_SESSION_LIST_FAILED",
   );
 });

@@ -9,7 +9,6 @@ import { fileURLToPath } from "node:url";
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const pagePath = path.join(root, "app", "admin", "order-audit", "page.tsx");
 const pageSource = fs.readFileSync(pagePath, "utf8");
-const targetOrder = { order_number: "CNF-260925-9135", final_total: 23, currency: "GBP" };
 
 function comparisonSide(role, amountTotal) {
   return {
@@ -21,7 +20,7 @@ function comparisonSide(role, amountTotal) {
     created: 1780000000,
     status: "open",
     paymentStatus: "unpaid",
-    clientReference: amountTotal === 2300 ? "MATCHED_ORDER" : "PRESENT",
+    clientReference: "PRESENT",
     paymentMethodTypes: ["customer_balance"],
     paymentMethodConfigurationDetails: "PRESENT",
     paymentMethodConfigurationResolution: "SESSION_CONFIGURATION",
@@ -59,6 +58,7 @@ function successfulDiagnosis() {
     kind: "diagnosed",
     control: comparisonSide("CONTROL_METHOD_VISIBLE", 4100),
     failed: comparisonSide("FAILED_AFTER_PAY_CLICK", 2300),
+    clientReferencesSame: "NO",
     samePaymentMethodConfiguration: true,
     sessionPaymentMethodSetupDifference: false,
     customerCashBalanceDifference: false,
@@ -106,9 +106,9 @@ function loadPage({ authenticated = true, mode = "live", host = "www.cnfans.co.u
       if (id === "@/lib/payments/stripeBankTransfer") return { getStripeBankTransferMode: () => mode };
       if (id === "@/lib/payments/stripeLiveDiagnostics") return {
         createLiveStripeDiagnosticsClient: () => { calls.stripeClient += 1; return {}; },
-        compareExistingLiveStripeSessions: async (_stripe, actualOrder) => {
+        compareExistingLiveStripeSessions: async (...args) => {
           calls.diagnosis += 1;
-          assert.deepEqual(JSON.parse(JSON.stringify(actualOrder)), targetOrder);
+          assert.equal(args.length, 1, "comparison must not receive a fixed order object");
           if (stripeError) throw new StageError(stripeError);
           return diagnosticResult;
         },
@@ -139,9 +139,9 @@ test("order audit is a force-dynamic Server Component with Admin auth and no cli
   assert.match(pageSource, /await requireAdmin\(\)/);
   assert.match(pageSource, /export const dynamic = "force-dynamic"/);
   assert.match(pageSource, /export const revalidate = 0/);
-  assert.equal(pageSource.includes("CNF-260925-9135"), true);
-  assert.equal(pageSource.includes("final_total: 23"), true);
-  assert.equal(pageSource.includes('currency: "GBP"'), true);
+  assert.equal(pageSource.includes("CNF-260925-9135"), false);
+  assert.equal(pageSource.includes("final_total: 23"), false);
+  assert.equal(pageSource.includes('currency: "GBP"'), false);
   assert.doesNotMatch(pageSource, /useEffect|useState|\/api\/admin\/payment-diagnostics/);
   assert.doesNotMatch(pageSource, /getAdminWorkerToken|getCatalogApiBase|fetch\(|ORDER_READ_FAILED|TARGET_ORDER_MISMATCH/);
 });
@@ -152,7 +152,7 @@ test("Admin auth runs before Stripe reads", async () => {
   assert.deepEqual(loaded.calls, { stripeClient: 0, diagnosis: 0 });
 });
 
-test("a missing or inaccessible old Worker order does not block the fixed Stripe comparison", async () => {
+test("comparison page does not bind fingerprint-selected Sessions to an obsolete fixed order", async () => {
   const valid = loadPage();
   const validPage = await valid.page();
   assert.deepEqual(valid.calls, { stripeClient: 1, diagnosis: 1 });
@@ -176,6 +176,7 @@ test("safe Stripe values render while session identifiers and customer data neve
   for (const expected of [
     "CONTROL_ROLE CONTROL_METHOD_VISIBLE", "CONTROL_AMOUNT_TOTAL 4100", "FAILED_ROLE FAILED_AFTER_PAY_CLICK",
     "FAILED_AMOUNT_TOTAL 2300", "SAME_PAYMENT_METHOD_CONFIGURATION true",
+    "CLIENT_REFERENCES_SAME NO", "CONTROL_CLIENT_REFERENCE PRESENT", "FAILED_CLIENT_REFERENCE PRESENT",
     "FAILED_CUSTOMER_BALANCE_FUNDING_TYPE bank_transfer", "FAILED_CUSTOMER_BALANCE_BANK_TRANSFER_TYPE gb_bank_transfer",
     "MOBILE_BROWSER_ONLY_CAUSE NO", "ROOT_CAUSE_LAYER INSUFFICIENT_STRIPE_EVIDENCE",
   ]) assert.ok(rendered.includes(expected), `missing visible audit value: ${expected}`);
