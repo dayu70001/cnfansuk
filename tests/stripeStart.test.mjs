@@ -199,10 +199,12 @@ test("start endpoint is GET-only, no-store, server-authorized, and has no client
 });
 
 test("processing page requires its scoped cookie, reloads the order, and renders pending plus WhatsApp", async () => {
-  const calls = { purpose: "", token: "", order: "" };
+  const calls = { purpose: "", token: "", order: "", mode: "test" };
   const loadedModule = { exports: {} };
   const notFound = () => { throw new Error("NOT_FOUND"); };
   const metaPixelLink = function MetaPixelEventLink() {};
+  const nextLink = function Link() {};
+  const orderConfirmationDetails = function OrderConfirmationDetails() {};
   const compiled = ts.transpile(processingPageSource, {
     module: ts.ModuleKind.CommonJS,
     jsx: ts.JsxEmit.ReactJSX,
@@ -218,10 +220,16 @@ test("processing page requires its scoped cookie, reloads the order, and renders
     require(id) {
       if (id === "react/jsx-runtime") return nodeRequire("react/jsx-runtime");
       if (id === "next/headers") return {
-        headers: async () => new Headers({ host: "localhost:4000", cookie: "order=fixture" }),
+        headers: async () => new Headers({
+          host: calls.mode === "live" ? "www.cnfans.co.uk" : "localhost:4000",
+          "x-forwarded-proto": calls.mode === "live" ? "https" : "http",
+          cookie: "order=fixture",
+        }),
       };
       if (id === "next/navigation") return { notFound };
+      if (id === "next/link") return { __esModule: true, default: nextLink };
       if (id === "@/components/MetaPixelEventLink") return { MetaPixelEventLink: metaPixelLink };
+      if (id === "@/components/OrderConfirmationDetails") return { OrderConfirmationDetails: orderConfirmationDetails };
       if (id === "@/lib/orderAccessTokenCookie") return {
         getOrderAccessTokenFromCookieHeader: (_cookie, number, purpose) => {
           calls.order = number;
@@ -238,9 +246,9 @@ test("processing page requires its scoped cookie, reloads the order, and renders
         },
       };
       if (id === "@/lib/payments/stripeBankTransfer") return {
-        getStripeBankTransferMode: () => "test",
+        getStripeBankTransferMode: () => calls.mode,
         isLocalStripeBankTransferTestEnabled: () => true,
-        isStripeLiveBankTransferEnabled: () => false,
+        isStripeLiveBankTransferEnabled: () => true,
       };
       if (id === "@/lib/siteSettings") return { fetchSiteSettings: async () => ({ links: {} }) };
       throw new Error("Unexpected module import: " + id);
@@ -272,13 +280,38 @@ test("processing page requires its scoped cookie, reloads the order, and renders
   assert.match(text.join(" "), /Payment processing/);
   assert.match(text.join(" "), /Order #\s*CNF-260924-1234/);
   assert.match(text.join(" "), /Waiting for payment confirmation/);
+  assert.match(text.join(" "), /We.ll verify your order with you on WhatsApp before processing/);
   assert.match(text.join(" "), /Confirm order on WhatsApp/);
+  assert.match(text.join(" "), /Track order/);
+  assert.match(text.join(" "), /Continue shopping/);
+  assert.doesNotMatch(text.join(" "), /Order placed|Payment successful|Payment completed|Order completed|\bPaid\b/);
+  assert.equal(elements.some((element) => element.props?.className === "success-check"), false);
   const whatsappLink = elements.find((element) => element.type === metaPixelLink);
   assert.ok(whatsappLink);
   assert.equal(whatsappLink.props.target, "_blank");
   assert.equal(whatsappLink.props.rel, "noopener noreferrer");
   assert.equal(whatsappLink.props.recordWhatsappClickForOrder, "CNF-260924-1234");
   assert.equal(new URL(whatsappLink.props.href).searchParams.get("text"), "Hi, I'd like to confirm my order #CNF-260924-1234.");
+  assert.ok(elements.some((element) => element.props?.className === "success-whatsapp-icon"));
+  const links = elements.filter((element) => element.type === nextLink);
+  assert.ok(links.some((element) => element.props.href === "/track-order"));
+  assert.ok(links.some((element) => element.props.href === "/"));
+  const details = elements.find((element) => element.type === orderConfirmationDetails);
+  assert.equal(details.props.orderNumber, "CNF-260924-1234");
+  assert.equal(details.props.useLiveAccessCookie, false);
+
+  calls.mode = "live";
+  const liveResult = await page({ searchParams: Promise.resolve({ order: "CNF-260924-1234" }) });
+  const liveDetails = [];
+  function visitLive(node) {
+    if (Array.isArray(node)) return node.forEach(visitLive);
+    if (!node || typeof node !== "object") return;
+    liveDetails.push(node);
+    visitLive(node.props?.children);
+  }
+  visitLive(liveResult);
+  const liveOrderDetails = liveDetails.find((element) => element.type === orderConfirmationDetails);
+  assert.equal(liveOrderDetails.props.useLiveAccessCookie, true);
 
   await assert.rejects(
     page({ searchParams: Promise.resolve({ order: ["CNF-260924-1234", "CNF-260924-9999"] }) }),
