@@ -1,6 +1,5 @@
 import { headers } from "next/headers";
-import { requireAdmin, getAdminWorkerToken } from "@/lib/adminAuth";
-import { getCatalogApiBase } from "@/lib/catalogApiBase";
+import { requireAdmin } from "@/lib/adminAuth";
 import {
   compareExistingLiveStripeSessions,
   createLiveStripeDiagnosticsClient,
@@ -15,9 +14,13 @@ export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 const TARGET_ORDER_NUMBER = "CNF-260925-9135";
+const TARGET_ORDER = {
+  order_number: TARGET_ORDER_NUMBER,
+  final_total: 23,
+  currency: "GBP",
+} as const;
 
 type AuditRow = { label: string; value: string };
-type AuditOrder = { order_number?: unknown; final_total?: unknown; currency?: unknown };
 
 function renderRows(rows: AuditRow[]) {
   return (
@@ -160,49 +163,9 @@ export default async function OrderAuditPage() {
     || (forwardedProto && forwardedProto !== "https")
   ) return renderError("PRODUCTION_LIVE_MODE_REQUIRED");
 
-  const workerToken = getAdminWorkerToken();
-  if (!workerToken) return renderError("ORDER_READ_FAILED");
-
-  let orderResponse: Response;
-  try {
-    orderResponse = await fetch(
-      `${getCatalogApiBase()}/admin/orders/${encodeURIComponent(TARGET_ORDER_NUMBER)}`,
-      {
-        method: "GET",
-        headers: { Accept: "application/json", Authorization: `Bearer ${workerToken}` },
-        cache: "no-store",
-      },
-    );
-  } catch {
-    return renderError("ORDER_READ_FAILED");
-  }
-  if (!orderResponse.ok) return renderError("ORDER_READ_FAILED");
-
-  let order: AuditOrder | null = null;
-  try {
-    const payload = await orderResponse.json() as { order?: AuditOrder | null };
-    order = payload?.order ?? null;
-  } catch {
-    return renderError("ORDER_READ_FAILED");
-  }
-
-  const amount = typeof order?.final_total === "number" ? order.final_total : Number(order?.final_total);
-  if (
-    order?.order_number !== TARGET_ORDER_NUMBER
-    || !Number.isFinite(amount)
-    || Math.round(amount * 100) !== 2300
-    || Math.abs(amount * 100 - 2300) > 0.00001
-    || typeof order.currency !== "string"
-    || order.currency.toUpperCase() !== "GBP"
-  ) return renderError("TARGET_ORDER_MISMATCH");
-
   try {
     const stripe = createLiveStripeDiagnosticsClient();
-    const result = await compareExistingLiveStripeSessions(stripe, {
-      order_number: TARGET_ORDER_NUMBER,
-      final_total: amount,
-      currency: order.currency,
-    });
+    const result = await compareExistingLiveStripeSessions(stripe, TARGET_ORDER);
     return renderRows(resultRows(result));
   } catch (error) {
     const errorClass = error instanceof LiveStripeDiagnosticsStageError ? error.stage : "OTHER";

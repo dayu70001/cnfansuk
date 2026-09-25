@@ -74,8 +74,8 @@ function successfulDiagnosis() {
   };
 }
 
-function loadPage({ authenticated = true, order = targetOrder, responseOk = true, diagnosticResult = successfulDiagnosis(), stripeError } = {}) {
-  const calls = { worker: 0, stripeClient: 0, diagnosis: 0 };
+function loadPage({ authenticated = true, mode = "live", host = "www.cnfans.co.uk", proto = "https", diagnosticResult = successfulDiagnosis(), stripeError } = {}) {
+  const calls = { stripeClient: 0, diagnosis: 0 };
   const compiledModule = { exports: {} };
   const compiled = ts.transpile(pageSource, {
     module: ts.ModuleKind.CommonJS,
@@ -95,28 +95,15 @@ function loadPage({ authenticated = true, order = targetOrder, responseOk = true
     Number,
     Math,
     encodeURIComponent,
-    fetch: async (url, init) => {
-      calls.worker += 1;
-      assert.match(url, /\/admin\/orders\/CNF-260925-9135$/);
-      assert.equal(init.method, "GET");
-      assert.equal(init.cache, "no-store");
-      assert.equal(init.headers.Authorization, "Bearer server-only-worker-token");
-      return {
-        ok: responseOk,
-        json: async () => ({ order }),
-      };
-    },
     require(id) {
       if (id === "react/jsx-runtime") return { jsx: element, jsxs: element };
       if (id === "next/headers") return { headers: async () => new Map([
-        ["host", "www.cnfans.co.uk"], ["x-forwarded-proto", "https"],
+        ["host", host], ["x-forwarded-proto", proto],
       ]) };
       if (id === "@/lib/adminAuth") return {
         requireAdmin: async () => { if (!authenticated) throw new Error("REDIRECT:/admin/login"); },
-        getAdminWorkerToken: () => "server-only-worker-token",
       };
-      if (id === "@/lib/catalogApiBase") return { getCatalogApiBase: () => "https://catalog.example.test" };
-      if (id === "@/lib/payments/stripeBankTransfer") return { getStripeBankTransferMode: () => "live" };
+      if (id === "@/lib/payments/stripeBankTransfer") return { getStripeBankTransferMode: () => mode };
       if (id === "@/lib/payments/stripeLiveDiagnostics") return {
         createLiveStripeDiagnosticsClient: () => { calls.stripeClient += 1; return {}; },
         compareExistingLiveStripeSessions: async (_stripe, actualOrder) => {
@@ -152,35 +139,34 @@ test("order audit is a force-dynamic Server Component with Admin auth and no cli
   assert.match(pageSource, /await requireAdmin\(\)/);
   assert.match(pageSource, /export const dynamic = "force-dynamic"/);
   assert.match(pageSource, /export const revalidate = 0/);
-  assert.match(pageSource, /cache: "no-store"/);
+  assert.equal(pageSource.includes("CNF-260925-9135"), true);
+  assert.equal(pageSource.includes("final_total: 23"), true);
+  assert.equal(pageSource.includes('currency: "GBP"'), true);
   assert.doesNotMatch(pageSource, /useEffect|useState|\/api\/admin\/payment-diagnostics/);
+  assert.doesNotMatch(pageSource, /getAdminWorkerToken|getCatalogApiBase|fetch\(|ORDER_READ_FAILED|TARGET_ORDER_MISMATCH/);
 });
 
-test("Admin auth runs before Worker or Stripe reads", async () => {
+test("Admin auth runs before Stripe reads", async () => {
   const loaded = loadPage({ authenticated: false });
   await assert.rejects(loaded.page(), /REDIRECT:\/admin\/login/);
-  assert.deepEqual(loaded.calls, { worker: 0, stripeClient: 0, diagnosis: 0 });
+  assert.deepEqual(loaded.calls, { stripeClient: 0, diagnosis: 0 });
 });
 
-test("only the exact saved order is passed to the Stripe diagnostic helper", async () => {
-  const mismatch = loadPage({ order: { ...targetOrder, final_total: 24 } });
-  const mismatchPage = await mismatch.page();
-  assert.deepEqual(mismatch.calls, { worker: 1, stripeClient: 0, diagnosis: 0 });
-  assert.equal(flatten(mismatchPage).join(" ").includes("TARGET_ORDER_MISMATCH"), true);
-
+test("a missing or inaccessible old Worker order does not block the fixed Stripe comparison", async () => {
   const valid = loadPage();
   const validPage = await valid.page();
-  assert.deepEqual(valid.calls, { worker: 1, stripeClient: 1, diagnosis: 1 });
+  assert.deepEqual(valid.calls, { stripeClient: 1, diagnosis: 1 });
   assert.equal(flatten(validPage).join(" ").includes("CNFANS Live Session Comparison"), true);
+  assert.doesNotMatch(pageSource, /\/admin\/orders\/|ORDER_READ_FAILED|TARGET_ORDER_MISMATCH/);
 });
 
-test("Worker read failures are rendered as a safe stage without calling Stripe", async () => {
-  const loaded = loadPage({ responseOk: false });
-  const page = await loaded.page();
-  assert.deepEqual(loaded.calls, { worker: 1, stripeClient: 0, diagnosis: 0 });
-  const rendered = flatten(page).join(" ");
-  assert.ok(rendered.includes("ERROR_CLASS:"));
-  assert.ok(rendered.includes("ORDER_READ_FAILED"));
+test("Production Live gate blocks Test Mode, alternate hosts, and insecure forwarded protocol", async () => {
+  for (const options of [{ mode: "test" }, { host: "preview.cnfans.co.uk" }, { proto: "http" }]) {
+    const loaded = loadPage(options);
+    const page = await loaded.page();
+    assert.deepEqual(loaded.calls, { stripeClient: 0, diagnosis: 0 });
+    assert.ok(flatten(page).join(" ").includes("PRODUCTION_LIVE_MODE_REQUIRED"));
+  }
 });
 
 test("safe Stripe values render while session identifiers and customer data never enter the page", async () => {
