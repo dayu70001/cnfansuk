@@ -31,8 +31,41 @@ export type LiveStripeDiagnosticConfiguration = {
   }>;
 };
 
+export type LiveStripeDiagnosticBankTransferType =
+  | "gb_bank_transfer"
+  | "eu_bank_transfer"
+  | "jp_bank_transfer"
+  | "mx_bank_transfer"
+  | "us_bank_transfer"
+  | "unknown"
+  | null;
+
+export type LiveStripeDiagnosticRootCauseLayer =
+  | "LIVE_PAYMENT_METHOD_CONFIGURATION_OFF"
+  | "STRIPE_ACCOUNT_METHOD_UNAVAILABLE"
+  | "STRIPE_DYNAMIC_SESSION_FILTERING"
+  | "CUSTOMER_BALANCE_SESSION_OPTIONS_MISSING"
+  | "CUSTOMER_BALANCE_NOT_CONFIGURED_AS_BANK_TRANSFER"
+  | "WRONG_BANK_TRANSFER_TYPE"
+  | "STRIPE_CHECKOUT_DISPLAY_OR_ELIGIBILITY"
+  | "STRIPE_API_DOES_NOT_EXPOSE_ENOUGH_DETAIL"
+  | "UNKNOWN";
+
+export type LiveStripeDiagnosticFailureStage =
+  | "STRIPE_SESSION_LIST_FAILED"
+  | "STRIPE_SESSION_RETRIEVE_FAILED"
+  | "PAYMENT_METHOD_CONFIGURATION_READ_FAILED";
+
+export class LiveStripeDiagnosticsStageError extends Error {
+  constructor(readonly stage: LiveStripeDiagnosticFailureStage) {
+    super(stage);
+    this.name = "LiveStripeDiagnosticsStageError";
+  }
+}
+
 export type LiveStripeSessionDiagnosis = {
   sessionFound: true;
+  matchCount: 1;
   livemode: true;
   mode: "payment";
   status: string | null;
@@ -48,14 +81,19 @@ export type LiveStripeSessionDiagnosis = {
   paymentMethodConfigurationResolution: string;
   paymentMethodConfigurationDetailsPresent: boolean;
   paymentMethodOptionKeys: string[];
+  customerBalanceOptionPresent: boolean;
+  customerBalanceFundingType: "bank_transfer" | "unknown" | null;
+  customerBalanceBankTransferType: LiveStripeDiagnosticBankTransferType;
   case: "A" | "B" | "C" | "D" | "UNKNOWN";
+  rootCauseLayer: LiveStripeDiagnosticRootCauseLayer;
+  missingStripeFields: string[];
 };
 
 export type LiveStripeSessionDiagnosticResult =
-  | { kind: "SESSION_NOT_FOUND" }
-  | { kind: "SESSION_AMBIGUOUS" }
-  | { kind: "SESSION_SEARCH_LIMIT_EXCEEDED" }
-  | { kind: "SESSION_RETRIEVAL_MISMATCH" }
+  | { kind: "SESSION_NOT_FOUND"; matchCount: 0 }
+  | { kind: "SESSION_AMBIGUOUS"; matchCount: number }
+  | { kind: "SESSION_SEARCH_LIMIT_EXCEEDED"; matchCount: number }
+  | { kind: "SESSION_RETRIEVAL_MISMATCH"; matchCount: 1 }
   | { kind: "diagnosed"; diagnosis: LiveStripeSessionDiagnosis };
 
 /** Create a server-only Stripe client after verifying this is the configured Production Live environment. */
@@ -94,11 +132,16 @@ export async function diagnoseExistingLiveStripeSession(
   let completed = false;
 
   for (let pageNumber = 0; pageNumber < MAX_LIST_PAGES; pageNumber += 1) {
-    const page = await stripe.checkout.sessions.list({
-      created: { gte: SESSION_CREATED_FROM, lt: SESSION_CREATED_UNTIL },
-      limit: PAGE_SIZE,
-      ...(startingAfter ? { starting_after: startingAfter } : {}),
-    });
+    let page: Stripe.ApiList<Stripe.Checkout.Session>;
+    try {
+      page = await stripe.checkout.sessions.list({
+        created: { gte: SESSION_CREATED_FROM, lt: SESSION_CREATED_UNTIL },
+        limit: PAGE_SIZE,
+        ...(startingAfter ? { starting_after: startingAfter } : {}),
+      });
+    } catch {
+      throw new LiveStripeDiagnosticsStageError("STRIPE_SESSION_LIST_FAILED");
+    }
 
     for (const session of page.data) {
       if (
@@ -118,16 +161,21 @@ export async function diagnoseExistingLiveStripeSession(
     }
 
     const lastSession = page.data.at(-1);
-    if (!lastSession) return { kind: "SESSION_SEARCH_LIMIT_EXCEEDED" };
+    if (!lastSession) return { kind: "SESSION_SEARCH_LIMIT_EXCEEDED", matchCount: matches.length };
     startingAfter = lastSession.id;
   }
 
-  if (!completed) return { kind: "SESSION_SEARCH_LIMIT_EXCEEDED" };
-  if (matches.length === 0) return { kind: "SESSION_NOT_FOUND" };
-  if (matches.length !== 1) return { kind: "SESSION_AMBIGUOUS" };
+  if (!completed) return { kind: "SESSION_SEARCH_LIMIT_EXCEEDED", matchCount: matches.length };
+  if (matches.length === 0) return { kind: "SESSION_NOT_FOUND", matchCount: 0 };
+  if (matches.length !== 1) return { kind: "SESSION_AMBIGUOUS", matchCount: matches.length };
 
   const listedSession = matches[0];
-  const session = await stripe.checkout.sessions.retrieve(listedSession.id);
+  let session: Stripe.Checkout.Session;
+  try {
+    session = await stripe.checkout.sessions.retrieve(listedSession.id);
+  } catch {
+    throw new LiveStripeDiagnosticsStageError("STRIPE_SESSION_RETRIEVE_FAILED");
+  }
   if (
     session.id !== listedSession.id
     || session.created < SESSION_CREATED_FROM
@@ -137,10 +185,15 @@ export async function diagnoseExistingLiveStripeSession(
     || session.client_reference_id !== TARGET_ORDER_NUMBER
     || session.amount_total !== TARGET_AMOUNT_MINOR
     || session.currency !== TARGET_CURRENCY
-  ) return { kind: "SESSION_RETRIEVAL_MISMATCH" };
+  ) return { kind: "SESSION_RETRIEVAL_MISMATCH", matchCount: 1 };
 
   const configurationDetailsId = session.payment_method_configuration_details?.id;
-  const resolvedConfiguration = await resolvePaymentMethodConfiguration(stripe, configurationDetailsId);
+  let resolvedConfiguration: Awaited<ReturnType<typeof resolvePaymentMethodConfiguration>>;
+  try {
+    resolvedConfiguration = await resolvePaymentMethodConfiguration(stripe, configurationDetailsId);
+  } catch {
+    throw new LiveStripeDiagnosticsStageError("PAYMENT_METHOD_CONFIGURATION_READ_FAILED");
+  }
   const paymentMethodTypes = session.payment_method_types.filter(isSafeIdentifier);
   const paymentMethodOptionKeys = Object.keys(session.payment_method_options ?? {}).filter(isSafeIdentifier);
   const customerBalanceInSession = paymentMethodTypes.includes("customer_balance");
@@ -149,11 +202,26 @@ export async function diagnoseExistingLiveStripeSession(
   const configurationAvailable = typeof customerBalance?.available === "boolean"
     ? customerBalance.available
     : null;
+  const paymentMethodOptions = session.payment_method_options as unknown as Record<string, unknown> | null;
+  const customerBalanceOption = asRecord(paymentMethodOptions?.customer_balance);
+  const customerBalanceBankTransferOption = asRecord(customerBalanceOption?.bank_transfer);
+  const customerBalanceOptionPresent = customerBalanceOption !== null;
+  const customerBalanceFundingType = safeFundingType(customerBalanceOption?.funding_type);
+  const customerBalanceBankTransferType = safeBankTransferType(customerBalanceBankTransferOption?.type);
+  const classification = classifyRootCause(
+    configurationValue,
+    configurationAvailable,
+    customerBalanceInSession,
+    customerBalanceOptionPresent,
+    customerBalanceFundingType,
+    customerBalanceBankTransferType,
+  );
 
   return {
     kind: "diagnosed",
     diagnosis: {
       sessionFound: true,
+      matchCount: 1,
       livemode: true,
       mode: "payment",
       status: safeStripeStatus(session.status),
@@ -169,7 +237,12 @@ export async function diagnoseExistingLiveStripeSession(
       paymentMethodConfigurationResolution: resolvedConfiguration.resolution,
       paymentMethodConfigurationDetailsPresent: Boolean(configurationDetailsId),
       paymentMethodOptionKeys,
-      case: classifyDiagnosticCase(configurationValue, configurationAvailable, customerBalanceInSession),
+      customerBalanceOptionPresent,
+      customerBalanceFundingType,
+      customerBalanceBankTransferType,
+      case: classification.case,
+      rootCauseLayer: classification.rootCauseLayer,
+      missingStripeFields: classification.missingStripeFields,
     },
   };
 }
@@ -258,16 +331,61 @@ function summarizeConfiguration(configuration: Stripe.PaymentMethodConfiguration
   } satisfies LiveStripeDiagnosticConfiguration;
 }
 
-function classifyDiagnosticCase(
+function classifyRootCause(
   configurationValue: "on" | "off" | null,
   configurationAvailable: boolean | null,
   customerBalanceInSession: boolean,
-): LiveStripeSessionDiagnosis["case"] {
-  if (customerBalanceInSession) return "D";
-  if (configurationValue === "off") return "A";
-  if (configurationValue === "on" && configurationAvailable === false) return "B";
-  if (configurationValue === "on" && configurationAvailable === true) return "C";
-  return "UNKNOWN";
+  optionPresent: boolean,
+  fundingType: "bank_transfer" | "unknown" | null,
+  transferType: LiveStripeDiagnosticBankTransferType,
+): {
+  case: LiveStripeSessionDiagnosis["case"];
+  rootCauseLayer: LiveStripeDiagnosticRootCauseLayer;
+  missingStripeFields: string[];
+} {
+  if (configurationValue === "off") {
+    return { case: "A", rootCauseLayer: "LIVE_PAYMENT_METHOD_CONFIGURATION_OFF", missingStripeFields: [] };
+  }
+  if (configurationValue === "on" && configurationAvailable === false) {
+    return { case: "B", rootCauseLayer: "STRIPE_ACCOUNT_METHOD_UNAVAILABLE", missingStripeFields: [] };
+  }
+  if (configurationValue === "on" && configurationAvailable === true && !customerBalanceInSession) {
+    return { case: "C", rootCauseLayer: "STRIPE_DYNAMIC_SESSION_FILTERING", missingStripeFields: [] };
+  }
+  if (customerBalanceInSession) {
+    if (!optionPresent) {
+      return { case: "D", rootCauseLayer: "CUSTOMER_BALANCE_SESSION_OPTIONS_MISSING", missingStripeFields: [] };
+    }
+    if (fundingType === null) {
+      return {
+        case: "UNKNOWN",
+        rootCauseLayer: "STRIPE_API_DOES_NOT_EXPOSE_ENOUGH_DETAIL",
+        missingStripeFields: ["payment_method_options.customer_balance.funding_type"],
+      };
+    }
+    if (fundingType !== "bank_transfer") {
+      return { case: "D", rootCauseLayer: "CUSTOMER_BALANCE_NOT_CONFIGURED_AS_BANK_TRANSFER", missingStripeFields: [] };
+    }
+    if (transferType === null) {
+      return {
+        case: "UNKNOWN",
+        rootCauseLayer: "STRIPE_API_DOES_NOT_EXPOSE_ENOUGH_DETAIL",
+        missingStripeFields: ["payment_method_options.customer_balance.bank_transfer.type"],
+      };
+    }
+    if (transferType !== "gb_bank_transfer") {
+      return { case: "D", rootCauseLayer: "WRONG_BANK_TRANSFER_TYPE", missingStripeFields: [] };
+    }
+    return { case: "D", rootCauseLayer: "STRIPE_CHECKOUT_DISPLAY_OR_ELIGIBILITY", missingStripeFields: [] };
+  }
+
+  const missingStripeFields = [
+    ...(configurationValue === null ? ["customerBalanceConfigValue"] : []),
+    ...(configurationAvailable === null ? ["customerBalanceConfigAvailable"] : []),
+  ];
+  return missingStripeFields.length
+    ? { case: "UNKNOWN", rootCauseLayer: "STRIPE_API_DOES_NOT_EXPOSE_ENOUGH_DETAIL", missingStripeFields }
+    : { case: "UNKNOWN", rootCauseLayer: "UNKNOWN", missingStripeFields: [] };
 }
 
 function isSafeIdentifier(value: string) {
@@ -284,4 +402,27 @@ function safeConfigPreference(value: unknown): "on" | "off" | "none" | null {
 
 function safeStripeStatus(value: unknown) {
   return typeof value === "string" && /^[a-z_]{1,40}$/.test(value) ? value : null;
+}
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : null;
+}
+
+function safeFundingType(value: unknown): "bank_transfer" | "unknown" | null {
+  if (value === undefined || value === null) return null;
+  return value === "bank_transfer" ? "bank_transfer" : "unknown";
+}
+
+function safeBankTransferType(value: unknown): LiveStripeDiagnosticBankTransferType {
+  if (value === undefined || value === null) return null;
+  switch (value) {
+    case "gb_bank_transfer":
+    case "eu_bank_transfer":
+    case "jp_bank_transfer":
+    case "mx_bank_transfer":
+    case "us_bank_transfer":
+      return value as Exclude<LiveStripeDiagnosticBankTransferType, "unknown" | null>;
+    default:
+      return "unknown";
+  }
 }

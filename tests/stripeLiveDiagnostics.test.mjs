@@ -31,7 +31,7 @@ function liveSession(overrides = {}) {
     customer_details: { name: "Private Name", address: { line1: "Private Address" }, phone: "0000000000" },
     payment_method_types: ["card", "customer_balance"],
     payment_method_configuration_details: { id: "pmc_sensitive123", parent: null },
-    payment_method_options: { customer_balance: { funding_type: "bank_transfer" }, card: {} },
+    payment_method_options: { customer_balance: { funding_type: "bank_transfer", bank_transfer: { type: "gb_bank_transfer" } }, card: {} },
     url: "https://checkout.stripe.com/c/pay/cs_live_sensitive123",
     ...overrides,
   };
@@ -216,6 +216,11 @@ test("exactly one Session is retrieved and only read APIs are called; response i
   assert.equal(result.diagnosis.paymentMethodConfiguration.customerBalanceValue, "on");
   assert.equal(result.diagnosis.paymentMethodConfigurationResolution, "SESSION_CONFIGURATION");
   assert.equal(result.diagnosis.case, "D");
+  assert.equal(result.diagnosis.rootCauseLayer, "STRIPE_CHECKOUT_DISPLAY_OR_ELIGIBILITY");
+  assert.equal(result.diagnosis.customerBalanceOptionPresent, true);
+  assert.equal(result.diagnosis.customerBalanceFundingType, "bank_transfer");
+  assert.equal(result.diagnosis.customerBalanceBankTransferType, "gb_bank_transfer");
+  assert.deepEqual(JSON.parse(JSON.stringify(result.diagnosis.missingStripeFields)), []);
   assert.deepEqual(JSON.parse(JSON.stringify(result.diagnosis.paymentMethodOptionKeys)), ["customer_balance", "card"]);
   assert.deepEqual(helper.calls.map((call) => call.operation).filter((operation) => operation !== "client.init"), [
     "sessions.list", "sessions.retrieve", "configurations.retrieve",
@@ -258,6 +263,117 @@ test("wrong amount/currency/reference and Test Sessions cannot match", async () 
     const helper = loadHelper({ sessionPages: [exactPage(session)] });
     assert.equal((await helper.diagnoseExistingLiveStripeSession(createLiveTestClient(helper), targetOrder)).kind, "SESSION_NOT_FOUND");
   }
+});
+
+test("bank transfer option details use a strict whitelist and unknown transfer types stay masked", async () => {
+  const allowed = loadHelper({ sessionPages: [exactPage(liveSession())] });
+  const allowedResult = await allowed.diagnoseExistingLiveStripeSession(createLiveTestClient(allowed), targetOrder);
+  assert.equal(allowedResult.kind, "diagnosed");
+  if (allowedResult.kind === "diagnosed") {
+    assert.equal(allowedResult.diagnosis.customerBalanceBankTransferType, "gb_bank_transfer");
+    assert.equal(allowedResult.diagnosis.rootCauseLayer, "STRIPE_CHECKOUT_DISPLAY_OR_ELIGIBILITY");
+  }
+
+  const unknown = loadHelper({
+    sessionPages: [exactPage(liveSession({
+      payment_method_options: { customer_balance: { funding_type: "bank_transfer", bank_transfer: { type: "sensitive_future_value" } } },
+    }))],
+    sessionToRetrieve: liveSession({
+      payment_method_options: { customer_balance: { funding_type: "bank_transfer", bank_transfer: { type: "sensitive_future_value" } } },
+    }),
+  });
+  const unknownResult = await unknown.diagnoseExistingLiveStripeSession(createLiveTestClient(unknown), targetOrder);
+  assert.equal(unknownResult.kind, "diagnosed");
+  if (unknownResult.kind === "diagnosed") {
+    assert.equal(unknownResult.diagnosis.customerBalanceBankTransferType, "unknown");
+    assert.equal(unknownResult.diagnosis.rootCauseLayer, "WRONG_BANK_TRANSFER_TYPE");
+    assert.equal(JSON.stringify(unknownResult.diagnosis).includes("sensitive_future_value"), false);
+  }
+});
+
+test("root-cause cases A through D and missing-field reporting follow the approved matrix", async () => {
+  const cases = [
+    {
+      session: liveSession(),
+      configuration: liveConfiguration({ customer_balance: { available: true, display_preference: { preference: "on", value: "off" } } }),
+      expectedCase: "A",
+      expectedRoot: "LIVE_PAYMENT_METHOD_CONFIGURATION_OFF",
+    },
+    {
+      session: liveSession(),
+      configuration: liveConfiguration({ customer_balance: { available: false, display_preference: { preference: "on", value: "on" } } }),
+      expectedCase: "B",
+      expectedRoot: "STRIPE_ACCOUNT_METHOD_UNAVAILABLE",
+    },
+    {
+      session: liveSession({ payment_method_types: ["card"] }),
+      configuration: liveConfiguration(),
+      expectedCase: "C",
+      expectedRoot: "STRIPE_DYNAMIC_SESSION_FILTERING",
+    },
+    {
+      session: liveSession({ payment_method_options: {} }),
+      configuration: liveConfiguration(),
+      expectedCase: "D",
+      expectedRoot: "CUSTOMER_BALANCE_SESSION_OPTIONS_MISSING",
+    },
+    {
+      session: liveSession({ payment_method_options: { customer_balance: { funding_type: "cash" } } }),
+      configuration: liveConfiguration(),
+      expectedCase: "D",
+      expectedRoot: "CUSTOMER_BALANCE_NOT_CONFIGURED_AS_BANK_TRANSFER",
+    },
+    {
+      session: liveSession({ payment_method_options: { customer_balance: { funding_type: "bank_transfer", bank_transfer: { type: "future_value" } } } }),
+      configuration: liveConfiguration(),
+      expectedCase: "D",
+      expectedRoot: "WRONG_BANK_TRANSFER_TYPE",
+    },
+  ];
+
+  for (const { session, configuration, expectedCase, expectedRoot } of cases) {
+    const helper = loadHelper({ sessionPages: [exactPage(session)], sessionToRetrieve: session, configuration });
+    const result = await helper.diagnoseExistingLiveStripeSession(createLiveTestClient(helper), targetOrder);
+    assert.equal(result.kind, "diagnosed");
+    if (result.kind === "diagnosed") {
+      assert.equal(result.diagnosis.case, expectedCase);
+      assert.equal(result.diagnosis.rootCauseLayer, expectedRoot);
+    }
+  }
+
+  const missing = liveConfiguration({ customer_balance: { display_preference: { preference: "none", value: null } } });
+  const missingHelper = loadHelper({
+    sessionPages: [exactPage(liveSession({ payment_method_types: ["card"] }))],
+    sessionToRetrieve: liveSession({ payment_method_types: ["card"] }),
+    configuration: missing,
+  });
+  const missingResult = await missingHelper.diagnoseExistingLiveStripeSession(createLiveTestClient(missingHelper), targetOrder);
+  assert.equal(missingResult.kind, "diagnosed");
+  if (missingResult.kind === "diagnosed") {
+    assert.equal(missingResult.diagnosis.case, "UNKNOWN");
+    assert.equal(missingResult.diagnosis.rootCauseLayer, "STRIPE_API_DOES_NOT_EXPOSE_ENOUGH_DETAIL");
+    assert.deepEqual(JSON.parse(JSON.stringify(missingResult.diagnosis.missingStripeFields)), [
+      "customerBalanceConfigValue", "customerBalanceConfigAvailable",
+    ]);
+  }
+});
+
+test("Stripe read failures are reduced to safe diagnostic stages", async () => {
+  const listFailure = loadHelper();
+  const listClient = createLiveTestClient(listFailure);
+  listClient.checkout.sessions.list = async () => { throw new Error("sensitive Stripe detail"); };
+  await assert.rejects(
+    listFailure.diagnoseExistingLiveStripeSession(listClient, targetOrder),
+    (error) => error.stage === "STRIPE_SESSION_LIST_FAILED" && error.message === "STRIPE_SESSION_LIST_FAILED",
+  );
+
+  const configFailure = loadHelper({ sessionPages: [exactPage(liveSession())] });
+  const configClient = createLiveTestClient(configFailure);
+  configClient.paymentMethodConfigurations.retrieve = async () => { throw new Error("sensitive configuration detail"); };
+  await assert.rejects(
+    configFailure.diagnoseExistingLiveStripeSession(configClient, targetOrder),
+    (error) => error.stage === "PAYMENT_METHOD_CONFIGURATION_READ_FAILED" && error.message === "PAYMENT_METHOD_CONFIGURATION_READ_FAILED",
+  );
 });
 
 test("Stripe client refuses non-Production/non-Live env and disables automatic retry", () => {
