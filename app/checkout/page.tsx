@@ -25,12 +25,10 @@ import { getOrderPaymentStage, orderPaymentStageLabel, type OrderPaymentStage, t
 import type { CartItem, CustomerDetails } from "@/lib/types";
 import { getOrderAccessTokenStorageKey } from "@/lib/orderAccessTokenKey";
 import {
-  getLocalStripeFallbackStorageKey,
   getStripeSessionId,
   isStripeCheckoutUrl,
   isStripeLiveSuccessReturnUrl,
   isStripeTestSuccessReturnUrl,
-  serializeLocalStripeFallback,
 } from "@/lib/stripeCheckoutHandoff";
 
 type CheckoutStep = "details" | "delivery" | "payment";
@@ -160,7 +158,6 @@ export default function CheckoutPage() {
   });
   const [checkoutSessionId, setCheckoutSessionId] = useState("");
   const [localStripeMode, setLocalStripeMode] = useState<LocalStripeMode | null>(null);
-  const [localStripeFallbackUrl, setLocalStripeFallbackUrl] = useState("");
   const [order, setOrder] = useState<CheckoutOrder | null>(null);
   const [hydrated, setHydrated] = useState(false);
 
@@ -466,26 +463,6 @@ export default function CheckoutPage() {
     localStripeRequestInFlight.current = true;
     setSubmitting(true);
     setSubmitError("");
-    setLocalStripeFallbackUrl("");
-
-    let paymentWindow: Window | null = null;
-    if (localStripeMode === "test" || localStripeMode === "live") {
-      // Open synchronously during the real click so browser popup blockers allow the later Stripe URL.
-      try {
-        paymentWindow = window.open("about:blank", "_blank");
-        if (paymentWindow) {
-          try {
-            paymentWindow.opener = null;
-          } catch {
-            paymentWindow.close();
-            paymentWindow = null;
-          }
-        }
-      } catch {
-        paymentWindow?.close();
-        paymentWindow = null;
-      }
-    }
 
     try {
       const response = await fetch("/api/payments/stripe/checkout", {
@@ -528,51 +505,23 @@ export default function CheckoutPage() {
         || (localStripeMode === "test" && (result.mode !== "test" || !sessionId || !isStripeCheckoutUrl(result.checkoutUrl) || !localReturnUrl))
         || (localStripeMode === "live" && (result.mode !== "live" || !sessionId || !isStripeCheckoutUrl(result.checkoutUrl) || !liveReturnUrl))
       ) {
-        paymentWindow?.close();
         setSubmitError(result.error || (localStripeMode === "live"
           ? "The bank transfer could not be started. Please try again."
           : "The local payment simulation could not be started."));
         return;
       }
-      if ((localStripeMode === "test" || localStripeMode === "live") && result.checkoutUrl && sessionId && (localReturnUrl || liveReturnUrl)) {
-        const fallbackKey = getLocalStripeFallbackStorageKey(order.orderNumber);
-        const serializedFallback = serializeLocalStripeFallback(result.checkoutUrl, sessionId, order.orderNumber, localStripeMode);
-        let fallbackSaved = false;
-        if (fallbackKey && serializedFallback) {
-          try {
-            // Persist the validated existing Session before navigating either tab.
-            window.sessionStorage.setItem(fallbackKey, serializedFallback);
-            fallbackSaved = true;
-          } catch {
-            fallbackSaved = false;
-          }
-        }
-
-        if (paymentWindow && !paymentWindow.closed) {
-          try {
-            paymentWindow.location.replace(result.checkoutUrl);
-          } catch {
-            paymentWindow.close();
-            paymentWindow = null;
-          }
-        }
-
-        if (!fallbackSaved) {
-          // If sessionStorage is unavailable, stay on Checkout with the in-memory
-          // same-Session link instead of leaving the customer without recovery.
-          setLocalStripeFallbackUrl(result.checkoutUrl);
-          setSubmitError("This browser could not save a payment recovery link. Keep this tab open and use Open Bank Transfer below.");
+      if (localStripeMode === "test" || localStripeMode === "live") {
+        if (!result.checkoutUrl) {
+          setSubmitError(localStripeMode === "live"
+            ? "The bank transfer could not be started. Please try again."
+            : "The local payment simulation could not be started.");
           return;
         }
-
-        // The same validated Session is now recoverable on Order Success even if
-        // this popup is blocked or the customer closes the Stripe tab later.
-        window.location.assign(localReturnUrl || liveReturnUrl!);
+        window.location.assign(result.checkoutUrl);
         return;
       }
       if (result.checkoutUrl) router.push(result.checkoutUrl);
     } catch {
-      paymentWindow?.close();
       setSubmitError(localStripeMode === "live"
         ? "The bank transfer service could not be reached. Please try again."
         : "The local payment simulation could not be reached.");
@@ -642,7 +591,6 @@ export default function CheckoutPage() {
                 orderNumber={order?.orderNumber || ""}
                 submitting={submitting}
                 submitError={submitError}
-                fallbackCheckoutUrl={localStripeFallbackUrl}
                 onBack={() => setStep("delivery")}
                 onContinue={continueToLocalBankPayment}
               />
@@ -928,7 +876,6 @@ function StripeBankTransferStep({
   orderNumber,
   submitting,
   submitError,
-  fallbackCheckoutUrl,
   onBack,
   onContinue,
 }: {
@@ -937,7 +884,6 @@ function StripeBankTransferStep({
   orderNumber: string;
   submitting: boolean;
   submitError: string;
-  fallbackCheckoutUrl: string;
   onBack: () => void;
   onContinue: () => void | Promise<void>;
 }) {
@@ -952,11 +898,9 @@ function StripeBankTransferStep({
         <div><span>Status</span><strong>Bank transfer pending</strong></div>
       </div>
       <p className="checkout-submit-note">
-        {mode === "test"
-          ? "Your bank transfer will open in a separate secure Stripe page. Keep this page open and return here after completing the transfer."
-          : mode === "live"
-            ? "Complete your bank transfer securely on Stripe. Keep this page open; it will update when Stripe confirms receipt."
-            : "This local simulation does not create an order or start a real payment."}
+        {mode === "test" || mode === "live"
+          ? "Continue in this tab to Stripe’s secure bank transfer page. Stripe will return you here after the payment step."
+          : "This local simulation does not create an order or start a real payment."}
       </p>
       {mode === "test" || mode === "live" ? (
         <p className="checkout-submit-note checkout-bank-transfer-followup">
@@ -965,13 +909,9 @@ function StripeBankTransferStep({
       ) : null}
       <div className="checkout-actions">
         <button className="checkout-back" type="button" onClick={onBack}>Back to Delivery</button>
-        {fallbackCheckoutUrl ? (
-          <a className="btn btn-solid" href={fallbackCheckoutUrl} target="_blank" rel="noopener noreferrer">Open Bank Transfer</a>
-        ) : (
-          <button className="btn btn-solid" type="button" onClick={onContinue} disabled={submitting}>
-            {submitting ? "Opening payment step…" : "Continue to Bank Payment"}
-          </button>
-        )}
+        <button className="btn btn-solid" type="button" onClick={onContinue} disabled={submitting}>
+          {submitting ? "Opening payment step…" : "Continue to Bank Payment"}
+        </button>
       </div>
       {submitError ? <p className="checkout-submit-error">{submitError}</p> : null}
     </div>

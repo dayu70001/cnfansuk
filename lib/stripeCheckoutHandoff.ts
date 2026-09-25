@@ -1,17 +1,4 @@
-export const LOCAL_STRIPE_FALLBACK_STORAGE_KEY = "cnfansuk-local-stripe-bank-transfer-fallback";
 export type StripeHandoffMode = "test" | "live";
-
-export function getLocalStripeFallbackStorageKey(orderNumber: string): string | null {
-  if (!/^CNF-[A-Za-z0-9-]{1,72}$/.test(orderNumber)) return null;
-  return `${LOCAL_STRIPE_FALLBACK_STORAGE_KEY}:${orderNumber}`;
-}
-
-export type LocalStripeFallback = {
-  orderNumber: string;
-  sessionId: string;
-  checkoutUrl: string;
-  mode: StripeHandoffMode;
-};
 
 export function getStripeSessionId(sessionId: string | undefined, mode: StripeHandoffMode): string | null {
   if (!sessionId) return null;
@@ -90,48 +77,6 @@ export function isStripeLiveSuccessReturnUrl(value: string | undefined, sessionI
   } catch {
     return false;
   }
-}
-
-export function serializeLocalStripeFallback(
-  checkoutUrl: string,
-  sessionId: string,
-  orderNumber: string,
-  mode: StripeHandoffMode = "test",
-): string | null {
-  if (!getStripeSessionId(sessionId, mode) || !isStripeCheckoutUrl(checkoutUrl) || !getLocalStripeFallbackStorageKey(orderNumber)) return null;
-  return JSON.stringify({ orderNumber, sessionId, checkoutUrl, mode });
-}
-
-export function parseLocalStripeFallback(
-  serialized: string | null,
-  expectedSessionId: string,
-  expectedOrderNumber: string,
-  mode: StripeHandoffMode = "test",
-): string | null {
-  const prefix = mode === "test" ? "cs_test_" : "cs_live_";
-  if (
-    !serialized
-    || !new RegExp(`^${prefix}[A-Za-z0-9]+$`).test(expectedSessionId)
-    || !getLocalStripeFallbackStorageKey(expectedOrderNumber)
-  ) return null;
-
-  try {
-    const fallback = JSON.parse(serialized) as Partial<LocalStripeFallback>;
-    if (
-      fallback.orderNumber !== expectedOrderNumber
-      || fallback.sessionId !== expectedSessionId
-      || fallback.mode !== mode
-      || typeof fallback.checkoutUrl !== "string"
-      || !isStripeCheckoutUrl(fallback.checkoutUrl)
-    ) return null;
-    return fallback.checkoutUrl;
-  } catch {
-    return null;
-  }
-}
-
-export function shouldShowLocalStripeFallback(paymentStatus: string, checkoutUrl: string | null): boolean {
-  return paymentStatus !== "paid" && checkoutUrl !== null;
 }
 
 function isLoopbackHostname(hostname: string) {

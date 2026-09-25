@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getOrderAccessTokenStorageKey } from "@/lib/orderAccessTokenKey";
-import { StripeBankTransferFallback } from "@/components/StripeBankTransferFallback";
 import {
   getStripePaymentStatusPresentation,
   isStripeCheckoutStatus,
@@ -95,12 +94,6 @@ export function StripePaymentStatus({
     <section className={`stripe-payment-status stripe-payment-status-${presentation.tone}`} aria-live="polite" aria-atomic="true">
       <p className="success-payment-status">{presentation.label}</p>
       {refreshError ? <p className="stripe-payment-status-error" role="status">{refreshError}</p> : null}
-      <StripeBankTransferFallback
-        orderNumber={order}
-        sessionId={sessionId}
-        paymentStatus={paymentStatus}
-        mode={mode}
-      />
     </section>
   );
 }
