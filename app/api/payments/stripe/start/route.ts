@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { loadAuthorizedOrder } from "@/lib/authorizedOrder";
+import { getCatalogApiBase } from "@/lib/catalogApiBase";
 import { getOrderAccessTokenFromCookieHeader } from "@/lib/orderAccessTokenCookie";
 import {
   getStripeBankTransferMode,
@@ -67,6 +68,8 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: "Payment page is unavailable." }, { status: 502, headers: noStoreHeaders });
     }
 
+    await recordPaymentSubmitted(orderNumber);
+
     const response = NextResponse.redirect(checkout.checkoutUrl, { status: 303 });
     for (const [name, value] of Object.entries(noStoreHeaders)) response.headers.set(name, value);
     return response;
@@ -75,6 +78,31 @@ export async function GET(request: Request) {
       status: 502,
       headers: noStoreHeaders,
     });
+  }
+}
+
+async function recordPaymentSubmitted(orderNumber: string) {
+  try {
+    const response = await fetch(
+      `${getCatalogApiBase()}/orders/${encodeURIComponent(orderNumber)}/payment-submitted`,
+      {
+        method: "POST",
+        headers: { Accept: "application/json" },
+        cache: "no-store",
+        signal: AbortSignal.timeout(2_500),
+      },
+    );
+    if (!response.ok) logPaymentSubmittedFailure(response.status);
+  } catch {
+    logPaymentSubmittedFailure(null);
+  }
+}
+
+function logPaymentSubmittedFailure(status: number | null) {
+  try {
+    console.error("Stripe payment-submitted event could not be recorded", { status });
+  } catch {
+    // Tracking failure must never prevent the customer from entering Stripe.
   }
 }
 

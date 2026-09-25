@@ -11,6 +11,9 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const nodeRequire = createRequire(import.meta.url);
 const source = fs.readFileSync(path.join(root, "app", "api", "payments", "stripe", "start", "route.ts"), "utf8");
 const processingPageSource = fs.readFileSync(path.join(root, "app", "payments", "stripe", "processing", "page.tsx"), "utf8");
+const whatsappClickSource = fs.readFileSync(path.join(root, "components", "MetaPixelEventLink.tsx"), "utf8");
+const whatsappClickRouteSource = fs.readFileSync(path.join(root, "app", "api", "orders", "[orderNumber]", "whatsapp-clicked", "route.ts"), "utf8");
+const workerSource = fs.readFileSync(path.join(root, "workers", "catalog-api", "src", "index.ts"), "utf8");
 
 function loadHandler(modules) {
   const compiled = ts.transpile(source, { module: ts.ModuleKind.CommonJS, esModuleInterop: true });
@@ -29,12 +32,15 @@ function loadHandler(modules) {
     process: { env: { NODE_ENV: "production" } },
     URL,
     Headers,
+    AbortSignal,
+    fetch: modules.__fetch || (async () => new Response(null, { status: 204 })),
+    console: modules.__console || console,
     Set,
     Number,
     Object,
-    console,
     require(id) {
       if (id === "next/server") return { NextResponse: response };
+      if (id === "@/lib/catalogApiBase") return { getCatalogApiBase: () => "https://catalog.example.invalid" };
       if (Object.hasOwn(modules, id)) return modules[id];
       throw new Error("Unexpected module import: " + id);
     },
@@ -42,8 +48,8 @@ function loadHandler(modules) {
   return loadedModule.exports;
 }
 
-test("start route authorizes the persisted Live order and redirects directly to authenticated Stripe URL", async () => {
-  const calls = { cookiePurpose: "", order: "", token: "", mode: "", stripe: 0 };
+test("start route authorizes the Live order, records submission after Session validation, then redirects", async () => {
+  const calls = { cookiePurpose: "", order: "", token: "", mode: "", stripe: 0, events: [], workerUrl: "", workerInit: null };
   const handler = loadHandler({
     "@/lib/authorizedOrder": {
       loadAuthorizedOrder: async (number, token) => {
@@ -69,6 +75,7 @@ test("start route authorizes the persisted Live order and redirects directly to 
     "@/lib/payments/stripeServer": {
       createStripeBankTransferCheckout: async (order, mode) => {
         calls.stripe += 1;
+        calls.events.push("stripe-session-created");
         calls.mode = mode;
         assert.equal(order.order_number, "CNF-260924-1234");
         assert.equal(order.final_total, 117);
@@ -86,6 +93,12 @@ test("start route authorizes the persisted Live order and redirects directly to 
         }
       },
     },
+    __fetch: async (input, init) => {
+      calls.events.push("payment-submitted");
+      calls.workerUrl = String(input);
+      calls.workerInit = init;
+      return new Response(null, { status: 204 });
+    },
   });
 
   const response = await handler.GET(new Request(
@@ -101,6 +114,75 @@ test("start route authorizes the persisted Live order and redirects directly to 
   assert.equal(calls.cookiePurpose, "stripe");
   assert.equal(calls.mode, "live");
   assert.equal(calls.stripe, 1);
+  assert.equal(calls.workerUrl, "https://catalog.example.invalid/orders/CNF-260924-1234/payment-submitted");
+  assert.equal(calls.workerInit.method, "POST");
+  assert.equal(calls.workerInit.cache, "no-store");
+  assert.ok(calls.workerInit.signal instanceof AbortSignal);
+  assert.deepEqual(calls.events, ["stripe-session-created", "payment-submitted"]);
+});
+
+test("payment-submitted tracking failure does not block a valid Stripe redirect", async () => {
+  for (const failure of [
+    { name: "Worker HTTP failure", fetch: async () => new Response(null, { status: 503 }), loggedStatus: 503 },
+    { name: "Worker network failure", fetch: async () => { throw new Error("network unavailable"); }, loggedStatus: null },
+  ]) {
+    const logs = [];
+    const handler = loadHandler({
+      "@/lib/authorizedOrder": {
+        loadAuthorizedOrder: async (orderNumber) => ({ ok: true, order: { order_number: orderNumber, final_total: 117, currency: "GBP" } }),
+      },
+      "@/lib/orderAccessTokenCookie": { getOrderAccessTokenFromCookieHeader: () => "signed-order-token" },
+      "@/lib/payments/stripeBankTransfer": {
+        getStripeBankTransferMode: () => "live",
+        isLocalStripeBankTransferTestEnabled: () => false,
+        isStripeLiveProductionRequest: () => true,
+      },
+      "@/lib/payments/stripeServer": {
+        createStripeBankTransferCheckout: async () => ({ checkoutUrl: "https://checkout.stripe.com/c/pay/cs_live_fixture" }),
+      },
+      "@/lib/stripeCheckoutHandoff": { isStripeCheckoutUrl: () => true },
+      __fetch: failure.fetch,
+      __console: { error: (...args) => logs.push(args) },
+    });
+
+    const response = await handler.GET(new Request(
+      "https://www.cnfans.co.uk/api/payments/stripe/start?order=CNF-260924-1234",
+      { headers: { host: "www.cnfans.co.uk", cookie: "order=fixture" } },
+    ));
+    assert.equal(response.status, 303, failure.name);
+    assert.equal(response.location, "https://checkout.stripe.com/c/pay/cs_live_fixture", failure.name);
+    assert.equal(logs.length, 1, failure.name);
+    assert.equal(logs[0][0], "Stripe payment-submitted event could not be recorded", failure.name);
+    assert.deepEqual(JSON.parse(JSON.stringify(logs[0][1])), { status: failure.loggedStatus }, failure.name);
+    assert.equal(JSON.stringify(logs).includes("CNF-260924-1234"), false, failure.name);
+  }
+});
+
+test("Stripe Session creation failure never records payment submitted", async () => {
+  let workerCalls = 0;
+  const handler = loadHandler({
+    "@/lib/authorizedOrder": {
+      loadAuthorizedOrder: async (orderNumber) => ({ ok: true, order: { order_number: orderNumber, final_total: 117, currency: "GBP" } }),
+    },
+    "@/lib/orderAccessTokenCookie": { getOrderAccessTokenFromCookieHeader: () => "signed-order-token" },
+    "@/lib/payments/stripeBankTransfer": {
+      getStripeBankTransferMode: () => "live",
+      isLocalStripeBankTransferTestEnabled: () => false,
+      isStripeLiveProductionRequest: () => true,
+    },
+    "@/lib/payments/stripeServer": {
+      createStripeBankTransferCheckout: async () => { throw new Error("Stripe session creation failed"); },
+    },
+    "@/lib/stripeCheckoutHandoff": { isStripeCheckoutUrl: () => true },
+    __fetch: async () => { workerCalls += 1; return new Response(null, { status: 204 }); },
+  });
+
+  const response = await handler.GET(new Request(
+    "https://www.cnfans.co.uk/api/payments/stripe/start?order=CNF-260924-1234",
+    { headers: { host: "www.cnfans.co.uk", cookie: "order=fixture" } },
+  ));
+  assert.equal(response.status, 502);
+  assert.equal(workerCalls, 0);
 });
 
 test("start route refuses client-supplied values and missing order cookie before Stripe", async () => {
@@ -317,4 +399,12 @@ test("processing page requires its scoped cookie, reloads the order, and renders
     page({ searchParams: Promise.resolve({ order: ["CNF-260924-1234", "CNF-260924-9999"] }) }),
     /NOT_FOUND/,
   );
+});
+
+test("Processing WhatsApp click keeps the existing event path through the Worker timestamp write", () => {
+  assert.match(processingPageSource, /recordWhatsappClickForOrder=\{order\}/);
+  assert.match(whatsappClickSource, /fetch\(`\/api\/orders\/\$\{encodeURIComponent\(recordWhatsappClickForOrder\)\}\/whatsapp-clicked`/);
+  assert.match(whatsappClickRouteSource, /fetch\(`\$\{baseUrl\}\/orders\/\$\{encodeURIComponent\(orderNumber\)\}\/whatsapp-clicked`/);
+  assert.match(workerSource, /UPDATE orders SET whatsapp_clicked_at = COALESCE\(whatsapp_clicked_at, CURRENT_TIMESTAMP\)/);
+  assert.doesNotMatch(workerSource, /UPDATE orders SET[^\n]*payment_confirmed_at[^\n]*whatsapp_clicked_at/);
 });

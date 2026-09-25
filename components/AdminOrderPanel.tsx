@@ -2,7 +2,7 @@
 
 import { FormEvent, useEffect, useState } from "react";
 import { formatMoney } from "@/lib/formatMoney";
-import { getOrderPaymentStage, orderPaymentStageLabel, type OrderPaymentStage, type RawOrderStatus } from "@/lib/orderStatus";
+import { getOrderPaymentStage, type OrderPaymentStage, type RawOrderStatus } from "@/lib/orderStatus";
 import type { CurrencyCode } from "@/lib/currency";
 
 type AdminOrderItem = {
@@ -55,12 +55,11 @@ type AdminOrder = {
   items?: AdminOrderItem[];
 };
 
-type AdminOrderFilter = "" | OrderPaymentStage | "whatsapp_not_clicked";
+type AdminOrderFilter = "" | "unpaid" | "payment_submitted" | "payment_confirmed" | "whatsapp_not_clicked" | "cancelled";
 
 const filterOptions: Array<{ value: AdminOrderFilter; label: string }> = [
   { value: "", label: "全部" },
-  { value: "created", label: "未进入付款页" },
-  { value: "awaiting_payment", label: "待付款" },
+  { value: "unpaid", label: "待付款" },
   { value: "payment_submitted", label: "已提交转账" },
   { value: "payment_confirmed", label: "已确认到账" },
   { value: "whatsapp_not_clicked", label: "WhatsApp 未点击" },
@@ -78,15 +77,51 @@ function paymentStage(order: AdminOrder) {
   return order.payment_stage || getOrderPaymentStage(order);
 }
 
-function whatsappClicked(order: AdminOrder) {
+const adminPaymentStageLabels: Record<OrderPaymentStage, string> = {
+  created: "待付款",
+  awaiting_payment: "待付款",
+  payment_submitted: "已提交转账",
+  payment_confirmed: "已确认到账",
+  cancelled: "已取消",
+};
+
+export function adminPaymentStageLabel(stage: OrderPaymentStage) {
+  return adminPaymentStageLabels[stage];
+}
+
+export function adminHasSubmittedPayment(stage: OrderPaymentStage) {
+  return stage === "payment_submitted";
+}
+
+export function adminWhatsappClicked(order: Pick<AdminOrder, "whatsapp_clicked_at" | "whatsapp_clicked">) {
   return Boolean(order.whatsapp_clicked_at || order.whatsapp_clicked);
 }
 
 async function requestOrders(search: string, status: AdminOrderFilter) {
-  const params = new URLSearchParams({ q: search.trim(), status, limit: "50" });
-  const response = await fetch(`/api/admin/orders?${params}`, { cache: "no-store" });
-  const result = await response.json().catch(() => ({})) as { orders?: AdminOrder[]; error?: string };
-  return { response, result };
+  const fetchOrders = async (filter: string) => {
+    const params = new URLSearchParams({ q: search.trim(), status: filter, limit: "50" });
+    const response = await fetch(`/api/admin/orders?${params}`, { cache: "no-store" });
+    const result = await response.json().catch(() => ({})) as { orders?: AdminOrder[]; error?: string };
+    return { response, result };
+  };
+
+  if (status === "unpaid") {
+    const results = await Promise.all([fetchOrders("created"), fetchOrders("awaiting_payment")]);
+    const failed = results.find(({ response }) => !response.ok);
+    if (failed) return failed;
+    const orders = new Map<string, AdminOrder>();
+    for (const { result } of results) {
+      for (const order of result.orders || []) orders.set(order.order_number, order);
+    }
+    return {
+      response: results[0].response,
+      result: {
+        orders: [...orders.values()].sort((a, b) => b.created_at.localeCompare(a.created_at)).slice(0, 50),
+      },
+    };
+  }
+
+  return fetchOrders(status);
 }
 
 async function requestOrderDetail(orderNumber: string) {
@@ -231,7 +266,7 @@ export function AdminOrderPanel() {
   }
 
   const selectedStage = selected ? paymentStage(selected) : null;
-  const selectedWhatsappClicked = selected ? whatsappClicked(selected) : false;
+  const selectedWhatsappClicked = selected ? adminWhatsappClicked(selected) : false;
 
   return (
     <section className="admin-shell admin-orders-shell">
@@ -247,8 +282,8 @@ export function AdminOrderPanel() {
         {!loading && orders.length === 0 ? <p>暂时没有订单。</p> : null}
         {orders.map((order) => {
           const stage = paymentStage(order);
-          const clicked = whatsappClicked(order);
-          const warning = stage === "payment_submitted" && !clicked;
+          const clicked = adminWhatsappClicked(order);
+          const warning = adminHasSubmittedPayment(stage) && !clicked;
           return (
             <button
               className={`${order.order_number === selected?.order_number ? "order-row active" : "order-row"}${warning ? " order-row-warning" : ""}`}
@@ -257,9 +292,9 @@ export function AdminOrderPanel() {
               aria-pressed={order.order_number === selected?.order_number}
               onClick={() => void loadOrderDetail(order.order_number)}
             >
-              <span className="order-row-top"><strong>{order.order_number}</strong><small className="order-status">{orderPaymentStageLabel(stage, "zh")}</small></span>
+              <span className="order-row-top"><strong>{order.order_number}</strong><small className="order-status">{adminPaymentStageLabel(stage)}</small></span>
               <span className="order-row-customer">{order.customer_name}</span>
-              <span className="order-row-payment-summary">付款：{orderPaymentStageLabel(stage, "zh")} · WhatsApp：{clicked ? "已点击" : "未点击"}</span>
+              <span className="order-row-payment-summary">付款：{adminPaymentStageLabel(stage)} · WhatsApp：{clicked ? "已点击" : "未点击"}</span>
               <span className="order-row-bottom"><small>{formatOrderDate(order.created_at)} · {order.currency}</small><strong>{formatMoney(order.total, order.currency)}</strong></span>
             </button>
           );
@@ -333,12 +368,12 @@ export function AdminOrderPanel() {
             <section className="admin-order-detail-section">
               <h3>付款与联系</h3>
               <dl className="admin-order-payment-list">
-                <div><dt>付款</dt><dd>{selectedStage ? orderPaymentStageLabel(selectedStage, "zh") : "—"}</dd></div>
+                <div><dt>付款</dt><dd>{selectedStage ? adminPaymentStageLabel(selectedStage) : "—"}</dd></div>
                 <div><dt>WhatsApp</dt><dd>{selectedWhatsappClicked ? "已点击" : "未点击"}</dd></div>
                 <div><dt>付款方式</dt><dd>{selected.payment_method || "待确认"}</dd></div>
                 <div><dt>币种</dt><dd>{selected.currency}</dd></div>
               </dl>
-              {selectedStage === "payment_submitted" && !selectedWhatsappClicked ? <p className="admin-order-warning">已提交转账，但客户尚未点击 WhatsApp。</p> : null}
+              {selectedStage && adminHasSubmittedPayment(selectedStage) && !selectedWhatsappClicked ? <p className="admin-order-warning">已提交转账，但客户尚未点击 WhatsApp。</p> : null}
             </section>
 
             <section className="admin-order-detail-section">
