@@ -335,9 +335,27 @@ test("order success keeps one concise WhatsApp prompt and omits duplicate Stripe
   assert.doesNotMatch(orderSuccessSource, /Payment is not confirmed automatically|Your transfer status is checked securely|Your bank transfer opens in a separate secure Stripe page|We'll check your size, delivery details and payment/);
 });
 
-test("normal Test Mode copy is customer-facing and the Payment step has no WhatsApp CTA", () => {
+test("normal Test Mode copy is customer-facing and the Payment step WhatsApp help stays read-only", () => {
   assert.doesNotMatch(checkoutPageSource, /This local test creates no CNFANS order|cannot collect a live payment|fixed £57/i);
   const paymentStep = checkoutPageSource.slice(checkoutPageSource.indexOf("function StripeBankTransferStep"), checkoutPageSource.indexOf("function LocalCheckoutGuardStep"));
-  assert.doesNotMatch(paymentStep, /href=.*whatsapp|WhatsApp.*button/i);
+  assert.match(paymentStep, /Need help with sizing or anything else before paying\?/);
+  assert.match(paymentStep, /Chat on WhatsApp/);
+  assert.match(paymentStep, /href=\{whatsappHref\} target="_blank" rel="noopener noreferrer"/);
+  const whatsappLinkStart = paymentStep.indexOf('<a className="checkout-whatsapp-help-link"');
+  const whatsappLinkEnd = paymentStep.indexOf("</a>", whatsappLinkStart);
+  assert.notEqual(whatsappLinkStart, -1);
+  assert.notEqual(whatsappLinkEnd, -1);
+  assert.doesNotMatch(paymentStep.slice(whatsappLinkStart, whatsappLinkEnd), /onClick|router\.(push|replace)|clearCart|payment-submitted|payment_submitted|stripe\/checkout/i);
+
+  const whatsappContactFlow = paymentStep.slice(
+    paymentStep.indexOf("const [whatsappHref, setWhatsappHref]"),
+    paymentStep.indexOf("  return (", paymentStep.indexOf("const [whatsappHref, setWhatsappHref]")),
+  );
+  assert.match(whatsappContactFlow, /\/site-settings/);
+  assert.match(whatsappContactFlow, /method: "GET"/);
+  assert.match(whatsappContactFlow, /personalWhatsappUrl/);
+  assert.match(whatsappContactFlow, /personalWhatsappNumber/);
+  assert.match(whatsappContactFlow, /Hi, I have a question about order #\$\{orderNumber\}\./);
+  assert.doesNotMatch(whatsappContactFlow, /\/api\/payments\/stripe\/checkout|payment-submitted|payment_submitted|\/payments\/stripe\/processing|clearCart|payment.status|method: "POST"/i);
   assert.match(orderSuccessSource, /Confirm order on WhatsApp/);
 });

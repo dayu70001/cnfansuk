@@ -13,7 +13,7 @@ export function ProductCard({ product }: { product: Product }) {
   const { addItem } = useCart();
   const { currency } = useCurrency();
   const color = product.colors.find((item) => item?.trim());
-  const size = product.sizes[0];
+  const size = "";
   const swatches = product.colors.filter((item) => item?.trim()).slice(0, 3);
   const image = product.images.find((item) => item && item !== "placeholder");
   const currentPrice = getProductPrice(product, currency);

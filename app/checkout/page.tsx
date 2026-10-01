@@ -25,6 +25,7 @@ import { getOrderPaymentStage, orderPaymentStageLabel, type OrderPaymentStage, t
 import type { CartItem, CustomerDetails } from "@/lib/types";
 import { getOrderAccessTokenStorageKey } from "@/lib/orderAccessTokenKey";
 import { openStripeStartWindow } from "@/lib/stripeCheckoutHandoff";
+import { DEFAULT_CATALOG_API_BASE } from "@/lib/catalogApiBase";
 
 type CheckoutStep = "details" | "delivery" | "payment";
 type LocalStripeMode = "mock" | "test" | "live";
@@ -856,6 +857,57 @@ function StripeBankTransferStep({
   onBack: () => void;
   onContinue: () => void | Promise<void>;
 }) {
+  const [whatsappHref, setWhatsappHref] = useState("");
+
+  useEffect(() => {
+    let active = true;
+
+    void fetch(`${process.env.NEXT_PUBLIC_CATALOG_API_BASE?.trim() || DEFAULT_CATALOG_API_BASE}/site-settings`, {
+      method: "GET",
+      cache: "no-store",
+    })
+      .then(async (response) => {
+        if (!response.ok) return null;
+        return await response.json() as {
+          settings?: {
+            links?: {
+              personalWhatsappUrl?: unknown;
+              personalWhatsappNumber?: unknown;
+            };
+          } | null;
+        };
+      })
+      .then((payload) => {
+        if (!active) return;
+        const links = payload?.settings?.links;
+        const configuredUrl = typeof links?.personalWhatsappUrl === "string"
+          ? links.personalWhatsappUrl.trim()
+          : "";
+        const configuredNumber = typeof links?.personalWhatsappNumber === "string"
+          ? links.personalWhatsappNumber.replace(/\D/g, "")
+          : "";
+        const baseUrl = configuredUrl || (configuredNumber ? `https://wa.me/${configuredNumber}` : "");
+        if (!baseUrl) return;
+
+        try {
+          const url = new URL(baseUrl);
+          if (url.protocol !== "https:" || url.username || url.password) return;
+          const message = orderNumber
+            ? `Hi, I have a question about order #${orderNumber}.`
+            : "Hi, I have a question about sizing or anything else before paying.";
+          url.searchParams.set("text", message);
+          setWhatsappHref(url.toString());
+        } catch {
+          // Invalid or unavailable site contact settings should not create a broken link.
+        }
+      })
+      .catch(() => undefined);
+
+    return () => {
+      active = false;
+    };
+  }, [orderNumber]);
+
   return (
     <div className="checkout-step-panel">
       <p className="eyebrow">Payment</p>
@@ -874,6 +926,17 @@ function StripeBankTransferStep({
       {mode === "test" || mode === "live" ? (
         <p className="checkout-submit-note checkout-bank-transfer-followup">
           Return here to check the payment status, then confirm your order details with us on WhatsApp.
+        </p>
+      ) : null}
+      {whatsappHref ? (
+        <p className="checkout-whatsapp-help">
+          <span>Need help with sizing or anything else before paying?</span>
+          <a className="checkout-whatsapp-help-link" href={whatsappHref} target="_blank" rel="noopener noreferrer">
+            <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <path fill="currentColor" d="M20.52 3.48A11.86 11.86 0 0 0 12.08 0C5.5 0 .14 5.35.14 11.94c0 2.1.55 4.15 1.6 5.96L0 24l6.26-1.64a11.9 11.9 0 0 0 5.82 1.48h.01c6.58 0 11.94-5.35 11.94-11.94 0-3.19-1.24-6.19-3.51-8.42ZM12.09 21.8h-.01a9.9 9.9 0 0 1-5.05-1.38l-.36-.21-3.71.97.99-3.62-.24-.37a9.87 9.87 0 0 1-1.52-5.25c0-5.46 4.45-9.9 9.91-9.9a9.83 9.83 0 0 1 7.01 2.9 9.83 9.83 0 0 1 2.9 7.02c0 5.46-4.45 9.9-9.92 9.9Zm5.44-7.42c-.3-.15-1.76-.87-2.04-.97-.27-.1-.47-.15-.67.15-.2.3-.77.97-.94 1.17-.18.2-.35.23-.65.08-.3-.15-1.26-.46-2.4-1.47-.9-.8-1.5-1.77-1.67-2.07-.18-.3-.02-.46.13-.61.13-.13.3-.35.45-.52.15-.18.2-.3.3-.5.1-.2.05-.37-.02-.52-.08-.15-.67-1.61-.92-2.2-.24-.57-.49-.49-.67-.5h-.57c-.2 0-.52.07-.8.37-.28.3-1.05 1.02-1.05 2.48s1.07 2.87 1.22 3.07c.15.2 2.1 3.2 5.09 4.48.71.31 1.27.5 1.7.64.72.23 1.37.2 1.88.12.58-.08 1.76-.72 2-1.42.25-.7.25-1.3.18-1.42-.08-.13-.28-.2-.58-.35Z" />
+            </svg>
+            <span>Chat on WhatsApp</span>
+          </a>
         </p>
       ) : null}
       <div className="checkout-actions">

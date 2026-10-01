@@ -1,7 +1,7 @@
 "use client";
 
 import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
-import { CART_STORAGE_KEY, sameCartItem } from "@/lib/cart";
+import { CART_STORAGE_KEY, createCartLineId, ensureCartLineIds, sameCartItem, sameCartLine, updateCartItemSize } from "@/lib/cart";
 import { readStorage, writeStorage } from "@/lib/storage";
 import type { CartItem } from "@/lib/types";
 
@@ -12,6 +12,7 @@ type CartContextValue = {
   closeCart: () => void;
   toggleCart: () => void;
   addItem: (item: CartItem, options?: { openCart?: boolean }) => void;
+  updateSize: (item: CartItem, size: string) => void;
   updateQuantity: (item: CartItem, quantity: number) => void;
   removeItem: (item: CartItem) => void;
   clearCart: () => void;
@@ -22,19 +23,24 @@ const CartContext = createContext<CartContextValue | null>(null);
 export function CartProvider({ children }: { children: React.ReactNode }) {
   const [items, setItems] = useState<CartItem[]>([]);
   const [isOpen, setIsOpen] = useState(false);
+  const [cartRestored, setCartRestored] = useState(false);
   const lockedScrollY = useRef(0);
 
   useEffect(() => {
     try {
-      setItems(JSON.parse(readStorage(CART_STORAGE_KEY) || "[]"));
+      const storedItems = JSON.parse(readStorage(CART_STORAGE_KEY) || "[]") as CartItem[];
+      setItems(ensureCartLineIds(Array.isArray(storedItems) ? storedItems : []));
     } catch {
       setItems([]);
+    } finally {
+      setCartRestored(true);
     }
   }, []);
 
   useEffect(() => {
+    if (!cartRestored) return;
     writeStorage(CART_STORAGE_KEY, JSON.stringify(items));
-  }, [items]);
+  }, [cartRestored, items]);
 
   useEffect(() => {
     if (!isOpen) {
@@ -84,12 +90,10 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       toggleCart: () => setIsOpen((current) => !current),
       addItem: (item, options = { openCart: true }) => {
         setItems((current) => {
-          const existing = current.find((cartItem) => sameCartItem(cartItem, item));
-          if (!existing) {
-            return [...current, item];
-          }
-          return current.map((cartItem) =>
-            sameCartItem(cartItem, item)
+          const existingIndex = current.findIndex((cartItem) => sameCartItem(cartItem, item));
+          if (existingIndex < 0) return [...current, { ...item, cartLineId: item.cartLineId || createCartLineId() }];
+          return current.map((cartItem, index) =>
+            index === existingIndex
               ? { ...cartItem, quantity: cartItem.quantity + item.quantity }
               : cartItem,
           );
@@ -98,17 +102,20 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
           setIsOpen(true);
         }
       },
+      updateSize: (item, size) => {
+        setItems((current) => updateCartItemSize(current, item, size));
+      },
       updateQuantity: (item, quantity) => {
         if (quantity <= 0) {
-          setItems((current) => current.filter((cartItem) => !sameCartItem(cartItem, item)));
+          setItems((current) => current.filter((cartItem) => !sameCartLine(cartItem, item)));
           return;
         }
         setItems((current) =>
-          current.map((cartItem) => (sameCartItem(cartItem, item) ? { ...cartItem, quantity } : cartItem)),
+          current.map((cartItem) => (sameCartLine(cartItem, item) ? { ...cartItem, quantity } : cartItem)),
         );
       },
       removeItem: (item) => {
-        setItems((current) => current.filter((cartItem) => !sameCartItem(cartItem, item)));
+        setItems((current) => current.filter((cartItem) => !sameCartLine(cartItem, item)));
       },
       clearCart: () => setItems([]),
     }),

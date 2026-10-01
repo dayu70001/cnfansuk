@@ -1,19 +1,25 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { getCartItemPrice, getCartSubtotal } from "@/lib/cart";
+import { getCartItemPrice, getCartLineKey, getCartSubtotal } from "@/lib/cart";
 import { formatMoney } from "@/lib/formatMoney";
 import { cartItemToGoogleAnalyticsItem, trackGoogleAnalyticsEvent } from "@/lib/googleAnalytics";
 import { trackInitiateCheckout } from "@/lib/metaPixel";
 import { useCurrency } from "@/lib/useCurrency";
 import { useCart } from "./CartProvider";
 
+const CUSTOMER_SIZES = ["M", "L", "XL", "XXL"];
+const isCustomerSize = (size: string) => CUSTOMER_SIZES.includes(size);
+
 export function CartDrawer() {
-  const { items, isOpen, closeCart, updateQuantity, removeItem } = useCart();
+  const { items, isOpen, closeCart, updateQuantity, updateSize, removeItem } = useCart();
   const { currency } = useCurrency();
   const subtotal = getCartSubtotal(items, currency);
   const viewedOpenCart = useRef(false);
+  const [openSizeLine, setOpenSizeLine] = useState<string | null>(null);
+  const [checkoutAttempted, setCheckoutAttempted] = useState(false);
+  const hasMissingSize = items.some((item) => !isCustomerSize(item.size));
 
   useEffect(() => {
     if (!isOpen) {
@@ -49,8 +55,8 @@ export function CartDrawer() {
         ) : (
           <>
             <div className="cart-items">
-              {items.map((item) => (
-                <div className="cart-line" key={`${item.productId}-${item.color}-${item.size}`}>
+              {items.map((item, index) => (
+                <div className="cart-line" key={getCartLineKey(item, index)}>
                   <Link href={`/product/${item.slug}`} className={item.image ? "cart-thumb placeholder-art has-cart-image" : "cart-thumb placeholder-art"} onClick={closeCart}>
                     {item.image ? <img src={item.image} alt={item.name} onError={(event) => event.currentTarget.classList.add("image-error")} /> : null}
                     <span />
@@ -60,7 +66,41 @@ export function CartDrawer() {
                       <h3>{item.name}</h3>
                       <strong>{formatMoney(getCartItemPrice(item, currency) * item.quantity, currency)}</strong>
                     </div>
-                    <p>{[item.color, `Size ${item.size}`].filter(Boolean).join(" · ")}</p>
+                    {item.color ? <p>{item.color}</p> : null}
+                    <div className="cart-size-row">
+                      <span className="cart-size-label">
+                        Size{!isCustomerSize(item.size) ? <span className="cart-size-required"> *</span> : ""}
+                      </span>
+                      <button
+                        className={`cart-size-select${!isCustomerSize(item.size) ? " missing" : ""}`}
+                        type="button"
+                        aria-label={isCustomerSize(item.size) ? `Size ${item.size}, change size` : "Select size"}
+                        aria-expanded={openSizeLine === getCartLineKey(item, index)}
+                        onClick={() => {
+                          const lineKey = getCartLineKey(item, index);
+                          setOpenSizeLine((current) => (current === lineKey ? null : lineKey));
+                        }}
+                      >
+                        {isCustomerSize(item.size) ? item.size : "Select"} <span aria-hidden="true">▾</span>
+                      </button>
+                    </div>
+                    {openSizeLine === getCartLineKey(item, index) ? (
+                      <div className="cart-size-options" aria-label={`Choose size for ${item.name}`}>
+                        {CUSTOMER_SIZES.map((size) => (
+                          <button
+                            key={size}
+                            type="button"
+                            aria-pressed={item.size === size}
+                            onClick={() => {
+                              updateSize(item, size);
+                              setOpenSizeLine(null);
+                            }}
+                          >
+                            {size}
+                          </button>
+                        ))}
+                      </div>
+                    ) : null}
                     <p>{formatMoney(getCartItemPrice(item, currency), currency)}</p>
                     <div className="quantity-row">
                       <button type="button" onClick={() => updateQuantity(item, item.quantity - 1)}>
@@ -101,7 +141,13 @@ export function CartDrawer() {
                 className="primary-button full"
                 href="/checkout"
                 scroll
-                onClick={() => {
+                onClick={(event) => {
+                  if (hasMissingSize) {
+                    event.preventDefault();
+                    setCheckoutAttempted(true);
+                    return;
+                  }
+                  setCheckoutAttempted(false);
                   trackInitiateCheckout({
                     source_page: "cart_drawer",
                     placement: "cart_checkout",
@@ -119,6 +165,9 @@ export function CartDrawer() {
               >
                 Checkout
               </Link>
+              {checkoutAttempted && hasMissingSize ? (
+                <p className="cart-checkout-error" role="alert">Please select a size for all items.</p>
+              ) : null}
               <button className="secondary-button full" type="button" onClick={closeCart}>
                 Continue Shopping
               </button>

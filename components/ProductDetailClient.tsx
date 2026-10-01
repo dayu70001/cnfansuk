@@ -344,12 +344,6 @@ export function ProductDetailClient({ product }: { product: Product }) {
         </div>
       </aside>
 
-      <div className="pdp-mobile-bar">
-        <span>{formatMoney(currentPrice, currency)}</span>
-        <button className="btn btn-solid" type="button" onClick={handleAddToCart}>
-          Add to cart
-        </button>
-      </div>
     </section>
   );
 }

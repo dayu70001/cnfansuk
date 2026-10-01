@@ -29,6 +29,8 @@ export type Product = {
 };
 
 export type CartItem = {
+  /** Stable local cart-row identity; never sent to the order API. */
+  cartLineId?: string;
   productId: string;
   productCode?: string;
   slug: string;
