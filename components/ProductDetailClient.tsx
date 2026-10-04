@@ -374,7 +374,7 @@ function AccordionItem({
         <span>{title}</span>
         <span className={open ? "pdp-accordion-icon open" : "pdp-accordion-icon"}>+</span>
       </button>
-      {open ? <div className="pdp-accordion-content">{children}</div> : null}
+      <div className="pdp-accordion-content" hidden={!open}>{children}</div>
     </div>
   );
 }
