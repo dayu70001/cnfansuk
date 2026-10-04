@@ -89,6 +89,14 @@ export default function DeliveryPage() {
           <Link href="/bank-transfer-payment-help">bank transfer payment help</Link>.
         </p>
       </section>
+
+      <section className="support-notice">
+        <span>UK customs and import charges</span>
+        <p>
+          For information about customs and import charges under our current UK delivery arrangement, read our{" "}
+          <Link href="/uk-customs-and-import-charges">customs and import charges guidance</Link>.
+        </p>
+      </section>
     </main>
   );
 }

@@ -23,6 +23,7 @@ const PUBLIC_PATHS = [
   "/about",
   "/how-to-order",
   "/bank-transfer-payment-help",
+  "/uk-customs-and-import-charges",
   "/guides",
   "/cnfans-spreadsheet",
   "/cnfans-finds",
