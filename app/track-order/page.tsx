@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState, FormEvent } from "react";
 
 interface TrackEvent {
@@ -20,16 +21,16 @@ interface TrackResult {
 
 const trackingNotes = [
   {
-    title: "Tracking updates",
-    text: "Tracking information is shared after your order has been confirmed and dispatched.",
+    title: "Order status and tracking status",
+    text: "An order result describes order or payment progress, such as Order created, Awaiting payment, Payment submitted, Payment confirmed or Cancelled. Payment submitted records the payment step, not confirmed receipt. Parcel tracking is different: it shows carrier movement after dispatch.",
   },
   {
-    title: "Order number",
-    text: "Your CNFans UK order number is shown after checkout. Keep it safe for support and delivery updates.",
+    title: "Tracking updates",
+    text: "Tracking information is shared after your order has been confirmed and dispatched. A new carrier scan may not appear immediately.",
   },
   {
     title: "Need help?",
-    text: "If tracking is not available yet, email us with your CNFans UK order number.",
+    text: "Keep your CNFans UK order number. If your order is not visible or tracking is not available, contact support with that number.",
   },
 ];
 
@@ -137,6 +138,15 @@ export default function TrackOrderPage() {
             <p>{item.text}</p>
           </article>
         ))}
+      </section>
+
+      <section className="support-notice">
+        <span>Related help</span>
+        <p>
+          Read our <Link href="/delivery">delivery guidance</Link> for parcel issues, the{" "}
+          <Link href="/how-to-order">How to Order guide</Link> for the purchase steps, or{" "}
+          <Link href="/bank-transfer-payment-help">bank transfer payment help</Link> if you are unsure about a payment status.
+        </p>
       </section>
     </main>
   );

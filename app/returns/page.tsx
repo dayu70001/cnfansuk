@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 const policyItems = [
   {
     label: "Return window",
@@ -45,6 +47,16 @@ export default function ReturnsPage() {
             </div>
           </article>
         ))}
+      </section>
+
+      <section className="support-notice">
+        <span>Before contacting us</span>
+        <p>
+          For a wrong size, incorrect or damaged item, or something missing from your delivery, keep your order number and
+          identify the affected item and issue. <Link href="/contact">Contact support</Link> before sending anything back. For a
+          parcel marked delivered but not received, see our <Link href="/delivery">delivery guidance</Link>. Do not send full
+          bank or card details with your first message.
+        </p>
       </section>
     </main>
   );

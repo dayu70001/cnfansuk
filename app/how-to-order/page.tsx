@@ -31,12 +31,12 @@ const steps = [
   {
     number: "04",
     title: "Place your order",
-    body: "Add your items to the bag, enter your delivery details and complete the GBP bank transfer shown at checkout.",
+    body: "Add your items to the bag, enter your delivery details and follow the payment steps shown at checkout.",
   },
   {
     number: "05",
-    title: "Confirm payment and track",
-    body: "Save your order, then contact us on WhatsApp or Telegram with the order number that is added to your message automatically.",
+    title: "Check your order and track delivery",
+    body: "Keep your order number to check progress or contact support. Payment being submitted and payment being confirmed are separate steps.",
   },
 ];
 
@@ -111,8 +111,16 @@ export default function HowToOrderPage() {
           &mdash; a correct postcode and phone number help your parcel move smoothly.
         </p>
         <p>
-          The checkout displays our GBP bank account and your exact order total. After completing the transfer, save the order
-          and use the WhatsApp or Telegram button shown on screen. Your order number is included in the message automatically.
+          Checkout shows your order total and takes you to Stripe&rsquo;s secure hosted page to follow the bank transfer instructions.
+        </p>
+      </section>
+
+      <section className="seo-section">
+        <h2>Payment help after checkout</h2>
+        <p>
+          A CNFans &ldquo;Payment submitted&rdquo; status records the payment step; it is not confirmation that funds have arrived.
+          If your payment status is unclear, do not pay again just because it has not changed. Read our{" "}
+          <Link href="/bank-transfer-payment-help">bank transfer payment help</Link> for the next safe steps.
         </p>
       </section>
 
