@@ -30,6 +30,7 @@ const PUBLIC_PATHS = [
   "/cnfans-delivery-uk",
   "/cnfans-qc-photos",
   "/cnfans-size-guide",
+  "/size-recommender",
   "/cnfans-hoodie-finds",
   "/cnfans-jacket-finds",
   "/cnfans-t-shirt-finds",

@@ -6946,6 +6946,332 @@ a:focus-visible {
   white-space: nowrap;
 }
 
+.size-recommender-page .category-breadcrumb {
+  margin: 0 0 22px;
+}
+
+.size-recommender-tool {
+  margin-top: 22px;
+}
+
+.size-recommender-card,
+.size-recommender-result-card {
+  padding: 22px;
+  border: 1px solid var(--line);
+  background: var(--white);
+}
+
+.size-recommender-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+}
+
+.size-recommender-field {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  min-width: 0;
+}
+
+.size-recommender-field-wide {
+  grid-column: 1 / -1;
+}
+
+.size-recommender-field > label,
+.size-recommender-fit legend {
+  color: var(--ink);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.size-recommender-field > label {
+  display: block;
+}
+
+.size-recommender-field > label span,
+.size-recommender-fit legend span {
+  color: var(--muted);
+  font-weight: 400;
+}
+
+.size-recommender-field input[type="number"] {
+  width: 100%;
+  min-height: 46px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 0;
+  background: var(--white);
+  color: var(--ink);
+  font: inherit;
+  font-variant-numeric: tabular-nums;
+}
+
+.size-recommender-field input[type="number"]:focus-visible,
+.size-recommender-fit-option input:focus-visible,
+.size-recommender-reset:focus-visible,
+.size-recommender-table-wrap:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
+
+.size-recommender-help,
+.size-recommender-measure-help p,
+.size-recommender-table-hint {
+  color: var(--muted);
+  font-size: 13px !important;
+  line-height: 1.5 !important;
+}
+
+.size-recommender-measure-help summary {
+  width: fit-content;
+  color: var(--ink-soft);
+  cursor: pointer;
+  font-size: 13px;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.size-recommender-measure-help p {
+  margin: 8px 0 0;
+}
+
+.size-recommender-fit {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.size-recommender-fit legend {
+  margin-bottom: 9px;
+}
+
+.size-recommender-fit-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.size-recommender-fit-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 42px;
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  color: var(--ink-soft);
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.size-recommender-fit-option:has(input:checked) {
+  border-color: var(--ink);
+  color: var(--ink);
+}
+
+.size-recommender-fit-option input {
+  accent-color: var(--ink);
+}
+
+.size-recommender-actions {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  margin-top: 22px;
+}
+
+.size-recommender-actions .btn {
+  min-height: 46px;
+}
+
+.size-recommender-reset {
+  padding: 10px 0;
+  border: 0;
+  background: transparent;
+  color: var(--ink-soft);
+  cursor: pointer;
+  font: inherit;
+  font-size: 14px;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.size-recommender-error,
+.size-recommender-warning {
+  color: #8b3029;
+}
+
+.size-recommender-error {
+  margin: 14px 0 0 !important;
+}
+
+.size-recommender-result {
+  margin-top: 18px;
+}
+
+.size-recommender-result-placeholder {
+  color: var(--muted);
+  font-size: 13px !important;
+}
+
+.size-recommender-result-heading {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 18px;
+  margin-bottom: 14px;
+}
+
+.size-recommender-result-heading .eyebrow {
+  margin-bottom: 2px;
+}
+
+.size-recommender-size {
+  margin: 0 !important;
+  color: var(--ink);
+  font-family: var(--serif);
+  font-size: 48px !important;
+  line-height: 1 !important;
+}
+
+.size-recommender-confidence {
+  margin: 0 !important;
+  color: var(--ink-soft);
+  font-size: 13px !important;
+}
+
+.size-recommender-confidence strong {
+  color: var(--ink);
+}
+
+.size-recommender-confidence.is-low strong {
+  color: #8b3029;
+}
+
+.size-recommender-measurements {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0 16px;
+  margin: 18px 0;
+  border-top: 1px solid var(--line);
+}
+
+.size-recommender-measurements div {
+  padding: 11px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.size-recommender-measurements dt {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.size-recommender-measurements dd {
+  margin: 3px 0 0;
+  color: var(--ink);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.size-recommender-general-reference h3 {
+  margin: 0 0 8px;
+  color: var(--ink);
+  font-size: 15px;
+}
+
+.size-recommender-general-reference ul {
+  margin-bottom: 12px;
+}
+
+.size-recommender-warning {
+  margin: 10px 0 !important;
+  font-size: 14px !important;
+  font-weight: 600;
+}
+
+.size-recommender-style-note {
+  margin: 16px 0 0 !important;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+  font-size: 14px !important;
+}
+
+.size-recommender-table-hint {
+  margin-bottom: 8px !important;
+}
+
+.size-recommender-table-wrap {
+  overscroll-behavior-inline: contain;
+}
+
+.size-recommender-table {
+  min-width: 1060px;
+  font-size: 13px;
+}
+
+.size-recommender-table th,
+.size-recommender-table td {
+  white-space: nowrap;
+}
+
+.size-recommender-table tbody th {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  background: var(--white);
+}
+
+.size-recommender-range {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.size-recommender-related-links p:last-child {
+  margin-bottom: 0;
+}
+
+@media (max-width: 600px) {
+  .size-recommender-page {
+    padding-top: 28px;
+  }
+
+  .size-recommender-card,
+  .size-recommender-result-card {
+    padding: 16px;
+  }
+
+  .size-recommender-fields {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 16px;
+  }
+
+  .size-recommender-field-wide {
+    grid-column: auto;
+  }
+
+  .size-recommender-actions {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .size-recommender-actions .btn {
+    width: 100%;
+  }
+
+  .size-recommender-result-heading {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .size-recommender-measurements {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0 12px;
+  }
+}
+
 .first-party-examples {
   margin-top: 26px;
 }

@@ -39,6 +39,9 @@ export default async function CnfansSizeGuidePage() {
           Think about how you like to wear a piece, too. If you prefer a roomier, relaxed look, stick with your usual size.
           If you like things closer to the body, sizing down often works &mdash; especially on styles with an oversized cut.
         </p>
+        <p>
+          Not sure which size to start with? Use the <Link href="/size-recommender">Size Recommender</Link> for an approximate reference based on your measurements and preferred fit.
+        </p>
       </section>
 
       <section className="seo-section">
