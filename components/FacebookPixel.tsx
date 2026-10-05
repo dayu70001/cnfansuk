@@ -5,7 +5,7 @@ import Script from "next/script";
 import { usePathname, useSearchParams } from "next/navigation";
 import { trackPageView } from "@/lib/metaPixel";
 
-const PIXEL_ID = "1090229380102691";
+const PIXEL_ID = "1499287258896439";
 
 export function FacebookPixel() {
   const pathname = usePathname();

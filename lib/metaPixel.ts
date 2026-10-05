@@ -27,7 +27,9 @@ export type MetaCustomEvent =
   | "ContactTelegram"
   | "CheckoutWhatsAppContact"
   | "CheckoutTelegramContact"
-  | "ContactEmail";
+  | "ContactEmail"
+  | "click_whatsapp_channel"
+  | "click_telegram_channel";
 
 export type MetaPixelEventName = MetaStandardEvent | MetaCustomEvent;
 

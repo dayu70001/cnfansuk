@@ -1,0 +1,426 @@
+.channelPage {
+  --channel-bg: #f5f7fb;
+  --channel-surface: #ffffff;
+  --channel-surface-light: #eef2f7;
+  --channel-navy: #1e3a5f;
+  --channel-navy-light: #3b82f6;
+  --channel-navy-dark: #152e4a;
+  --channel-text: #1e293b;
+  --channel-text-muted: #475569;
+  --channel-text-dim: #94a3b8;
+  --channel-border: #d1d5db;
+  --channel-radius: 8px;
+  width: 100%;
+  max-width: 480px;
+  min-height: 100vh;
+  margin: 0 auto;
+  padding-bottom: 40px;
+  background: var(--channel-bg);
+  color: var(--channel-text);
+  font-family: Georgia, "Times New Roman", -apple-system, serif;
+  line-height: 1.7;
+  letter-spacing: 0.01em;
+  -webkit-font-smoothing: antialiased;
+}
+
+.channelPage * {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+.channelPage section {
+  padding: 32px 20px;
+}
+
+.channelPage section + section {
+  border-top: 1px solid var(--channel-border);
+}
+
+:global(body:has([data-channel-page="true"])) {
+  background: #f5f7fb;
+}
+
+:global(body:has([data-channel-page="true"]) .announce),
+:global(body:has([data-channel-page="true"]) .site-header),
+:global(body:has([data-channel-page="true"]) footer),
+:global(body:has([data-channel-page="true"]) .cart-backdrop),
+:global(body:has([data-channel-page="true"]) .cart-drawer) {
+  display: none !important;
+}
+
+:global(body:has([data-channel-page="true"]) main) {
+  min-height: 0;
+  overflow: visible;
+}
+
+.channelSectionLabel {
+  margin-bottom: 12px;
+  color: var(--channel-navy);
+  font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+  font-size: 10px;
+  font-weight: 400;
+  letter-spacing: 0.2em;
+  text-align: center;
+  text-transform: uppercase;
+}
+
+.channelHero {
+  position: relative;
+  overflow: hidden;
+  padding: 0 20px 20px !important;
+  background: linear-gradient(180deg, var(--channel-navy-dark) 0%, var(--channel-bg) 100%);
+  text-align: center;
+}
+
+.channelHero::before {
+  position: absolute;
+  top: -60px;
+  left: 50%;
+  width: 280px;
+  height: 280px;
+  transform: translateX(-50%);
+  background: radial-gradient(circle, rgba(30, 58, 95, 0.08) 0%, transparent 70%);
+  content: "";
+  pointer-events: none;
+}
+
+.channelHeroBrand {
+  position: relative;
+  padding-top: 48px;
+  margin-bottom: 16px;
+  color: var(--channel-navy);
+  font-size: 28px;
+  font-weight: 400;
+  letter-spacing: 0.12em;
+}
+
+.channelHeroBrand::after {
+  display: block;
+  width: 32px;
+  height: 1px;
+  margin: 14px auto 0;
+  background: var(--channel-navy-dark);
+  content: "";
+}
+
+.channelHeroTitle {
+  max-width: 340px;
+  margin: 0 auto 12px;
+  color: var(--channel-text);
+  font-size: 16px;
+  font-weight: 400;
+  line-height: 1.6;
+}
+
+.channelHeroDescription {
+  max-width: 320px;
+  margin: 0 auto 8px;
+  color: var(--channel-text-muted);
+  font-size: 13px;
+  line-height: 1.7;
+}
+
+.channelHeroTags {
+  display: flex;
+  flex-wrap: nowrap;
+  justify-content: center;
+  color: var(--channel-text-dim);
+  font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+  font-size: 10px;
+  letter-spacing: 0.04em;
+}
+
+.channelHeroTags span {
+  padding: 4px 10px;
+  border: 1px solid var(--channel-border);
+  border-radius: 20px;
+  font-size: 9px;
+  white-space: nowrap;
+}
+
+.channelCarouselWrap {
+  position: relative;
+  overflow: hidden;
+  margin: 0 6px;
+  border-radius: var(--channel-radius);
+}
+
+.channelCarouselTrack {
+  display: flex;
+  transition: transform 0.5s cubic-bezier(0.25, 0.1, 0.25, 1);
+}
+
+.channelCarouselSlide {
+  position: relative;
+  display: flex;
+  min-width: 100%;
+  aspect-ratio: 4 / 5;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  background: var(--channel-surface);
+  color: var(--channel-text-dim);
+  font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+  font-size: 13px;
+}
+
+.channelImage {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.channelCarouselDots {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.channelCarouselDot {
+  width: 6px;
+  height: 6px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: var(--channel-border);
+  cursor: pointer;
+  transition: background 0.3s;
+}
+
+.channelCarouselDotActive {
+  background: var(--channel-navy);
+}
+
+.channelCarouselDot:focus-visible,
+.channelCtaButton:focus-visible,
+.channelFooterLinks a:focus-visible {
+  outline: 2px solid var(--channel-navy-light);
+  outline-offset: 3px;
+}
+
+.channelCarouselHint {
+  overflow: hidden;
+  margin-top: 14px;
+  color: var(--channel-text-dim);
+  font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+  font-size: 12px;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.channelCarouselTags {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 10px;
+  color: var(--channel-text-muted);
+  font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+  font-size: 11px;
+}
+
+.channelCtaButtons {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.channelCtaButton {
+  display: flex;
+  min-height: 80px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 18px 12px;
+  border: 2px solid var(--channel-navy);
+  border-radius: 8px;
+  background: var(--channel-surface);
+  color: var(--channel-navy);
+  font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+  font-size: 14px;
+  font-weight: 600;
+  text-align: center;
+  text-decoration: none;
+  transition: all 0.3s;
+}
+
+.channelCtaButton:hover {
+  background: var(--channel-navy);
+  color: #fff;
+}
+
+.channelCtaButton:hover .channelIcon svg {
+  fill: #fff;
+}
+
+.channelIcon {
+  width: 24px;
+  height: 24px;
+  margin-bottom: 6px;
+}
+
+.channelIcon svg {
+  display: block;
+  width: 24px;
+  height: 24px;
+  fill: var(--channel-navy);
+  transition: fill 0.3s;
+}
+
+.channelCtaLabel {
+  font-size: 13px;
+  letter-spacing: 0.04em;
+}
+
+.channelAboutText {
+  color: var(--channel-text-muted);
+  font-size: 14px;
+  line-height: 1.8;
+}
+
+.channelAboutText p + p {
+  margin-top: 12px;
+}
+
+.channelOperationsGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.channelOperationsItem {
+  overflow: hidden;
+  aspect-ratio: 1;
+  border-radius: 6px;
+  background: var(--channel-surface);
+}
+
+.channelOperationsLabel {
+  margin-top: 6px;
+  color: var(--channel-text-muted);
+  font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+  font-size: 11px;
+  text-align: center;
+}
+
+.channelOperationsNote {
+  margin-top: 14px;
+  color: var(--channel-text-dim);
+  font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+  font-size: 12px;
+  text-align: center;
+}
+
+.channelPaymentScroll {
+  display: flex;
+  overflow-x: auto;
+  gap: 10px;
+  padding-bottom: 4px;
+  scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
+}
+
+.channelPaymentScroll::-webkit-scrollbar {
+  height: 0;
+}
+
+.channelPaymentCard {
+  position: relative;
+  display: flex;
+  overflow: hidden;
+  flex: 0 0 140px;
+  align-items: center;
+  justify-content: center;
+  aspect-ratio: 3 / 4;
+  border-radius: 6px;
+  background: var(--channel-surface);
+  color: var(--channel-text-dim);
+  font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+  font-size: 10px;
+  scroll-snap-align: start;
+}
+
+.channelPaymentNote {
+  margin-top: 12px;
+  color: var(--channel-text-dim);
+  font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+  font-size: 11px;
+}
+
+.channelReviewCard {
+  padding: 20px;
+  margin-bottom: 12px;
+  border-radius: var(--channel-radius);
+  background: var(--channel-surface);
+}
+
+.channelReviewCard:last-child {
+  margin-bottom: 0;
+}
+
+.channelReviewStars {
+  margin-bottom: 10px;
+  color: var(--channel-navy);
+  font-size: 13px;
+}
+
+.channelReviewQuote {
+  color: var(--channel-text-muted);
+  font-size: 13px;
+  font-style: italic;
+  line-height: 1.7;
+}
+
+.channelReviewQuote::before {
+  content: "\201C";
+}
+
+.channelReviewQuote::after {
+  content: "\201D";
+}
+
+.channelReviewAuthor {
+  margin-top: 12px;
+  color: var(--channel-text-dim);
+  font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+  font-size: 12px;
+}
+
+.channelFooter {
+  padding: 36px 20px 28px;
+  border-top: 1px solid var(--channel-border);
+  font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+  text-align: center;
+}
+
+.channelFooterBrand {
+  margin-bottom: 4px;
+  color: var(--channel-navy);
+  font-size: 14px;
+  letter-spacing: 0.1em;
+}
+
+.channelFooterTagline {
+  margin-bottom: 14px;
+  color: var(--channel-text-dim);
+  font-size: 11px;
+}
+
+.channelFooterLinks {
+  color: var(--channel-text-dim);
+  font-size: 10px;
+  letter-spacing: 0.04em;
+}
+
+.channelFooterLinks a {
+  color: var(--channel-text-dim);
+  text-decoration: none;
+}
+
+.channelFooterLinks a:hover {
+  color: var(--channel-navy);
+}
