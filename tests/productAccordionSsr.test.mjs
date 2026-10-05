@@ -75,11 +75,19 @@ test("Product page accordion content is present in initial server HTML while all
 
   assert.match(html, /SSR Product Details fixture text\./);
   assert.match(html, /SSR Size &amp; Fit fixture text\./);
+  assert.match(html, /Not sure which size to choose\?/);
+  assert.match(html, /<a class="pdp-accordion-link" href="\/size-recommender">Use our Size Recommender →<\/a>/);
   assert.match(html, /SSR Material fixture text\./);
   assert.match(html, /Tracked delivery across the UK and Europe\./);
   assert.match(html, /View returns information/);
   assert.equal((html.match(/aria-expanded="false"/g) || []).length, 5);
   assert.equal((html.match(/class="pdp-accordion-content" hidden=""/g) || []).length, 5);
+
+  const sizeFitStart = componentSource.indexOf('title="Size & Fit"');
+  const materialStart = componentSource.indexOf('title="Material"', sizeFitStart);
+  const sizeFitSource = componentSource.slice(sizeFitStart, materialStart);
+  assert.match(sizeFitSource, /Not sure which size to choose\?/);
+  assert.match(sizeFitSource, /href="\/size-recommender"/);
 });
 
 test("accordion keeps children mounted and uses native hidden for closed content", () => {

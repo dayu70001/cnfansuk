@@ -308,6 +308,10 @@ export function ProductDetailClient({ product }: { product: Product }) {
             onToggle={() => setOpenSection(openSection === "fit" ? null : "fit")}
           >
             <FactList facts={fitFacts} />
+            <p>Not sure which size to choose?</p>
+            <Link className="pdp-accordion-link" href="/size-recommender">
+              Use our Size Recommender →
+            </Link>
             <Link className="pdp-accordion-link" href="/cnfans-size-guide">
               View size guide →
             </Link>
