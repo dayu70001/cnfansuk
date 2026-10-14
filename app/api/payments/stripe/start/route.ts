@@ -74,7 +74,7 @@ export async function GET(request: Request) {
     for (const [name, value] of Object.entries(noStoreHeaders)) response.headers.set(name, value);
     return response;
   } catch {
-    return NextResponse.json({ error: "The bank transfer could not be started. Please try again." }, {
+    return NextResponse.json({ error: "The payment could not be started. Please try again." }, {
       status: 502,
       headers: noStoreHeaders,
     });

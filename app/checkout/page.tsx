@@ -911,21 +911,21 @@ function StripeBankTransferStep({
   return (
     <div className="checkout-step-panel">
       <p className="eyebrow">Payment</p>
-      <h2>Bank transfer</h2>
-      <p className="checkout-submit-note">Secure bank transfer via Stripe</p>
+      <h2>Secure payment</h2>
+      <p className="checkout-submit-note">Pay securely with Stripe</p>
       <div className="checkout-payment-summary">
         <div><span>Order</span><strong>#{orderNumber}</strong></div>
         <div><span>Amount due</span><strong>{formatMoney(total, "GBP")}</strong></div>
-        <div><span>Status</span><strong>Bank transfer pending</strong></div>
+        <div><span>Status</span><strong>Payment pending</strong></div>
       </div>
       <p className="checkout-submit-note">
         {mode === "test" || mode === "live"
-          ? "Continue in this tab to Stripe’s secure bank transfer page. Stripe will return you here after the payment step."
+          ? "Continue to Stripe to choose an available payment method and complete your payment securely."
           : "This local simulation does not create an order or start a real payment."}
       </p>
       {mode === "test" || mode === "live" ? (
         <p className="checkout-submit-note checkout-bank-transfer-followup">
-          Return here to check the payment status, then confirm your order details with us on WhatsApp.
+          After payment, return here to check the latest status and confirm your order with us on WhatsApp.
         </p>
       ) : null}
       {whatsappHref ? (
@@ -942,7 +942,7 @@ function StripeBankTransferStep({
       <div className="checkout-actions">
         <button className="checkout-back" type="button" onClick={onBack}>Back to Delivery</button>
         <button className="btn btn-solid" type="button" onClick={onContinue} disabled={submitting}>
-          {submitting ? "Opening payment step…" : "Continue to Bank Payment"}
+          {submitting ? "Opening secure payment…" : "Continue to Secure Payment"}
         </button>
       </div>
       {submitError ? <p className="checkout-submit-error">{submitError}</p> : null}
@@ -1189,7 +1189,6 @@ function OrderSummary({
           <strong>{formatMoney(total, "GBP")}</strong>
         </div>
       </div>
-      <p className="checkout-summary-currency">Checkout and bank transfer are completed in GBP.</p>
     </div>
   );
 }

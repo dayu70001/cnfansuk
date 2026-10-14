@@ -2889,8 +2889,7 @@ select {
 }
 
 .checkout-bank-intro p,
-.checkout-contact-next,
-.checkout-summary-currency {
+.checkout-contact-next {
   margin: 0;
   color: var(--ink-soft);
   font-size: 13px;
@@ -2999,11 +2998,6 @@ select {
 .checkout-contact-next {
   padding: 14px 16px;
   border: 1px solid var(--line);
-}
-
-.checkout-summary-currency {
-  margin-top: 16px;
-  font-size: 12px;
 }
 
 .success-wrap {

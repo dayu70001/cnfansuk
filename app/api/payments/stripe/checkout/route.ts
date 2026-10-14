@@ -19,7 +19,7 @@ export const dynamic = "force-dynamic";
 export async function POST(request: Request) {
   const mode = getStripeBankTransferMode();
   if (mode === "disabled") {
-    return NextResponse.json({ error: "Stripe bank transfer is not configured." }, { status: 503 });
+    return NextResponse.json({ error: "Stripe payment is not configured." }, { status: 503 });
   }
 
   let body: unknown;
@@ -76,7 +76,7 @@ export async function POST(request: Request) {
       if (error instanceof StripeCheckoutSessionMismatchError) {
         console.error("Stripe Test Checkout Session validation failed", error.checks);
         return NextResponse.json(
-          { error: "Bank transfer is temporarily unavailable. Please try again." },
+          { error: "Payment is temporarily unavailable. Please try again." },
           { status: 502, headers: { "Cache-Control": "no-store" } },
         );
       }
@@ -90,7 +90,7 @@ export async function POST(request: Request) {
         message: safeStripeErrorMessage(details.message),
       });
       return NextResponse.json(
-        { error: "Bank transfer is temporarily unavailable. Please try again." },
+        { error: "Payment is temporarily unavailable. Please try again." },
         { status: 502, headers: { "Cache-Control": "no-store" } },
       );
     }
@@ -98,7 +98,7 @@ export async function POST(request: Request) {
 
   if (mode === "live") {
     if (!isStripeLiveProductionRequest(request)) {
-      return NextResponse.json({ error: "Stripe bank transfer is unavailable." }, { status: 403 });
+      return NextResponse.json({ error: "Stripe payment is unavailable." }, { status: 403 });
     }
 
     const accessToken = getOrderAccessTokenFromCookieHeader(request.headers.get("cookie"), orderNumber);
@@ -115,7 +115,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Order payment is unavailable." }, { status: loadedOrder.status });
     }
     if (loadedOrder.order.currency !== "GBP" || !Number.isFinite(loadedOrder.order.final_total) || loadedOrder.order.final_total <= 0) {
-      return NextResponse.json({ error: "This saved order is not eligible for GBP bank transfer." }, { status: 409 });
+      return NextResponse.json({ error: "This saved order is not eligible for Stripe payment." }, { status: 409 });
     }
 
     try {
@@ -133,7 +133,7 @@ export async function POST(request: Request) {
       if (error instanceof StripeCheckoutSessionMismatchError) {
         console.error("Stripe Live Checkout Session validation failed", error.checks);
         return NextResponse.json(
-          { error: "Bank transfer is temporarily unavailable. Please try again." },
+          { error: "Payment is temporarily unavailable. Please try again." },
           { status: 502, headers: { "Cache-Control": "no-store" } },
         );
       }
@@ -147,14 +147,14 @@ export async function POST(request: Request) {
         message: safeStripeErrorMessage(details.message),
       });
       return NextResponse.json(
-        { error: "Bank transfer is temporarily unavailable. Please try again." },
+        { error: "Payment is temporarily unavailable. Please try again." },
         { status: 502, headers: { "Cache-Control": "no-store" } },
       );
     }
   }
 
   if (!isLocalStripeBankTransferMockEnabled()) {
-    return NextResponse.json({ error: "Stripe bank transfer is not configured." }, { status: 503 });
+    return NextResponse.json({ error: "Stripe payment is not configured." }, { status: 503 });
   }
 
   const amountMinor = input.amountMinor;

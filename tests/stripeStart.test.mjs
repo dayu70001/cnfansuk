@@ -182,6 +182,7 @@ test("Stripe Session creation failure never records payment submitted", async ()
     { headers: { host: "www.cnfans.co.uk", cookie: "order=fixture" } },
   ));
   assert.equal(response.status, 502);
+  assert.deepEqual(JSON.parse(JSON.stringify(response.body)), { error: "The payment could not be started. Please try again." });
   assert.equal(workerCalls, 0);
 });
 

@@ -119,9 +119,12 @@ function loadStripeServer(session, mode = "test") {
 
 test("payment presentation depends on payment_status, not Checkout complete status", () => {
   const { getStripePaymentStatusPresentation } = loadHelper();
-  assert.equal(getStripePaymentStatusPresentation("unpaid").label, "Waiting for bank transfer confirmation");
-  assert.equal(getStripePaymentStatusPresentation("paid").label, "Bank transfer received");
-  assert.equal(getStripePaymentStatusPresentation("no_payment_required").label, "No payment confirmation available");
+  assert.equal(getStripePaymentStatusPresentation("unpaid").label, "Payment not yet confirmed");
+  assert.equal(getStripePaymentStatusPresentation("unpaid").message, "Stripe has not confirmed this payment yet. If you have just completed payment, please wait a moment and check again.");
+  assert.equal(getStripePaymentStatusPresentation("paid").label, "Payment received");
+  assert.equal(getStripePaymentStatusPresentation("paid").message, "Your payment has been confirmed. Please confirm your order details with us on WhatsApp.");
+  assert.equal(getStripePaymentStatusPresentation("no_payment_required").label, "No payment required");
+  assert.equal(getStripePaymentStatusPresentation("no_payment_required").message, "No payment is required for this Stripe session.");
   assert.equal(getStripePaymentStatusPresentation("unpaid").tone, "waiting");
 });
 
@@ -260,7 +263,7 @@ test("read-only Stripe session status validates the real saved order and returns
   assert.equal(summary.status, "complete");
   assert.equal(
     loadHelper().getStripePaymentStatusPresentation(summary.paymentStatus).label,
-    "Waiting for bank transfer confirmation",
+    "Payment not yet confirmed",
     "A completed Checkout Session must not be treated as proof of payment.",
   );
   assert.equal(Object.hasOwn(summary, "customer"), false);
@@ -338,8 +341,15 @@ test("order success keeps one concise WhatsApp prompt and omits duplicate Stripe
 test("normal Test Mode copy is customer-facing and the Payment step WhatsApp help stays read-only", () => {
   assert.doesNotMatch(checkoutPageSource, /This local test creates no CNFANS order|cannot collect a live payment|fixed £57/i);
   const paymentStep = checkoutPageSource.slice(checkoutPageSource.indexOf("function StripeBankTransferStep"), checkoutPageSource.indexOf("function LocalCheckoutGuardStep"));
+  assert.match(paymentStep, /<h2>Secure payment<\/h2>/);
+  assert.match(paymentStep, /Pay securely with Stripe/);
+  assert.match(paymentStep, /<strong>Payment pending<\/strong>/);
+  assert.match(paymentStep, /Continue to Stripe to choose an available payment method and complete your payment securely\./);
+  assert.match(paymentStep, /After payment, return here to check the latest status and confirm your order with us on WhatsApp\./);
+  assert.match(paymentStep, /Continue to Secure Payment/);
   assert.match(paymentStep, /Need help with sizing or anything else before paying\?/);
   assert.match(paymentStep, /Chat on WhatsApp/);
+  assert.doesNotMatch(checkoutPageSource, /Checkout and bank transfer are completed in GBP\./);
   assert.match(paymentStep, /href=\{whatsappHref\} target="_blank" rel="noopener noreferrer"/);
   const whatsappLinkStart = paymentStep.indexOf('<a className="checkout-whatsapp-help-link"');
   const whatsappLinkEnd = paymentStep.indexOf("</a>", whatsappLinkStart);

@@ -267,7 +267,7 @@ test("Live Session mismatch logs booleans only and returns the generic checkout 
     body: JSON.stringify({ orderNumber: "CNF-260924-1234" }),
   }));
   assert.equal(response.status, 502);
-  assert.deepEqual(JSON.parse(JSON.stringify(response.body)), { error: "Bank transfer is temporarily unavailable. Please try again." });
+  assert.deepEqual(JSON.parse(JSON.stringify(response.body)), { error: "Payment is temporarily unavailable. Please try again." });
   assert.equal(route.logs.length, 1);
   assert.equal(route.logs[0][0], "Stripe Live Checkout Session validation failed");
   assert.deepEqual(JSON.parse(JSON.stringify(route.logs[0][1])), checks);

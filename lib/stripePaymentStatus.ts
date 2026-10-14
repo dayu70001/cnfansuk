@@ -12,23 +12,23 @@ export function isStripeCheckoutStatus(value: unknown): value is StripeCheckoutS
 export function getStripePaymentStatusPresentation(paymentStatus: StripePaymentStatus) {
   if (paymentStatus === "paid") {
     return {
-      label: "Bank transfer received",
-      message: "Your transfer has been received. Please confirm your order details with us on WhatsApp.",
+      label: "Payment received",
+      message: "Your payment has been confirmed. Please confirm your order details with us on WhatsApp.",
       tone: "received" as const,
     };
   }
 
   if (paymentStatus === "unpaid") {
     return {
-      label: "Waiting for bank transfer confirmation",
-      message: "Bank transfers can take a little time to appear. Return here after completing the transfer.",
+      label: "Payment not yet confirmed",
+      message: "Stripe has not confirmed this payment yet. If you have just completed payment, please wait a moment and check again.",
       tone: "waiting" as const,
     };
   }
 
   return {
-    label: "No payment confirmation available",
-    message: "This session has not confirmed a bank transfer. Please contact us on WhatsApp so we can check.",
+    label: "No payment required",
+    message: "No payment is required for this Stripe session.",
     tone: "neutral" as const,
   };
 }
