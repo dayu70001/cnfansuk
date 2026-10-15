@@ -1,4 +1,5 @@
 import Link from "next/link";
+import Image from "next/image";
 import { MetaPixelEventLink } from "@/components/MetaPixelEventLink";
 import { fetchSiteSettings } from "@/lib/siteSettings";
 
@@ -102,7 +103,24 @@ export async function Footer() {
           </nav>
         </div>
         <div className="foot-bottom">
-          <small>© 2026 CNFans UK. All rights reserved.</small>
+          <div className="foot-bottom-legal">
+            <small>© 2026 CNFans UK. All rights reserved.</small>
+            <nav className="foot-legal-links" aria-label="Legal">
+              <Link href="/privacy-policy">Privacy Policy</Link>
+              <span aria-hidden="true">·</span>
+              <Link href="/terms">Terms &amp; Conditions</Link>
+              <span aria-hidden="true">·</span>
+              <Link href="/payment-security">Payment &amp; Security</Link>
+            </nav>
+          </div>
+          <div className="foot-payment">
+            <span>Payments processed securely by Stripe</span>
+            <ul className="foot-payment-logos" aria-label="Accepted payment methods">
+              <li><Image src="/payment-methods/visa.svg" width={120} height={80} alt="Visa" /></li>
+              <li><Image src="/payment-methods/mastercard.svg" width={120} height={80} alt="Mastercard" /></li>
+              <li className="payment-logo-container-apple-pay"><Image className="payment-logo-apple-pay" src="/payment-methods/apple-pay.svg" width={166} height={106} alt="Apple Pay" /></li>
+            </ul>
+          </div>
         </div>
       </div>
     </footer>
