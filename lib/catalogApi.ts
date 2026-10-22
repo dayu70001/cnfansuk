@@ -240,6 +240,7 @@ function mapCatalogProduct(product: CatalogProduct): Product {
 
   return {
     id: productCode,
+    productCode,
     slug: cleanText(product.slug) || toSlug(title) || productCode.toLowerCase(),
     name: title,
     category,

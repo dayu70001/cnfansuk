@@ -7,6 +7,8 @@ export type Category = {
 
 export type Product = {
   id: string;
+  /** Stable catalog identity used as the public Product Code. */
+  productCode?: string;
   slug: string;
   name: string;
   category: string;

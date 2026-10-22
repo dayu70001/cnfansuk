@@ -8243,6 +8243,14 @@ body {
   margin: 0;
 }
 
+.pdp-accordion-content > .pdp-product-code {
+  margin-top: 10px;
+}
+
+.pdp-product-code strong {
+  font-weight: 600;
+}
+
 .pdp-fact-list {
   display: grid;
   gap: 8px;

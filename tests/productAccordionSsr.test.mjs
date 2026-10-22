@@ -54,6 +54,7 @@ function loadProductDetailClient() {
 
 const fixtureProduct = {
   id: "test-product",
+  productCode: "CNF-SSR-000001",
   slug: "test-product",
   name: "SSR Accordion Test Product",
   category: "Outerwear",
@@ -74,6 +75,7 @@ test("Product page accordion content is present in initial server HTML while all
   const html = renderToString(React.createElement(ProductDetailClient, { product: fixtureProduct }));
 
   assert.match(html, /SSR Product Details fixture text\./);
+  assert.match(html, /<strong>Product Code:<\/strong> <!-- -->CNF-SSR-000001/);
   assert.match(html, /SSR Size &amp; Fit fixture text\./);
   assert.match(html, /Not sure which size to choose\?/);
   assert.match(html, /<a class="pdp-accordion-link" href="\/size-recommender">Use our Size Recommender →<\/a>/);
@@ -82,12 +84,41 @@ test("Product page accordion content is present in initial server HTML while all
   assert.match(html, /View returns information/);
   assert.equal((html.match(/aria-expanded="false"/g) || []).length, 5);
   assert.equal((html.match(/class="pdp-accordion-content" hidden=""/g) || []).length, 5);
+  assert.ok(html.indexOf("SSR Product Details fixture text.") < html.indexOf("Product Code:", html.indexOf("Product Details")));
 
   const sizeFitStart = componentSource.indexOf('title="Size & Fit"');
   const materialStart = componentSource.indexOf('title="Material"', sizeFitStart);
   const sizeFitSource = componentSource.slice(sizeFitStart, materialStart);
   assert.match(sizeFitSource, /Not sure which size to choose\?/);
   assert.match(sizeFitSource, /href="\/size-recommender"/);
+});
+
+test("Product Code stays tied to catalog identity, not title or selected size", () => {
+  const ProductDetailClient = loadProductDetailClient();
+  const titleChanged = { ...fixtureProduct, name: "Renamed title, same catalog identity" };
+  const sizeChanged = { ...fixtureProduct, sizes: ["XXL"] };
+  const renamedHtml = renderToString(React.createElement(ProductDetailClient, { product: titleChanged }));
+  const sizedHtml = renderToString(React.createElement(ProductDetailClient, { product: sizeChanged }));
+
+  assert.match(renamedHtml, /<strong>Product Code:<\/strong> <!-- -->CNF-SSR-000001/);
+  assert.match(sizedHtml, /<strong>Product Code:<\/strong> <!-- -->CNF-SSR-000001/);
+});
+
+test("independent products with identical titles render their distinct stored codes", () => {
+  const ProductDetailClient = loadProductDetailClient();
+  const repeatedTitleProducts = [
+    { ...fixtureProduct, id: "same-title-1", productCode: "CNF-SSR-000011" },
+    { ...fixtureProduct, id: "same-title-2", productCode: "CNF-SSR-000012" },
+  ];
+  const html = renderToString(React.createElement(
+    "div",
+    null,
+    ...repeatedTitleProducts.map((product) => React.createElement(ProductDetailClient, { key: product.id, product })),
+  ));
+
+  assert.match(html, /<strong>Product Code:<\/strong> <!-- -->CNF-SSR-000011/);
+  assert.match(html, /<strong>Product Code:<\/strong> <!-- -->CNF-SSR-000012/);
+  assert.equal(new Set(repeatedTitleProducts.map((product) => product.productCode)).size, 2);
 });
 
 test("accordion keeps children mounted and uses native hidden for closed content", () => {

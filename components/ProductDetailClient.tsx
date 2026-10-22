@@ -74,6 +74,7 @@ export function ProductDetailClient({ product }: { product: Product }) {
   );
   const galleryItems = useMemo(() => product.images.filter((item) => item && item !== "placeholder").slice(0, 9), [product.images]);
   const currentPrice = getProductPrice(product, currency);
+  const publicProductCode = product.productCode?.trim() || product.id;
   const details = useMemo(() => productDetailFacts(product), [product.description, product.productDetails]);
   const fitFacts = useMemo(() => sizeFitFacts(product), [product.sizeFit]);
   const material = useMemo(() => materialValue(product), [product.description, product.material]);
@@ -301,6 +302,7 @@ export function ProductDetailClient({ product }: { product: Product }) {
             onToggle={() => setOpenSection(openSection === "details" ? null : "details")}
           >
             <FactList facts={details} />
+            <p className="pdp-product-code"><strong>Product Code:</strong> {publicProductCode}</p>
           </AccordionItem>
           <AccordionItem
             title="Size & Fit"
