@@ -13,28 +13,14 @@ const pages = {
   payment: read("app/payment-security/page.tsx"),
 };
 
-test("footer keeps the existing five columns and adds legal links, Stripe note, and ordered local payment marks", () => {
+test("footer keeps its navigation and legal links while temporarily hiding payment messaging and marks", () => {
   for (const label of ["Shop", "Support", "Follow", "Company"]) assert.match(footer, new RegExp(`aria-label="${label}"`));
   assert.match(footer, /CNFans <span>UK<\/span>/);
   assert.match(footer, /href="\/privacy-policy"/);
   assert.match(footer, /href="\/terms"/);
   assert.match(footer, /href="\/payment-security"/);
   assert.match(footer, /aria-label="Legal"/);
-  assert.match(footer, /Payments processed securely by Stripe/);
-  assert.match(footer, /aria-label="Accepted payment methods"/);
-  const paymentMarkup = footer.slice(footer.indexOf('<ul className="foot-payment-logos"'), footer.indexOf("</ul>", footer.indexOf('<ul className="foot-payment-logos"')));
-  const expectedMarks = [
-    ["visa", "width={120} height={80}", "Visa"],
-    ["mastercard", "width={120} height={80}", "Mastercard"],
-    ["apple-pay", "width={166} height={106}", "Apple Pay"],
-  ];
-  for (const [name, dimensions, alt] of expectedMarks) {
-    assert.match(footer, new RegExp(`src="/payment-methods/${name}\\.svg"`));
-    assert.match(footer, new RegExp(dimensions.replace(/[{}]/g, "\\$&")));
-    assert.match(footer, new RegExp(`alt="${alt}"`));
-  }
-  assert.doesNotMatch(paymentMarkup, /american-express|american express|\bamex\b|google-pay|google pay/i);
-  assert.deepEqual([...paymentMarkup.matchAll(/alt="([^"]+)"/g)].map(([, alt]) => alt), ["Visa", "Mastercard", "Apple Pay"]);
+  assert.doesNotMatch(footer, /Payments processed securely by Stripe|foot-payment-logos|payment-methods\//);
 });
 
 test("sitemap includes each of the three policy URLs exactly once", () => {
@@ -45,7 +31,7 @@ test("sitemap includes each of the three policy URLs exactly once", () => {
   assert.match(sitemap, /const publicPages: MetadataRoute\.Sitemap = \[\.\.\.PUBLIC_PATHS, \.\.\.indexableSubcategoryPaths\]/);
 });
 
-test("payment artwork is present and contains no executable or external SVG content", () => {
+test("retained payment artwork assets contain no executable or external SVG content", () => {
   for (const name of ["visa", "mastercard", "apple-pay"]) {
     const svg = read(`public/payment-methods/${name}.svg`);
     assert.match(svg, /<svg\b/);

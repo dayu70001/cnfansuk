@@ -9,6 +9,8 @@ import { fileURLToPath } from "node:url";
 const currentDirectory = path.dirname(fileURLToPath(import.meta.url));
 const source = fs.readFileSync(path.join(currentDirectory, "..", "lib", "stripeCheckoutHandoff.ts"), "utf8");
 const checkoutSource = fs.readFileSync(path.join(currentDirectory, "..", "app", "checkout", "page.tsx"), "utf8");
+const startRouteSource = fs.readFileSync(path.join(currentDirectory, "..", "app", "api", "payments", "stripe", "start", "route.ts"), "utf8");
+const productSource = fs.readFileSync(path.join(currentDirectory, "..", "components", "ProductDetailClient.tsx"), "utf8");
 const statusComponentSource = fs.readFileSync(path.join(currentDirectory, "..", "components", "StripePaymentStatus.tsx"), "utf8");
 const compiled = ts.transpile(source, { module: ts.ModuleKind.CommonJS });
 const loadedModule = { exports: {} };
@@ -102,23 +104,14 @@ test("popup blocked or opener isolation failure keeps the original checkout avai
   assert.equal(handle.closed, true);
 });
 
-test("Live/Test checkout opens the start route before async work and processing is pending-only", () => {
-  const start = checkoutSource.indexOf("async function continueToLocalBankPayment()");
-  const end = checkoutSource.indexOf("const isLocalStripeOrder", start);
-  const handler = checkoutSource.slice(start, end);
-  const startWindow = handler.indexOf("openStripeStartWindow(startUrl");
-  const processingNavigation = handler.indexOf("router.replace(`/payments/stripe/processing?order=");
-  const mockRequest = handler.indexOf('await fetch("/api/payments/stripe/checkout"');
-  assert.ok(startWindow >= 0 && processingNavigation > startWindow);
-  assert.ok(mockRequest > processingNavigation);
-  assert.match(handler, /window\.open\(url, target\)/);
-  assert.match(handler, /Unable to open payment page\. Please try again\./);
-  assert.match(handler, /if \(!opened\)[\s\S]*?return;/);
-  assert.doesNotMatch(handler, /about:blank|paymentWindow|sessionStorage|fallbackCheckoutUrl|serializeLocalStripeFallback|window\.location\.assign/);
-  assert.equal((handler.match(/await fetch\("\/api\/payments\/stripe\/checkout"/g) || []).length, 1);
-  assert.match(handler, /localStripeRequestInFlight\.current/);
-  assert.match(handler, /localStripeRequestInFlight\.current = false;\s*setSubmitting\(false\);\s*setSubmitError\("Unable to open payment page/);
-  assert.match(checkoutSource, /<button className="btn btn-solid" type="button" onClick=\{onContinue\} disabled=\{submitting\}>/);
+test("temporary payment pause removes checkout handoff and keeps the Processing route historical-only", () => {
+  assert.match(checkoutSource, /Online checkout is temporarily paused/);
+  assert.match(checkoutSource, /Contact on WhatsApp/);
+  assert.doesNotMatch(checkoutSource, /openStripeStartWindow|\/api\/payments\/stripe\/start|\/api\/payments\/stripe\/checkout/);
+  assert.match(startRouteSource, /status: 503/);
+  assert.doesNotMatch(startRouteSource, /createStripeBankTransferCheckout|payment-submitted|stripe\.checkout\.sessions\.create/);
+  assert.match(productSource, /Contact on WhatsApp/);
+  assert.doesNotMatch(productSource, /Order now|router\.push\("\/checkout"\)/);
   const processingSource = fs.readFileSync(path.join(currentDirectory, "..", "app", "payments", "stripe", "processing", "page.tsx"), "utf8");
   assert.match(processingSource, /<h1>Payment processing<\/h1>/);
   assert.match(processingSource, /Waiting for payment confirmation\./);

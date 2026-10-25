@@ -20,12 +20,14 @@ test("obsolete Payment Trust blocks and payment badges are absent from Checkout,
   assert.doesNotMatch(checkoutSource, /Checkout and bank transfer are completed in GBP\./);
 });
 
-test("approved Stripe payment copy and pre-payment WhatsApp remain intact", () => {
-  assert.match(checkoutSource, /<h2>Secure payment<\/h2>/);
-  assert.match(checkoutSource, /Pay securely with Stripe/);
-  assert.match(checkoutSource, /<strong>Payment pending<\/strong>/);
-  assert.match(checkoutSource, /Continue to Secure Payment/);
-  assert.match(checkoutSource, /Need help with sizing or anything else before paying\?/);
-  assert.match(checkoutSource, /Chat on WhatsApp/);
-  assert.match(checkoutSource, /href=\{whatsappHref\} target="_blank" rel="noopener noreferrer"/);
+test("checkout is paused and directs customers to the existing WhatsApp contact", () => {
+  assert.match(checkoutSource, /Online checkout is temporarily paused/);
+  assert.match(checkoutSource, /Contact on WhatsApp/);
+  assert.match(checkoutSource, /buildPersonalWhatsAppLink/);
+  assert.doesNotMatch(checkoutSource, /Stripe|Bank transfer|Account number|Sort code|createStripe|\/api\/orders/);
+  assert.doesNotMatch(productSource, /Order now|router\.push\("\/checkout"\)/);
+  assert.match(productSource, /Add to cart/);
+  assert.match(productSource, /Contact on WhatsApp/);
+  assert.match(cartSource, /Contact on WhatsApp/);
+  assert.doesNotMatch(cartSource, /href="\/checkout"|trackInitiateCheckout|clearCart/);
 });

@@ -298,13 +298,19 @@ test("session status rejects a wrong order, amount, currency or live-mode Sessio
   await assert.rejects(loadStripeServer(validSession()).retrieveLocalStripeTestSessionSummary("cs_live_fixture123", savedOrder));
 });
 
-test("Test Mode ignores no client price input and requires the order access token", () => {
-  const testBranch = checkoutRouteSource.slice(checkoutRouteSource.indexOf('if (mode === "test")'), checkoutRouteSource.indexOf("if (!isLocalStripeBankTransferMockEnabled())"));
-  assert.match(testBranch, /loadAuthorizedOrder\(orderNumber, input\.orderAccessToken\)/);
-  assert.match(testBranch, /forbiddenClientAmounts/);
-  assert.doesNotMatch(testBranch, /input\.amountMinor|input\.currency|input\.subtotal|input\.shippingFee|input\.price/);
-  assert.match(testBranch, /createLocalStripeTestCheckout\(loadedOrder\.order, origin\)/);
-  assert.doesNotMatch(testBranch, /LOCAL-CNF-TEST|5700/);
+test("new order and Stripe Session creation routes are hard-disabled while payment status remains readable", () => {
+  const orderRoute = fs.readFileSync(path.join(projectRoot, "app", "api", "orders", "route.ts"), "utf8");
+  const startRoute = fs.readFileSync(path.join(projectRoot, "app", "api", "payments", "stripe", "start", "route.ts"), "utf8");
+  const configRoute = fs.readFileSync(path.join(projectRoot, "app", "api", "payments", "stripe", "config", "route.ts"), "utf8");
+  for (const route of [checkoutRouteSource, orderRoute, startRoute]) {
+    assert.match(route, /status: 503/);
+    assert.match(route, /temporarily paused/);
+    assert.doesNotMatch(route, /createStripeBankTransferCheckout|createLocalStripeTestCheckout|stripe\.checkout\.sessions\.create|payment-submitted|fetch\(/);
+  }
+  assert.match(configRoute, /enabled: false, mode: "disabled"/);
+  assert.match(statusRouteSource, /export async function GET/);
+  assert.match(statusRouteSource, /retrieveStripeSessionSummary\(/);
+  assert.doesNotMatch(statusRouteSource, /method:\s*["']POST|payment_confirmed|payment-submitted/);
 });
 
 test("session-status authenticates Test or Live order access and returns only payment and checkout status", () => {
@@ -338,34 +344,11 @@ test("order success keeps one concise WhatsApp prompt and omits duplicate Stripe
   assert.doesNotMatch(orderSuccessSource, /Payment is not confirmed automatically|Your transfer status is checked securely|Your bank transfer opens in a separate secure Stripe page|We'll check your size, delivery details and payment/);
 });
 
-test("normal Test Mode copy is customer-facing and the Payment step WhatsApp help stays read-only", () => {
-  assert.doesNotMatch(checkoutPageSource, /This local test creates no CNFANS order|cannot collect a live payment|fixed £57/i);
-  const paymentStep = checkoutPageSource.slice(checkoutPageSource.indexOf("function StripeBankTransferStep"), checkoutPageSource.indexOf("function LocalCheckoutGuardStep"));
-  assert.match(paymentStep, /<h2>Secure payment<\/h2>/);
-  assert.match(paymentStep, /Pay securely with Stripe/);
-  assert.match(paymentStep, /<strong>Payment pending<\/strong>/);
-  assert.match(paymentStep, /Continue to Stripe to choose an available payment method and complete your payment securely\./);
-  assert.match(paymentStep, /After payment, return here to check the latest status and confirm your order with us on WhatsApp\./);
-  assert.match(paymentStep, /Continue to Secure Payment/);
-  assert.match(paymentStep, /Need help with sizing or anything else before paying\?/);
-  assert.match(paymentStep, /Chat on WhatsApp/);
-  assert.doesNotMatch(checkoutPageSource, /Checkout and bank transfer are completed in GBP\./);
-  assert.match(paymentStep, /href=\{whatsappHref\} target="_blank" rel="noopener noreferrer"/);
-  const whatsappLinkStart = paymentStep.indexOf('<a className="checkout-whatsapp-help-link"');
-  const whatsappLinkEnd = paymentStep.indexOf("</a>", whatsappLinkStart);
-  assert.notEqual(whatsappLinkStart, -1);
-  assert.notEqual(whatsappLinkEnd, -1);
-  assert.doesNotMatch(paymentStep.slice(whatsappLinkStart, whatsappLinkEnd), /onClick|router\.(push|replace)|clearCart|payment-submitted|payment_submitted|stripe\/checkout/i);
-
-  const whatsappContactFlow = paymentStep.slice(
-    paymentStep.indexOf("const [whatsappHref, setWhatsappHref]"),
-    paymentStep.indexOf("  return (", paymentStep.indexOf("const [whatsappHref, setWhatsappHref]")),
-  );
-  assert.match(whatsappContactFlow, /\/site-settings/);
-  assert.match(whatsappContactFlow, /method: "GET"/);
-  assert.match(whatsappContactFlow, /personalWhatsappUrl/);
-  assert.match(whatsappContactFlow, /personalWhatsappNumber/);
-  assert.match(whatsappContactFlow, /Hi, I have a question about order #\$\{orderNumber\}\./);
-  assert.doesNotMatch(whatsappContactFlow, /\/api\/payments\/stripe\/checkout|payment-submitted|payment_submitted|\/payments\/stripe\/processing|clearCart|payment.status|method: "POST"/i);
+test("checkout page is a concise personal WhatsApp contact prompt with no bank or Stripe details", () => {
+  assert.match(checkoutPageSource, /Online checkout is temporarily paused/);
+  assert.match(checkoutPageSource, /To place an order or ask about an item, contact us on WhatsApp/);
+  assert.match(checkoutPageSource, /buildPersonalWhatsAppLink/);
+  assert.match(checkoutPageSource, /target="_blank" rel="noopener noreferrer"/);
+  assert.doesNotMatch(checkoutPageSource, /Stripe|Bank transfer|Account number|Sort code|payment_submitted|clearCart|\/api\/orders/);
   assert.match(orderSuccessSource, /Confirm order on WhatsApp/);
 });

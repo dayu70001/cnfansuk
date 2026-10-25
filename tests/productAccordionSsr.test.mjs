@@ -30,12 +30,14 @@ function loadProductDetailClient() {
     "next/navigation": { useRouter: () => ({ push() {} }) },
     "@/lib/formatMoney": { formatMoney: (value) => `£${value}` },
     "@/lib/productPrice": { getProductPrice: (product) => product.priceGBP },
+    "@/lib/personalWhatsAppLink": { buildPersonalWhatsAppLink: () => "https://api.whatsapp.com/send?phone=85251200580" },
     "@/lib/googleAnalytics": {
       productToGoogleAnalyticsItem: () => ({}),
       trackGoogleAnalyticsEvent() {},
     },
     "@/lib/metaPixel": {
       trackAddToCart() {},
+      trackContactWhatsApp() {},
       trackInitiateCheckout() {},
       trackViewContent() {},
     },

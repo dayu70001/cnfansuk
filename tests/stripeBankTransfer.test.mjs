@@ -197,12 +197,8 @@ test("Stripe Test Mode amount and currency come from the persisted order, not an
   assert.equal(Object.hasOwn(capturedSessionParams, "payment_method_configuration"), false);
   assert.equal(Object.hasOwn(capturedSessionParams, "payment_method_options"), false);
 
-  const testModeRoute = checkoutRouteSource
-    .split('if (mode === "test")')[1]
-    ?.split("if (!isLocalStripeBankTransferMockEnabled())")[0];
-  assert.ok(testModeRoute);
-  assert.match(testModeRoute, /loadAuthorizedOrder\(orderNumber, input\.orderAccessToken\)/);
-  assert.match(testModeRoute, /createLocalStripeTestCheckout\(loadedOrder\.order, origin\)/);
-  assert.match(testModeRoute, /forbiddenClientAmounts/);
-  assert.doesNotMatch(testModeRoute, /input\.amountMinor/);
+  assert.match(checkoutRouteSource, /export async function POST\(\)/);
+  assert.match(checkoutRouteSource, /status: 503/);
+  assert.match(checkoutRouteSource, /Online payments are temporarily paused/);
+  assert.doesNotMatch(checkoutRouteSource, /createLocalStripeTestCheckout|createStripeBankTransferCheckout|stripe\.checkout\.sessions\.create/);
 });

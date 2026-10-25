@@ -2,11 +2,11 @@
 
 import { type MouseEvent, type UIEvent, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { formatMoney } from "@/lib/formatMoney";
 import { getProductPrice } from "@/lib/productPrice";
+import { buildPersonalWhatsAppLink } from "@/lib/personalWhatsAppLink";
 import { productToGoogleAnalyticsItem, trackGoogleAnalyticsEvent } from "@/lib/googleAnalytics";
-import { trackAddToCart, trackInitiateCheckout, trackViewContent } from "@/lib/metaPixel";
+import { trackAddToCart, trackContactWhatsApp, trackViewContent } from "@/lib/metaPixel";
 import { useCurrency } from "@/lib/useCurrency";
 import { getCustomerPurchaseSizes } from "@/lib/productSizes";
 import type { CartItem, Product } from "@/lib/types";
@@ -58,8 +58,15 @@ function sizeFitFacts(product: Product): string[] {
   return factLines(product.sizeFit).filter((line) => !isPureSizeLine(line));
 }
 
-export function ProductDetailClient({ product }: { product: Product }) {
-  const router = useRouter();
+export function ProductDetailClient({
+  product,
+  personalWhatsappUrl,
+  personalWhatsappNumber,
+}: {
+  product: Product;
+  personalWhatsappUrl?: string;
+  personalWhatsappNumber?: string;
+}) {
   const { addItem } = useCart();
   const { currency } = useCurrency();
   const [size, setSize] = useState("");
@@ -159,25 +166,33 @@ export function ProductDetailClient({ product }: { product: Product }) {
     }
   }
 
-  function orderNow(event: MouseEvent<HTMLButtonElement>) {
+  const whatsappHref = buildPersonalWhatsAppLink(
+    { personalWhatsappUrl, personalWhatsappNumber },
+    `Hi CNFans UK, I'd like help with this product:\nProduct: ${product.name}\nProduct Code: ${publicProductCode}\nSize: ${size || "Not selected"}\nQuantity: ${quantity}`,
+  );
+
+  function handleContactOnWhatsApp(event: MouseEvent<HTMLAnchorElement>) {
     event.stopPropagation();
-    if (addSelectedItem(false)) {
-      trackInitiateCheckout({
-        source_page: "product_detail",
-        placement: "order_now",
-        button_label: "Order now",
-        destination: "/checkout",
-        content_name: product.name,
-        content_ids: [product.id],
-        product_slug: product.slug,
-        product_code: product.id,
-        content_type: "product",
-        currency,
-        value: currentPrice * quantity,
-        num_items: quantity,
-      });
-      router.push("/checkout");
+    if (!size || !whatsappHref) {
+      event.preventDefault();
+      setSizeError(!size);
+      return;
     }
+    setSizeError(false);
+    trackContactWhatsApp({
+      source_page: "product_detail",
+      placement: "contact_on_whatsapp",
+      button_label: "Contact on WhatsApp",
+      destination: "personal_whatsapp",
+      content_name: product.name,
+      content_ids: [product.id],
+      product_slug: product.slug,
+      product_code: publicProductCode,
+      content_type: "product",
+      currency,
+      value: currentPrice * quantity,
+      num_items: quantity,
+    });
   }
 
   function selectSize(value: string) {
@@ -291,9 +306,15 @@ export function ProductDetailClient({ product }: { product: Product }) {
         <button className="btn btn-solid pdp-action" type="button" onClick={handleAddToCart}>
           Add to cart
         </button>
-        <button className="btn pdp-action" type="button" onClick={orderNow}>
-          Order now
-        </button>
+        <a
+          className="btn pdp-action"
+          href={whatsappHref || "#contact-on-whatsapp"}
+          target="_blank"
+          rel="noopener noreferrer"
+          onClick={handleContactOnWhatsApp}
+        >
+          Contact on WhatsApp
+        </a>
 
         <div className="pdp-accordion">
           <AccordionItem

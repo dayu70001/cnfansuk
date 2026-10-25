@@ -8,6 +8,7 @@ import { Footer } from "@/components/Footer";
 import GoogleAnalytics from "@/components/GoogleAnalytics";
 import { Header } from "@/components/Header";
 import { SITE_NAME, SITE_URL } from "@/lib/site";
+import { fetchSiteSettings } from "@/lib/siteSettings";
 import "./globals.css";
 
 const inter = Inter({
@@ -42,7 +43,8 @@ export const viewport: Viewport = {
   viewportFit: "cover",
 };
 
-export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+export default async function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
+  const settings = await fetchSiteSettings();
   return (
     <html lang="en" className={inter.variable}>
       <body>
@@ -51,7 +53,10 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
           <Header />
           <main>{children}</main>
           <Footer />
-          <CartDrawer />
+          <CartDrawer
+            personalWhatsappUrl={settings.links.personalWhatsappUrl}
+            personalWhatsappNumber={settings.links.personalWhatsappNumber}
+          />
         </CartProvider>
         <Suspense fallback={null}>
           <GoogleAnalytics />

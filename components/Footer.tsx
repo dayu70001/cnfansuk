@@ -1,5 +1,4 @@
 import Link from "next/link";
-import Image from "next/image";
 import { MetaPixelEventLink } from "@/components/MetaPixelEventLink";
 import { fetchSiteSettings } from "@/lib/siteSettings";
 
@@ -112,14 +111,6 @@ export async function Footer() {
               <span aria-hidden="true">·</span>
               <Link href="/payment-security">Payment &amp; Security</Link>
             </nav>
-          </div>
-          <div className="foot-payment">
-            <span>Payments processed securely by Stripe</span>
-            <ul className="foot-payment-logos" aria-label="Accepted payment methods">
-              <li><Image src="/payment-methods/visa.svg" width={120} height={80} alt="Visa" /></li>
-              <li><Image src="/payment-methods/mastercard.svg" width={120} height={80} alt="Mastercard" /></li>
-              <li className="payment-logo-container-apple-pay"><Image className="payment-logo-apple-pay" src="/payment-methods/apple-pay.svg" width={166} height={106} alt="Apple Pay" /></li>
-            </ul>
           </div>
         </div>
       </div>
