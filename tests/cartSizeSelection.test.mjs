@@ -35,16 +35,17 @@ test("card additions stay unselected while product detail still requires and pas
   assert.match(detailSource, /size,\s*quantity,/);
 });
 
-test("cart size selection uses the fixed customer sizes and blocks WhatsApp contact only while a size is missing", () => {
+test("cart size selection uses the fixed customer sizes and blocks Checkout only while a size is missing", () => {
   assert.match(drawerSource, /const CUSTOMER_SIZES = \["M", "L", "XL", "XXL"\]/);
   assert.match(drawerSource, /const isCustomerSize = \(size: string\) => CUSTOMER_SIZES\.includes\(size\)/);
   assert.match(drawerSource, /items\.some\(\(item\) => !isCustomerSize\(item\.size\)\)/);
   assert.match(drawerSource, /updateSize\(item, size\)/);
-  assert.match(drawerSource, /if \(hasMissingSize \|\| !whatsappHref\)\s*\{\s*event\.preventDefault\(\)/);
+  assert.match(drawerSource, /if \(hasMissingSize\)\s*\{\s*event\.preventDefault\(\)/);
   assert.match(drawerSource, /Please select a size for all items\./);
-  assert.match(drawerSource, /Contact on WhatsApp/);
-  assert.match(drawerSource, /target="_blank"/);
-  assert.doesNotMatch(drawerSource, /trackInitiateCheckout|href="\/checkout"|clearCart/);
+  assert.match(drawerSource, /Checkout/);
+  assert.match(drawerSource, /href="\/checkout"/);
+  assert.match(drawerSource, /trackInitiateCheckout/);
+  assert.doesNotMatch(drawerSource, /Contact on WhatsApp|clearCart/);
 });
 
 test("changing a size updates one line and merges quantity with an existing identical variant", () => {
@@ -94,7 +95,8 @@ test("mobile product sticky bar markup and styling are removed without removing 
   assert.doesNotMatch(detailSource, /pdp-mobile-bar/);
   assert.doesNotMatch(cssSource, /pdp-mobile-bar/);
   assert.match(detailSource, /Add to cart/);
-  assert.match(detailSource, /Contact on WhatsApp/);
-  assert.doesNotMatch(detailSource, /Order now|trackInitiateCheckout|router\.push\("\/checkout"\)/);
+  assert.match(detailSource, /Order now/);
+  assert.match(detailSource, /trackInitiateCheckout/);
+  assert.match(detailSource, /router\.push\("\/checkout"\)/);
   assert.match(cssSource, /\.pdp\s*\{[^}]*padding-bottom:\s*24px/s);
 });

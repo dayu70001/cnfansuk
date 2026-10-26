@@ -8,7 +8,7 @@ import { fileURLToPath } from "node:url";
 
 const currentDirectory = path.dirname(fileURLToPath(import.meta.url));
 const source = fs.readFileSync(path.join(currentDirectory, "..", "lib", "stripeCheckoutHandoff.ts"), "utf8");
-const checkoutSource = fs.readFileSync(path.join(currentDirectory, "..", "app", "checkout", "page.tsx"), "utf8");
+const checkoutFlowSource = fs.readFileSync(path.join(currentDirectory, "..", "components", "CheckoutFlow.tsx"), "utf8");
 const startRouteSource = fs.readFileSync(path.join(currentDirectory, "..", "app", "api", "payments", "stripe", "start", "route.ts"), "utf8");
 const productSource = fs.readFileSync(path.join(currentDirectory, "..", "components", "ProductDetailClient.tsx"), "utf8");
 const statusComponentSource = fs.readFileSync(path.join(currentDirectory, "..", "components", "StripePaymentStatus.tsx"), "utf8");
@@ -104,14 +104,15 @@ test("popup blocked or opener isolation failure keeps the original checkout avai
   assert.equal(handle.closed, true);
 });
 
-test("temporary payment pause removes checkout handoff and keeps the Processing route historical-only", () => {
-  assert.match(checkoutSource, /Online checkout is temporarily paused/);
-  assert.match(checkoutSource, /Contact on WhatsApp/);
-  assert.doesNotMatch(checkoutSource, /openStripeStartWindow|\/api\/payments\/stripe\/start|\/api\/payments\/stripe\/checkout/);
+test("normal checkout flow is restored while its final payment step is WhatsApp-only", () => {
+  assert.match(checkoutFlowSource, /fetch\("\/api\/orders"/);
+  assert.match(checkoutFlowSource, /Online Payment Temporarily Unavailable/);
+  assert.match(checkoutFlowSource, /Confirm Order on WhatsApp/);
+  assert.doesNotMatch(checkoutFlowSource, /openStripeStartWindow|\/api\/payments\/stripe\/start|\/api\/payments\/stripe\/checkout|payment-submitted/);
   assert.match(startRouteSource, /status: 503/);
   assert.doesNotMatch(startRouteSource, /createStripeBankTransferCheckout|payment-submitted|stripe\.checkout\.sessions\.create/);
-  assert.match(productSource, /Contact on WhatsApp/);
-  assert.doesNotMatch(productSource, /Order now|router\.push\("\/checkout"\)/);
+  assert.match(productSource, /Order now/);
+  assert.match(productSource, /router\.push\("\/checkout"\)/);
   const processingSource = fs.readFileSync(path.join(currentDirectory, "..", "app", "payments", "stripe", "processing", "page.tsx"), "utf8");
   assert.match(processingSource, /<h1>Payment processing<\/h1>/);
   assert.match(processingSource, /Waiting for payment confirmation\./);
@@ -120,8 +121,8 @@ test("temporary payment pause removes checkout handoff and keeps the Processing 
   assert.match(processingSource, /getOrderAccessTokenFromCookieHeader\([^\n]*"processing"\)/);
   assert.match(processingSource, /loadAuthorizedOrder\(order, accessToken\)/);
   assert.doesNotMatch(processingSource, /Payment successful|Payment completed|Order completed|StripePaymentStatus|session_id/);
-  assert.doesNotMatch(checkoutSource, /Open Bank Transfer/);
-  assert.doesNotMatch(checkoutSource, /separate secure Stripe page|Keep this page open/);
+  assert.doesNotMatch(checkoutFlowSource, /Open Bank Transfer/);
+  assert.doesNotMatch(checkoutFlowSource, /separate secure Stripe page|Keep this page open/);
   assert.doesNotMatch(source, /Fallback|fallback|sessionStorage/);
   assert.doesNotMatch(statusComponentSource, /StripeBankTransferFallback/);
   assert.match(statusComponentSource, /session-status/);

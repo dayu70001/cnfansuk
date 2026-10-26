@@ -4,43 +4,22 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { getCartItemPrice, getCartLineKey, getCartSubtotal } from "@/lib/cart";
 import { formatMoney } from "@/lib/formatMoney";
-import { buildPersonalWhatsAppLink } from "@/lib/personalWhatsAppLink";
 import { cartItemToGoogleAnalyticsItem, trackGoogleAnalyticsEvent } from "@/lib/googleAnalytics";
-import { trackContactWhatsApp } from "@/lib/metaPixel";
+import { trackInitiateCheckout } from "@/lib/metaPixel";
 import { useCurrency } from "@/lib/useCurrency";
 import { useCart } from "./CartProvider";
 
 const CUSTOMER_SIZES = ["M", "L", "XL", "XXL"];
 const isCustomerSize = (size: string) => CUSTOMER_SIZES.includes(size);
 
-export function CartDrawer({
-  personalWhatsappUrl,
-  personalWhatsappNumber,
-}: {
-  personalWhatsappUrl?: string;
-  personalWhatsappNumber?: string;
-}) {
+export function CartDrawer() {
   const { items, isOpen, closeCart, updateQuantity, updateSize, removeItem } = useCart();
   const { currency } = useCurrency();
   const subtotal = getCartSubtotal(items, currency);
   const viewedOpenCart = useRef(false);
   const [openSizeLine, setOpenSizeLine] = useState<string | null>(null);
-  const [contactAttempted, setContactAttempted] = useState(false);
+  const [checkoutAttempted, setCheckoutAttempted] = useState(false);
   const hasMissingSize = items.some((item) => !isCustomerSize(item.size));
-  const cartMessage = [
-    "Hi CNFans UK, I'd like help with this cart:",
-    ...items.flatMap((item, index) => [
-      `${index + 1}. ${item.name}`,
-      `Product Code: ${item.productCode || item.productId}`,
-      `Size: ${item.size || "Not selected"}`,
-      `Quantity: ${item.quantity}`,
-      "",
-    ]),
-  ].join("\n").trim();
-  const whatsappHref = buildPersonalWhatsAppLink(
-    { personalWhatsappUrl, personalWhatsappNumber },
-    cartMessage,
-  );
 
   useEffect(() => {
     if (!isOpen) {
@@ -158,38 +137,36 @@ export function CartDrawer({
                 <span>Subtotal</span>
                 <strong>{formatMoney(subtotal, currency)}</strong>
               </div>
-              <a
+              <Link
                 className="primary-button full"
-                href={whatsappHref || "#contact-on-whatsapp"}
-                target="_blank"
-                rel="noopener noreferrer"
+                href="/checkout"
+                scroll
                 onClick={(event) => {
-                  if (hasMissingSize || !whatsappHref) {
+                  if (hasMissingSize) {
                     event.preventDefault();
-                    setContactAttempted(true);
+                    setCheckoutAttempted(true);
                     return;
                   }
-                  setContactAttempted(false);
-                  trackContactWhatsApp({
+                  setCheckoutAttempted(false);
+                  trackInitiateCheckout({
                     source_page: "cart_drawer",
-                    placement: "cart_contact",
-                    button_label: "Contact on WhatsApp",
-                    destination: "personal_whatsapp",
+                    placement: "cart_checkout",
+                    button_label: "Checkout",
+                    destination: "/checkout",
                     content_ids: items.map((item) => item.productId),
                     content_type: "product",
                     currency,
                     value: subtotal,
                     num_items: items.reduce((sum, item) => sum + item.quantity, 0),
                   });
+                  closeCart();
+                  window.scrollTo({ top: 0, left: 0, behavior: "auto" });
                 }}
               >
-                Contact on WhatsApp
-              </a>
-              {contactAttempted && hasMissingSize ? (
+                Checkout
+              </Link>
+              {checkoutAttempted && hasMissingSize ? (
                 <p className="cart-checkout-error" role="alert">Please select a size for all items.</p>
-              ) : null}
-              {contactAttempted && !hasMissingSize && !whatsappHref ? (
-                <p className="cart-checkout-error" role="alert">WhatsApp contact is unavailable. Please try again later.</p>
               ) : null}
               <button className="secondary-button full" type="button" onClick={closeCart}>
                 Continue Shopping

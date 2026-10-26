@@ -5,7 +5,6 @@ import { JsonLd } from "@/components/JsonLd";
 import { fetchCatalogProductBySlug } from "@/lib/catalogApi";
 import { getCategory } from "@/data/categories";
 import { SITE_NAME, SITE_URL } from "@/lib/site";
-import { fetchSiteSettings } from "@/lib/siteSettings";
 
 // Product pages are stable SEO pages and do not need ten-minute regeneration.
 export const revalidate = 21600;
@@ -57,7 +56,7 @@ export async function generateMetadata({ params }: Params): Promise<Metadata> {
 
 export default async function ProductPage({ params }: Params) {
   const { slug } = await params;
-  const [product, settings] = await Promise.all([resolveProduct(slug), fetchSiteSettings()]);
+  const product = await resolveProduct(slug);
 
   if (!product) {
     notFound();
@@ -111,11 +110,7 @@ export default async function ProductPage({ params }: Params) {
     <>
       <JsonLd data={productSchema} />
       <JsonLd data={breadcrumbSchema} />
-      <ProductDetailClient
-        product={product}
-        personalWhatsappUrl={settings.links.personalWhatsappUrl}
-        personalWhatsappNumber={settings.links.personalWhatsappNumber}
-      />
+      <ProductDetailClient product={product} />
     </>
   );
 }

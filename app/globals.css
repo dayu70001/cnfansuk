@@ -2655,38 +2655,6 @@ select {
   padding-bottom: 96px;
 }
 
-.checkout-paused {
-  display: grid;
-  min-height: min(62vh, 620px);
-  place-items: center;
-  padding-top: 48px;
-  padding-bottom: 72px;
-}
-
-.checkout-paused > section {
-  display: grid;
-  width: min(100%, 560px);
-  gap: 16px;
-}
-
-.checkout-paused h1,
-.checkout-paused p {
-  margin: 0;
-}
-
-.checkout-paused > section > p:not(.eyebrow) {
-  color: var(--muted);
-  line-height: 1.65;
-}
-
-.checkout-paused-browse {
-  width: fit-content;
-  color: var(--ink-soft);
-  font-size: 14px;
-  text-decoration: underline;
-  text-underline-offset: 3px;
-}
-
 .checkout-heading {
   margin-bottom: 26px;
   text-align: left;
@@ -5971,12 +5939,6 @@ select {
 
   .checkout-flow {
     padding-top: 28px;
-  }
-
-  .checkout-paused {
-    min-height: 48vh;
-    padding-top: 32px;
-    padding-bottom: 56px;
   }
 
   .checkout-heading {

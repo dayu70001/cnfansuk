@@ -8,6 +8,7 @@ const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "
 const read = (file) => fs.readFileSync(path.join(projectRoot, file), "utf8");
 
 const checkoutSource = read("app/checkout/page.tsx");
+const checkoutFlowSource = read("components/CheckoutFlow.tsx");
 const productSource = read("components/ProductDetailClient.tsx");
 const cartSource = read("components/CartDrawer.tsx");
 
@@ -20,14 +21,30 @@ test("obsolete Payment Trust blocks and payment badges are absent from Checkout,
   assert.doesNotMatch(checkoutSource, /Checkout and bank transfer are completed in GBP\./);
 });
 
-test("checkout is paused and directs customers to the existing WhatsApp contact", () => {
-  assert.match(checkoutSource, /Online checkout is temporarily paused/);
-  assert.match(checkoutSource, /Contact on WhatsApp/);
-  assert.match(checkoutSource, /buildPersonalWhatsAppLink/);
-  assert.doesNotMatch(checkoutSource, /Stripe|Bank transfer|Account number|Sort code|createStripe|\/api\/orders/);
-  assert.doesNotMatch(productSource, /Order now|router\.push\("\/checkout"\)/);
+test("checkout restores Details and Delivery and shows the approved WhatsApp-only Payment copy", () => {
+  assert.match(checkoutSource, /fetchSiteSettings/);
+  assert.match(checkoutFlowSource, /id: "details", label: "Details"/);
+  assert.match(checkoutFlowSource, /id: "delivery", label: "Delivery"/);
+  assert.match(checkoutFlowSource, /id: "payment", label: "Payment"/);
+  assert.match(checkoutFlowSource, /fetch\("\/api\/orders"/);
+  assert.match(checkoutFlowSource, /<h2>Online Payment Temporarily Unavailable<\/h2>/);
+  assert.match(checkoutFlowSource, /We&apos;re currently updating our payment arrangements, so online payment is temporarily unavailable\./);
+  assert.match(checkoutFlowSource, /Your order has been created, but no payment has been taken\. Please contact us on WhatsApp to confirm your order and receive the next steps\./);
+  assert.match(checkoutFlowSource, /<strong>Awaiting Confirmation<\/strong>/);
+  assert.match(checkoutFlowSource, /Confirm Order on WhatsApp/);
+  assert.match(checkoutFlowSource, /buildPersonalWhatsAppLink/);
+  assert.match(checkoutFlowSource, /Product Code: \$\{item\.productCode \|\| item\.productId\}/);
+  assert.match(checkoutFlowSource, /Size: \$\{item\.size/);
+  assert.match(checkoutFlowSource, /Quantity: \$\{item\.quantity\}/);
+  assert.match(checkoutFlowSource, /Order amount: \$\{formatMoney\(order\.finalTotal/);
+  assert.match(checkoutFlowSource, /target="_blank"/);
+  assert.doesNotMatch(checkoutFlowSource, /stripe\/start|stripe\/checkout|payment-submitted|clearCart|add_payment_info|rememberSubmittedOrderAnalytics/);
+  assert.doesNotMatch(checkoutFlowSource, /Account number|Sort code|checkout-bank-card|I've made the bank transfer/);
+  assert.match(productSource, /Order now/);
+  assert.match(productSource, /router\.push\("\/checkout"\)/);
   assert.match(productSource, /Add to cart/);
-  assert.match(productSource, /Contact on WhatsApp/);
-  assert.match(cartSource, /Contact on WhatsApp/);
-  assert.doesNotMatch(cartSource, /href="\/checkout"|trackInitiateCheckout|clearCart/);
+  assert.match(cartSource, /href="\/checkout"/);
+  assert.match(cartSource, /trackInitiateCheckout/);
+  assert.doesNotMatch(productSource, /Contact on WhatsApp/);
+  assert.doesNotMatch(cartSource, /Contact on WhatsApp|clearCart/);
 });
