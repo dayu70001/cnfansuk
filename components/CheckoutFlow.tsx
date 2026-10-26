@@ -334,18 +334,9 @@ export default function CheckoutFlow({ personalWhatsappUrl, personalWhatsappNumb
   }
 
   const orderItems = order?.items ?? items;
-  const whatsappMessage = order ? [
-    `Hi CNFans UK, I’d like to confirm order #${order.orderNumber}.`,
-    "",
-    ...orderItems.flatMap((item, index) => [
-      `${index + 1}. ${item.title || item.name}`,
-      `Product Code: ${item.productCode || item.productId}`,
-      `Size: ${item.size || "Not selected"}`,
-      `Quantity: ${item.quantity}`,
-      "",
-    ]),
-    `Order amount: ${formatMoney(order.finalTotal, order.currency)}`,
-  ].join("\n").trim() : "";
+  const whatsappMessage = order
+    ? `Hi CNFans UK, please confirm my order #${order.orderNumber}`
+    : "";
   const whatsappHref = buildPersonalWhatsAppLink(
     { personalWhatsappUrl, personalWhatsappNumber },
     whatsappMessage,

@@ -33,10 +33,11 @@ test("checkout restores Details and Delivery and shows the approved WhatsApp-onl
   assert.match(checkoutFlowSource, /<strong>Awaiting Confirmation<\/strong>/);
   assert.match(checkoutFlowSource, /Confirm Order on WhatsApp/);
   assert.match(checkoutFlowSource, /buildPersonalWhatsAppLink/);
-  assert.match(checkoutFlowSource, /Product Code: \$\{item\.productCode \|\| item\.productId\}/);
-  assert.match(checkoutFlowSource, /Size: \$\{item\.size/);
-  assert.match(checkoutFlowSource, /Quantity: \$\{item\.quantity\}/);
-  assert.match(checkoutFlowSource, /Order amount: \$\{formatMoney\(order\.finalTotal/);
+  const messageStart = checkoutFlowSource.indexOf("const whatsappMessage = order");
+  const messageEnd = checkoutFlowSource.indexOf("const whatsappHref", messageStart);
+  const messageSource = checkoutFlowSource.slice(messageStart, messageEnd);
+  assert.match(messageSource, /Hi CNFans UK, please confirm my order #\$\{order\.orderNumber\}/);
+  assert.doesNotMatch(messageSource, /product|size|quantity|amount|items|subtotal|address|phone|email/i);
   assert.match(checkoutFlowSource, /target="_blank"/);
   assert.doesNotMatch(checkoutFlowSource, /stripe\/start|stripe\/checkout|payment-submitted|clearCart|add_payment_info|rememberSubmittedOrderAnalytics/);
   assert.doesNotMatch(checkoutFlowSource, /Account number|Sort code|checkout-bank-card|I've made the bank transfer/);
