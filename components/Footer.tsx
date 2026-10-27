@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { MetaPixelEventLink } from "@/components/MetaPixelEventLink";
+import { FooterBrand } from "@/components/FooterBrand";
 import { fetchSiteSettings } from "@/lib/siteSettings";
 
 export async function Footer() {
@@ -19,7 +20,7 @@ export async function Footer() {
     { href: "/contact", label: "Contact" },
   ];
   const companyLinks = [
-    { href: "/about", label: "About CNFans UK" },
+    { href: "/about", label: "About CNFANS UK" },
     { href: "/how-to-order", label: "How to Order" },
     { href: "/guides", label: "Guides" },
   ];
@@ -35,9 +36,7 @@ export async function Footer() {
       <div className="wrap">
         <div className="foot-top">
           <div className="foot-brand">
-            <div className="brand">
-              CNFans <span>UK</span>
-            </div>
+            <FooterBrand />
             <p>Everyday apparel with practical fits and a simpler sourcing route.</p>
           </div>
           <nav className="foot-col" aria-label="Shop">
@@ -103,7 +102,7 @@ export async function Footer() {
         </div>
         <div className="foot-bottom">
           <div className="foot-bottom-legal">
-            <small>© 2026 CNFans UK. All rights reserved.</small>
+            <small>© 2026 CNFANS UK. All rights reserved.</small>
             <nav className="foot-legal-links" aria-label="Legal">
               <Link href="/privacy-policy">Privacy Policy</Link>
               <span aria-hidden="true">·</span>

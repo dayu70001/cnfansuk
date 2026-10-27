@@ -105,7 +105,7 @@ test("SSR page exposes self-canonical metadata, content, and the full reference 
   assert.match(page, /path:\s*"\/size-recommender"/);
   assert.match(page, /title:\s*"CNFans Size Recommender \| M–XXL Men's Clothing"/);
   assert.match(page, /name:\s*"CNFans Size Recommender"/);
-  assert.match(page, /<h1>CNFans Size Recommender<\/h1>/);
+  assert.match(page, /<h1>CNFANS Size Recommender<\/h1>/);
   assert.match(page, /approximate general reference/i);
   assert.match(page, /Garment chest/);
   assert.match(page, /Flat chest/);

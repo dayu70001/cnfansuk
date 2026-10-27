@@ -38,14 +38,14 @@ export default async function ConnectPage() {
     <div className={styles.page}>
       <main className={styles.shell}>
         <div className={styles.avatarWrap}>
-          <img className={styles.avatar} src="/connect-logo.png" alt="CNFans UK" />
+          <img className={styles.avatar} src="/connect-logo.png" alt="CNFANS UK" />
         </div>
 
-        <h1>CNFans UK</h1>
+        <h1>CNFANS UK</h1>
         <p className={styles.kicker}>Official Personal Contact</p>
         <p className={styles.intro}>Questions about products, sizing, prices or orders? Contact us directly.</p>
 
-        <div className={styles.links} aria-label="Contact CNFans UK">
+        <div className={styles.links} aria-label="Contact CNFANS UK">
           <MetaPixelEventLink
             className={`${styles.link} ${styles.whatsapp}`}
             href={whatsappUrl}
@@ -95,11 +95,11 @@ export default async function ConnectPage() {
 
         <div className={styles.storeWrap}>
           <Link className={styles.storeLink} href="/">
-            Explore CNFans UK <span aria-hidden="true">→</span>
+            Explore CNFANS UK <span aria-hidden="true">→</span>
           </Link>
         </div>
 
-        <p className={styles.footer}>CNFans UK · Official Contact</p>
+        <p className={styles.footer}>CNFANS UK · Official Contact</p>
       </main>
     </div>
   );

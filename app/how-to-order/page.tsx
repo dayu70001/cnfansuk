@@ -42,13 +42,13 @@ const steps = [
 
 export default function HowToOrderPage() {
   return (
-    <main className="seo-page">
+    <main className="seo-page how-to-order-page">
       <JsonLd data={buildGuidePageSchemas({ path: "/how-to-order", name: "How to Order from CNFans UK", description: "Learn how to browse products, check sizing, place an order and follow delivery updates with CNFans UK." })} />
       <header className="seo-hero">
-        <p className="eyebrow">CNFans UK guide</p>
-        <h1>How to Order from CNFans UK</h1>
+        <p className="eyebrow">CNFANS UK guide</p>
+        <h1>How to Order from CNFANS UK</h1>
         <p className="seo-lead">
-          Ordering is straightforward. CNFans UK is an independent clothing store and product discovery site, and these five
+          Ordering is straightforward. CNFANS UK is an independent clothing store and product discovery site, and these five
           simple steps take you from browsing to tracking your parcel.
         </p>
       </header>
@@ -118,7 +118,7 @@ export default function HowToOrderPage() {
       <section className="seo-section">
         <h2>Payment help after checkout</h2>
         <p>
-          A CNFans &ldquo;Payment submitted&rdquo; status records the payment step; it is not confirmation that funds have arrived.
+          A CNFANS UK &ldquo;Payment submitted&rdquo; status records the payment step; it is not confirmation that funds have arrived.
           If your payment status is unclear, do not pay again just because it has not changed. Read our{" "}
           <Link href="/bank-transfer-payment-help">bank transfer payment help</Link> for the next safe steps.
         </p>
@@ -160,10 +160,10 @@ export default function HowToOrderPage() {
 
       <GuideRelated
         links={[
-          { href: "/cnfans-size-guide", title: "CNFans UK Size Guide", blurb: "Fit notes for hoodies, jackets, tops and bottoms." },
-          { href: "/cnfans-delivery-uk", title: "CNFans UK Delivery Guide", blurb: "Timings, tracking and order updates." },
-          { href: "/contact", title: "Contact CNFans UK", blurb: "Ask about sizing or an existing order." },
-          { href: "/cnfans-finds", title: "CNFans Finds UK", blurb: "Browse hoodies, jackets, tops and sets." },
+          { href: "/cnfans-size-guide", title: "CNFANS UK Size Guide", blurb: "Fit notes for hoodies, jackets, tops and bottoms." },
+          { href: "/cnfans-delivery-uk", title: "CNFANS UK Delivery Guide", blurb: "Timings, tracking and order updates." },
+          { href: "/contact", title: "Contact CNFANS UK", blurb: "Ask about sizing or an existing order." },
+          { href: "/cnfans-finds", title: "CNFANS Finds UK", blurb: "Browse hoodies, jackets, tops and sets." },
         ]}
       />
     </main>

@@ -20,7 +20,7 @@ export default function TermsPage() {
       <section className="policy-section">
         <h2>1. About these terms</h2>
         <p>
-          These terms describe use of the CNFans UK website and the information that applies when you place an order.
+          These terms describe use of the CNFANS UK website and the information that applies when you place an order.
           If you have a question about an order or these terms, please <Link href="/contact">contact us</Link>.
         </p>
       </section>

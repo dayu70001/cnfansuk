@@ -38,7 +38,7 @@ export default function PrivacyPolicyPage() {
         <h2>3. Payments</h2>
         <p>
           Payments are processed through Stripe. Where Stripe Hosted Checkout is used, payment details are entered on
-          Stripe&apos;s hosted payment page rather than in the CNFans checkout form. CNFans receives the order and payment
+          Stripe&apos;s hosted payment page rather than in the CNFANS UK checkout form. CNFANS UK receives the order and payment
           status information needed to handle your order.
         </p>
         <p>
@@ -79,7 +79,7 @@ export default function PrivacyPolicyPage() {
       <section className="policy-section">
         <h2>7. Contact</h2>
         <p>
-          For privacy questions, email <a href="mailto:support@cnfans.co.uk">support@cnfans.co.uk</a> or use our{" "}
+          For privacy questions, email <a href="mailto:dayu70001@gmail.com">dayu70001@gmail.com</a> or use our{" "}
           <Link href="/contact">Contact page</Link>.
         </p>
       </section>

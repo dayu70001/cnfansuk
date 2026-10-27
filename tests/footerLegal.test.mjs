@@ -15,7 +15,10 @@ const pages = {
 
 test("footer keeps its navigation and legal links while temporarily hiding payment messaging and marks", () => {
   for (const label of ["Shop", "Support", "Follow", "Company"]) assert.match(footer, new RegExp(`aria-label="${label}"`));
-  assert.match(footer, /CNFans <span>UK<\/span>/);
+  assert.match(footer, /FooterBrand/);
+  const footerBrand = read("components/FooterBrand.tsx");
+  assert.match(footerBrand, /"CNFANS UK"/);
+  assert.match(footerBrand, /CNFans <span>UK<\/span>/);
   assert.match(footer, /href="\/privacy-policy"/);
   assert.match(footer, /href="\/terms"/);
   assert.match(footer, /href="\/payment-security"/);

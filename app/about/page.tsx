@@ -32,14 +32,14 @@ export default function AboutPage() {
           <h1>Everyday clothing shaped by real production experience.</h1>
         </div>
         <p>
-          CNFans UK is an online apparel store shaped by garment-making experience, focused on practical wardrobe pieces and a simpler route from production to customer.
+          CNFANS UK is an online apparel store shaped by garment-making experience, focused on practical wardrobe pieces and a simpler route from production to customer.
         </p>
       </section>
 
       <section className="about-story-card">
         <h2>Our background</h2>
         <div className="about-story-copy">
-          <p>Behind CNFans UK is a Guangzhou-based clothing team with over a decade of apparel production experience.</p>
+          <p>Behind CNFANS UK is a Guangzhou-based clothing team with over a decade of apparel production experience.</p>
           <p>
             We have worked with clothing partners in China and overseas, developing everyday pieces, improving finishing details and understanding what makes a garment feel better in real wear.
           </p>
@@ -47,7 +47,7 @@ export default function AboutPage() {
         </div>
       </section>
 
-      <section className="about-trust-grid" aria-label="CNFans UK brand principles">
+      <section className="about-trust-grid" aria-label="CNFANS UK brand principles">
         {trustCards.map((card) => (
           <article key={card.title}>
             <h3>{card.title}</h3>
@@ -61,7 +61,7 @@ export default function AboutPage() {
         <div className="about-story-copy">
           <p>
             Browse our <Link href="/category/new-in">latest clothing arrivals</Link>, compare practical fits in the
-            <Link href="/guides"> CNFans UK guides</Link>, or read our <Link href="/how-to-order">ordering guide</Link> before you buy.
+            <Link href="/guides"> CNFANS UK guides</Link>, or read our <Link href="/how-to-order">ordering guide</Link> before you buy.
           </p>
         </div>
       </section>

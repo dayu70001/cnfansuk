@@ -23,7 +23,7 @@ export function ProductCard({ product }: { product: Product }) {
       <Link href={`/product/${product.slug}`} className="shot" aria-label={product.name}>
         <span className={image ? "fill product-preview has-product-image" : "fill product-preview"}>
           {image ? <img src={image} alt={product.name} loading="lazy" onError={(event) => event.currentTarget.classList.add("image-error")} /> : null}
-          <span className="product-placeholder-mark">CNFans UK</span>
+          <span className="product-placeholder-mark">CNFANS UK</span>
           <span className="product-placeholder-sub">Product preview</span>
         </span>
         <button

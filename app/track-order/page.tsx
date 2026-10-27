@@ -30,7 +30,7 @@ const trackingNotes = [
   },
   {
     title: "Need help?",
-    text: "Keep your CNFans UK order number. If your order is not visible or tracking is not available, contact support with that number.",
+    text: "Keep your CNFANS UK order number. If your order is not visible or tracking is not available, contact support with that number.",
   },
 ];
 
@@ -62,11 +62,13 @@ export default function TrackOrderPage() {
   return (
     <main className="support-page track-page">
       <section className="support-hero support-hero-centered">
-        <p className="support-kicker">Support</p>
-        <h1>Track Your Order</h1>
+        <div className="support-hero-title">
+          <p className="support-kicker">Support</p>
+          <h1>Track Your Order</h1>
+        </div>
         <p>
           Tracking details are shared after your order has been confirmed and dispatched. If tracking
-          is not available yet, please contact us with your CNFans UK order number.
+          is not available yet, please contact us with your CNFANS UK order number.
         </p>
       </section>
 
@@ -90,7 +92,7 @@ export default function TrackOrderPage() {
           </button>
         </form>
         <p className="tracking-note">
-          For delivery support, email us with your CNFans UK order number.
+          For delivery support, email us with your CNFANS UK order number.
         </p>
       </section>
 

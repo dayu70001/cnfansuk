@@ -12,14 +12,14 @@ export default function ContactPage() {
     <main className="support-page contact-page">
       <section className="contact-hero">
         <p className="support-kicker">Support</p>
-        <h1>Contact CNFans UK</h1>
+        <h1>Contact CNFANS UK</h1>
         <p>For product questions, sizing help or order support, contact us by email and include your order number if you have one.</p>
       </section>
 
       <section className="contact-email">
         <span>Email support</span>
         <MetaPixelEventLink
-          href="mailto:support@cnfans.co.uk"
+          href="mailto:dayu70001@gmail.com"
           eventName="ContactEmail"
           eventParams={{
             source_page: "contact_page",
@@ -28,7 +28,7 @@ export default function ContactPage() {
             destination: "email",
           }}
         >
-          support@cnfans.co.uk
+          dayu70001@gmail.com
         </MetaPixelEventLink>
         <p>We aim to respond as soon as possible. If your message is about an existing order, please include your order number.</p>
       </section>

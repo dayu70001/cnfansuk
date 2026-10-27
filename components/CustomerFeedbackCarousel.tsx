@@ -17,7 +17,7 @@ export function CustomerFeedbackCarousel({ items }: { items: readonly CustomerFe
     <section className="customer-feedback" aria-labelledby="customer-feedback-title">
       <div className="wrap">
         <header className="customer-feedback-head">
-          <h2 id="customer-feedback-title">Customer Orders &amp; Feedback</h2>
+          <h2 id="customer-feedback-title">Customer Feedback</h2>
           <p>Real customer messages, delivery updates and product feedback.</p>
           <p className="customer-feedback-privacy">Customer details are blurred for privacy.</p>
         </header>
@@ -36,7 +36,12 @@ export function CustomerFeedbackCarousel({ items }: { items: readonly CustomerFe
               return (
                 <article className="customer-feedback-card" key={item.id}>
                   <div className="customer-feedback-media">
-                    <img src={item.image} alt={`Customer order screenshot ${String(item.id).padStart(2, "0")}`} />
+                    <img
+                      src={item.image}
+                      alt={`Customer order screenshot ${String(item.id).padStart(2, "0")}`}
+                      loading="lazy"
+                      decoding="async"
+                    />
                   </div>
                 </article>
               );

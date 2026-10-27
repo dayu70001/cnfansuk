@@ -23,7 +23,7 @@ export default function PaymentSecurityPage() {
           payment step and may vary by country, device and transaction.
         </p>
         <p>
-          When card payment is available, card details are entered on Stripe&apos;s hosted payment page, not in the CNFans
+          When card payment is available, card details are entered on Stripe&apos;s hosted payment page, not in the CNFANS UK
           checkout form. For more information, see the{" "}
           <a href="https://stripe.com/privacy" target="_blank" rel="noopener noreferrer">
             Stripe Privacy Policy
@@ -35,7 +35,7 @@ export default function PaymentSecurityPage() {
       <section className="policy-section">
         <h2>Order review</h2>
         <p>
-          A successful Stripe payment does not replace CNFans order review and confirmation. After payment, we&apos;ll verify
+          A successful Stripe payment does not replace CNFANS UK order review and confirmation. After payment, we&apos;ll verify
           your order details with you on WhatsApp before processing. Payment submitted and payment confirmed are separate
           order states.
         </p>

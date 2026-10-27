@@ -76,12 +76,16 @@ const phaseFourSections = [
   },
 ];
 
+function formatVisibleBrandName(value: string) {
+  return value.replaceAll("CNFans UK", "CNFANS UK").replaceAll("CNFans", "CNFANS");
+}
+
 export default function GuidesPage() {
   return (
     <main className="seo-page guides-index">
       <JsonLd data={buildGuideIndexSchemas({ name: "Men's Clothing Guides UK", description: PAGE_DESCRIPTION })} />
       <header className="seo-hero">
-        <p className="eyebrow">CNFans UK guide</p>
+        <p className="eyebrow">CNFANS UK guide</p>
         <h1>Men&apos;s Clothing Guides UK</h1>
         <p className="seo-lead">
           Short, practical guides to help you shop with confidence. Find clothing picks, sizing and delivery notes, and a few
@@ -92,8 +96,8 @@ export default function GuidesPage() {
       <div className="guides-index-grid">
         {guides.map((guide) => (
           <Link href={guide.href} key={guide.href}>
-            <strong>{guide.title}</strong>
-            <span>{guide.blurb}</span>
+            <strong>{formatVisibleBrandName(guide.title)}</strong>
+            <span>{formatVisibleBrandName(guide.blurb)}</span>
           </Link>
         ))}
       </div>
@@ -103,8 +107,8 @@ export default function GuidesPage() {
         <div className="guides-index-grid guides-index-grid-compact">
           {PHASE_THREE_GUIDES.map((guide) => (
             <Link href={guide.path} key={guide.path}>
-              <strong>{guide.h1}</strong>
-              <span>{guide.blurb}</span>
+              <strong>{formatVisibleBrandName(guide.h1)}</strong>
+              <span>{formatVisibleBrandName(guide.blurb)}</span>
             </Link>
           ))}
         </div>
@@ -115,8 +119,8 @@ export default function GuidesPage() {
         <div className="guides-index-grid guides-index-grid-compact">
           {PHASE_FIVE_PUBLIC_GUIDES.map((guide) => (
             <Link href={guide.path} key={guide.path}>
-              <strong>{guide.h1}</strong>
-              <span>{guide.description}</span>
+              <strong>{formatVisibleBrandName(guide.h1)}</strong>
+              <span>{formatVisibleBrandName(guide.description)}</span>
             </Link>
           ))}
         </div>
@@ -127,8 +131,8 @@ export default function GuidesPage() {
         <div className="guides-index-grid guides-index-grid-compact">
           {PHASE_SIX_GUIDES.map((guide) => (
             <Link href={guide.path} key={guide.path}>
-              <strong>{guide.h1}</strong>
-              <span>{guide.description}</span>
+              <strong>{formatVisibleBrandName(guide.h1)}</strong>
+              <span>{formatVisibleBrandName(guide.description)}</span>
             </Link>
           ))}
         </div>
@@ -139,8 +143,8 @@ export default function GuidesPage() {
         <div className="guides-index-grid guides-index-grid-compact">
           {PHASE_EIGHT_GUIDES.map((guide) => (
             <Link href={guide.path} key={guide.path}>
-              <strong>{guide.h1}</strong>
-              <span>{guide.description}</span>
+              <strong>{formatVisibleBrandName(guide.h1)}</strong>
+              <span>{formatVisibleBrandName(guide.description)}</span>
             </Link>
           ))}
         </div>
@@ -150,12 +154,12 @@ export default function GuidesPage() {
         const sectionGuides = PHASE_FOUR_GUIDES.filter((guide) => section.paths.includes(guide.path));
         return (
           <section className="guides-index-section" aria-labelledby={`${section.heading}-heading`} key={section.heading}>
-            <h2 id={`${section.heading}-heading`}>{section.heading}</h2>
+            <h2 id={`${section.heading}-heading`}>{formatVisibleBrandName(section.heading)}</h2>
             <div className="guides-index-grid guides-index-grid-compact">
               {sectionGuides.map((guide) => (
                 <Link href={guide.path} key={guide.path}>
-                  <strong>{guide.h1}</strong>
-                  <span>{guide.description}</span>
+                  <strong>{formatVisibleBrandName(guide.h1)}</strong>
+                  <span>{formatVisibleBrandName(guide.description)}</span>
                 </Link>
               ))}
             </div>

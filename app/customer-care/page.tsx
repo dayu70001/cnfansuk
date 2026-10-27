@@ -52,13 +52,15 @@ export default function CustomerCarePage() {
   return (
     <main className="support-page care-page">
       <section className="support-hero support-hero-compact">
-        <p className="support-kicker">Support</p>
-        <h1>Customer Care</h1>
+        <div className="support-hero-title">
+          <p className="support-kicker">Support</p>
+          <h1>Customer Care</h1>
+        </div>
         <p>Find help before and after placing an order.</p>
       </section>
 
       <section className="care-overview">
-        <p>Choose the topic that matches what you need. If your question is about an order, please include your CNFans UK order number when contacting support.</p>
+        <p>Choose the topic that matches what you need. If your question is about an order, please include your CNFANS UK order number when contacting support.</p>
       </section>
 
       <section className="care-groups" aria-label="Customer care sections">

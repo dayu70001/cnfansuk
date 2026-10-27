@@ -13,10 +13,12 @@ export default function UkCustomsAndImportChargesPage() {
   return (
     <main className="support-page support-page-flow">
       <section className="support-hero support-hero-compact">
-        <p className="support-kicker">UK delivery support</p>
-        <h1>UK Customs &amp; Import Charges</h1>
+        <div className="support-hero-title">
+          <p className="support-kicker">UK delivery support</p>
+          <h1>UK Customs &amp; Import Charges</h1>
+        </div>
         <p>
-          For UK orders, CNFans UK uses a dedicated delivery arrangement. Under our current delivery process, customers are
+          For UK orders, CNFANS UK uses a dedicated delivery arrangement. Under our current delivery process, customers are
           not asked to pay additional customs or import charges when their order is delivered.
         </p>
       </section>
@@ -27,7 +29,7 @@ export default function UkCustomsAndImportChargesPage() {
           <div>
             <h2>Do I need to pay extra customs charges on delivery?</h2>
             <p>
-              Under the current CNFans UK delivery arrangement, customers are not asked to pay an additional customs or import
+              Under the current CNFANS UK delivery arrangement, customers are not asked to pay an additional customs or import
               charge when their order is delivered.
             </p>
           </div>
@@ -49,7 +51,7 @@ export default function UkCustomsAndImportChargesPage() {
             <h2>What if I receive an unexpected customs payment request?</h2>
             <p>
               If you are unsure, do not pay immediately. Check that the message is genuinely connected to the delivery, keep
-              your CNFans order number and <Link href="/contact">contact our support team</Link> so we can check the
+              your CNFANS order number and <Link href="/contact">contact our support team</Link> so we can check the
               order-specific situation. Do not share passwords, bank login details or full card details.
             </p>
           </div>
@@ -59,7 +61,7 @@ export default function UkCustomsAndImportChargesPage() {
           <div>
             <h2>Where does this guidance apply?</h2>
             <p>
-              This page describes the current CNFans UK delivery arrangement for orders delivered in the UK. It does not make
+              This page describes the current CNFANS UK delivery arrangement for orders delivered in the UK. It does not make
               a promise about delivery arrangements in other countries.
             </p>
           </div>
@@ -70,7 +72,7 @@ export default function UkCustomsAndImportChargesPage() {
         <article>
           <span>UK deliveries</span>
           <div>
-            <h2>Will I be charged customs when my CNFans UK order arrives?</h2>
+            <h2>Will I be charged customs when my CNFANS UK order arrives?</h2>
             <p>Under our current UK delivery arrangement, customers are not asked to pay a separate customs or import charge on delivery.</p>
           </div>
         </article>
@@ -85,7 +87,7 @@ export default function UkCustomsAndImportChargesPage() {
           <span>Unexpected requests</span>
           <div>
             <h2>What should I do if I receive an unexpected payment request?</h2>
-            <p>Verify the delivery message, keep your order number and contact CNFans UK through the <Link href="/contact">official contact page</Link> if you are unsure.</p>
+            <p>Verify the delivery message, keep your order number and contact CNFANS UK through the <Link href="/contact">official contact page</Link> if you are unsure.</p>
           </div>
         </article>
         <article>
@@ -99,7 +101,7 @@ export default function UkCustomsAndImportChargesPage() {
           <span>Information</span>
           <div>
             <h2>Is this general UK tax advice?</h2>
-            <p>No. This page describes the current CNFans UK delivery arrangement and customer experience, not general tax or customs advice.</p>
+            <p>No. This page describes the current CNFANS UK delivery arrangement and customer experience, not general tax or customs advice.</p>
           </div>
         </article>
       </section>

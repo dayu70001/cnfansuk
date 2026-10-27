@@ -47,7 +47,7 @@ export function CartDrawer() {
         </div>
         {items.length === 0 ? (
           <div className="empty-state">
-            <p>Your cart is empty. Explore the latest CNFans UK pieces.</p>
+            <p>Your cart is empty. Explore the latest CNFANS UK pieces.</p>
             <button className="secondary-button" type="button" onClick={closeCart}>
               Continue Shopping
             </button>

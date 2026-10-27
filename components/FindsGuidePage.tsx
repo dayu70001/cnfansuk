@@ -6,6 +6,7 @@ import { ProductCard } from "@/components/ProductCard";
 import { getProductsByCategory } from "@/data/products";
 import { fetchCatalogPage } from "@/lib/catalogApi";
 import { buildGuidePageSchemas } from "@/lib/seoPage";
+import { formatVisibleBrandName } from "@/lib/visibleBrandName";
 import type { PhaseThreeGuide } from "@/lib/phaseThreeGuides";
 
 export async function FindsGuidePage({ guide }: { guide: PhaseThreeGuide }) {
@@ -31,15 +32,15 @@ export async function FindsGuidePage({ guide }: { guide: PhaseThreeGuide }) {
     <main className="seo-page">
       <JsonLd data={buildGuidePageSchemas({ path: guide.path, name: guide.h1, description: guide.description })} />
       <header className="seo-hero">
-        <p className="eyebrow">CNFans UK clothing guide</p>
-        <h1>{guide.h1}</h1>
-        <p className="seo-lead">{guide.intro}</p>
+        <p className="eyebrow">CNFANS UK clothing guide</p>
+        <h1>{formatVisibleBrandName(guide.h1)}</h1>
+        <p className="seo-lead">{formatVisibleBrandName(guide.intro)}</p>
       </header>
 
       {guide.sections.map((section) => (
         <section className="seo-section" key={section.heading}>
-          <h2>{section.heading}</h2>
-          {section.paragraphs.map((paragraph) => <p key={paragraph}>{paragraph}</p>)}
+          <h2>{formatVisibleBrandName(section.heading)}</h2>
+          {section.paragraphs.map((paragraph) => <p key={paragraph}>{formatVisibleBrandName(paragraph)}</p>)}
         </section>
       ))}
 
@@ -47,7 +48,7 @@ export async function FindsGuidePage({ guide }: { guide: PhaseThreeGuide }) {
         <h2>Fit and sizing before you order</h2>
         <p>
           Start with the measurements on the product page rather than relying only on the letter printed in the label. Compare
-          the chest, waist, hip or inside-leg measurement with a similar piece you already wear. Our <Link href="/cnfans-size-guide">CNFans
+          the chest, waist, hip or inside-leg measurement with a similar piece you already wear. Our <Link href="/cnfans-size-guide">CNFANS
           UK size guide</Link> explains the simplest way to measure at home. Allow a little extra room when a piece is meant to
           layer, and remember that a relaxed cut should still sit properly at the shoulders or waist.
         </p>
@@ -68,8 +69,8 @@ export async function FindsGuidePage({ guide }: { guide: PhaseThreeGuide }) {
           delivery guide</Link> covers timings, tracking and the details that help a parcel move smoothly.
         </p>
         <p>
-          CNFans UK is an independent clothing store and product discovery site. These pages are written to help you compare
-          practical clothing choices, not to promise that one cut will suit everybody. Browse the wider <Link href="/cnfans-finds">CNFans
+          CNFANS UK is an independent clothing store and product discovery site. These pages are written to help you compare
+          practical clothing choices, not to promise that one cut will suit everybody. Browse the wider <Link href="/cnfans-finds">CNFANS
           finds guide</Link> or return to the <Link href="/guides">guides index</Link> when you want to compare another category,
           season or way of dressing.
         </p>

@@ -17,10 +17,10 @@ export default function CnfansJacketFindsPage() {
     <main className="seo-page">
       <JsonLd data={buildGuidePageSchemas({ path: "/cnfans-jacket-finds", name: "CNFans Jacket Finds UK", description: "Explore jacket, coat and everyday layering finds with practical fit notes for UK shoppers." })} />
       <header className="seo-hero">
-        <p className="eyebrow">CNFans UK guide</p>
-        <h1>CNFans Jacket Finds UK</h1>
+        <p className="eyebrow">CNFANS UK guide</p>
+        <h1>CNFANS Jacket Finds UK</h1>
         <p className="seo-lead">
-          A round-up of everyday outerwear. CNFans UK is an independent clothing store and product discovery site, and this
+          A round-up of everyday outerwear. CNFANS UK is an independent clothing store and product discovery site, and this
           page brings together jackets, coats and layering pieces made for a normal British week.
         </p>
       </header>

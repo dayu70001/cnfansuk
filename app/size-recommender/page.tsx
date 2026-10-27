@@ -26,8 +26,8 @@ export default function SizeRecommenderPage() {
         <Link href="/">Home</Link><span aria-hidden="true">/</span><span>Size Recommender</span>
       </nav>
       <header className="seo-hero">
-        <p className="eyebrow">CNFans UK sizing tool</p>
-        <h1>CNFans Size Recommender</h1>
+        <p className="eyebrow">CNFANS UK sizing tool</p>
+        <h1>CNFANS Size Recommender</h1>
         <p className="seo-lead">
           Add your measurements and preferred fit for an approximate starting point across M–XXL men&rsquo;s clothing. The
           estimate uses body chest first, with height and weight as secondary references. Treat it as a starting reference, not a promise of fit.
@@ -110,8 +110,8 @@ export default function SizeRecommenderPage() {
       </section>
 
       <section className="seo-section size-recommender-related-links" aria-label="Related sizing and ordering guides">
-        <p>For measuring advice and broader fit notes, visit the <Link href="/cnfans-size-guide">CNFans size guide</Link>.</p>
-        <p>Ready to browse? See <Link href="/how-to-order">how to order from CNFans UK</Link>.</p>
+        <p>For measuring advice and broader fit notes, visit the <Link href="/cnfans-size-guide">CNFANS size guide</Link>.</p>
+        <p>Ready to browse? See <Link href="/how-to-order">how to order from CNFANS UK</Link>.</p>
       </section>
     </main>
   );

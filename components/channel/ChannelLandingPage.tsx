@@ -73,9 +73,9 @@ export default function ChannelLandingPage() {
     <>
       <section className={styles.channelHero}>
         <div className={styles.channelHeroBrand}>
-          CNFans UK
+          CNFANS UK
         </div>
-        <h1 className={styles.channelHeroTitle}>The CNFans Clothing Collection</h1>
+        <h1 className={styles.channelHeroTitle}>The CNFANS Clothing Collection</h1>
         <p className={styles.channelHeroDescription}>
           Discover hoodies, jackets, tops, trousers, sets and more, with new styles added regularly.
         </p>
@@ -159,10 +159,10 @@ export default function ChannelLandingPage() {
       </section>
 
       <section className={styles.channelSection}>
-        <h2 className={styles.channelSectionLabel}>About CNFans UK</h2>
+        <h2 className={styles.channelSectionLabel}>About CNFANS UK</h2>
         <div className={styles.channelAboutText}>
           <p>
-            CNFans UK is a Guangzhou-based clothing team focused on practical everyday apparel. We work closer to
+            CNFANS UK is a Guangzhou-based clothing team focused on practical everyday apparel. We work closer to
             production to keep the buying process straightforward, with regular updates across outerwear, tops,
             bottoms and matching sets.
           </p>
@@ -235,7 +235,7 @@ export default function ChannelLandingPage() {
       </section>
 
       <div className={styles.channelFooter}>
-        <div className={styles.channelFooterBrand}>CNFans UK</div>
+        <div className={styles.channelFooterBrand}>CNFANS UK</div>
         <p className={styles.channelFooterTagline}>
           Everyday apparel with practical fits and a simpler sourcing route.
         </p>

@@ -17,10 +17,10 @@ export default function CnfansQcPhotosPage() {
     <main className="seo-page">
       <JsonLd data={buildGuidePageSchemas({ path: "/cnfans-qc-photos", name: "CNFans QC Photos Guide", description: "Learn how to review product photos for size details, fabric, colour and finish before ordering clothing." })} />
       <header className="seo-hero">
-        <p className="eyebrow">CNFans UK guide</p>
-        <h1>CNFans QC Photos Guide</h1>
+        <p className="eyebrow">CNFANS UK guide</p>
+        <h1>CNFANS QC Photos Guide</h1>
         <p className="seo-lead">
-          &ldquo;QC&rdquo; simply means quality check. CNFans UK is an independent clothing store and product discovery site,
+          &ldquo;QC&rdquo; simply means quality check. CNFANS UK is an independent clothing store and product discovery site,
           and this guide shows how to check the photos and details on a product page so you feel confident before you order.
         </p>
       </header>

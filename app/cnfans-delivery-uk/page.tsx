@@ -17,10 +17,10 @@ export default function CnfansDeliveryUkPage() {
     <main className="seo-page">
       <JsonLd data={buildGuidePageSchemas({ path: "/cnfans-delivery-uk", name: "CNFans UK Delivery Guide", description: "A practical guide to delivery timings, tracking and order updates for CNFans UK shoppers." })} />
       <header className="seo-hero">
-        <p className="eyebrow">CNFans UK guide</p>
-        <h1>CNFans UK Delivery Guide</h1>
+        <p className="eyebrow">CNFANS UK guide</p>
+        <h1>CNFANS UK Delivery Guide</h1>
         <p className="seo-lead">
-          Everything you need to know about getting your order. CNFans UK is an independent clothing store and product
+          Everything you need to know about getting your order. CNFANS UK is an independent clothing store and product
           discovery site, and this guide covers timings, processing, tracking and what to do if a parcel runs late.
         </p>
       </header>

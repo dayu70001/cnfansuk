@@ -13,11 +13,13 @@ export default function BankTransferPaymentHelpPage() {
   return (
     <main className="support-page support-page-flow">
       <section className="support-hero support-hero-compact">
-        <p className="support-kicker">Payment support</p>
-        <h1>Bank Transfer Payment Help</h1>
+        <div className="support-hero-title">
+          <p className="support-kicker">Payment support</p>
+          <h1>Bank Transfer Payment Help</h1>
+        </div>
         <p>
           If you have started a bank transfer for a CNFans order and its payment status is still pending, this page explains
-          what the status means and where to get help. A CNFans &ldquo;Payment submitted&rdquo; status is not confirmation that funds arrived.
+          what the status means and where to get help. A CNFANS &ldquo;Payment submitted&rdquo; status is not confirmation that funds arrived.
         </p>
       </section>
 
@@ -35,7 +37,7 @@ export default function BankTransferPaymentHelpPage() {
           <div>
             <h2>Before you pay</h2>
             <p>
-              Check the order number and total shown in CNFans checkout. Continue from the checkout payment step to Stripe&rsquo;s
+              Check the order number and total shown in CNFANS checkout. Continue from the checkout payment step to Stripe&rsquo;s
               secure hosted page and follow the instructions shown there. Use the payment details presented in that flow, not
               details copied from an old message or screenshot.
             </p>
@@ -46,8 +48,8 @@ export default function BankTransferPaymentHelpPage() {
           <div>
             <h2>After you start the bank transfer</h2>
             <p>
-              After the Stripe payment step starts, CNFans may show &ldquo;Payment submitted&rdquo; or a processing message. This records
-              the payment step; it does not mean that funds have arrived. CNFans confirms payment after the receipt has been checked.
+              After the Stripe payment step starts, CNFANS may show &ldquo;Payment submitted&rdquo; or a processing message. This records
+              the payment step; it does not mean that funds have arrived. CNFANS confirms payment after the receipt has been checked.
             </p>
           </div>
         </article>
@@ -67,7 +69,7 @@ export default function BankTransferPaymentHelpPage() {
           <div>
             <h2>If money has left your bank</h2>
             <p>
-              If your bank shows that money has left but CNFans has not confirmed the order, do not send another transfer.
+              If your bank shows that money has left but CNFANS has not confirmed the order, do not send another transfer.
               Keep your order number and <Link href="/contact">contact support</Link> so the payment can be checked. Do not send
               full banking credentials or account details.
             </p>
@@ -78,7 +80,7 @@ export default function BankTransferPaymentHelpPage() {
           <div>
             <h2>If you closed the Stripe page</h2>
             <p>
-              Check the order status on CNFans using your order number, for example on the{" "}
+              Check the order status on CNFANS using your order number, for example on the{" "}
               <Link href="/track-order">Track Your Order</Link> page. This help page does not reopen a Stripe payment session,
               and closing the payment page does not confirm that a transfer was received. If you are unsure what to do next,
               contact support before making another payment attempt.
@@ -103,7 +105,7 @@ export default function BankTransferPaymentHelpPage() {
           <span>Payment status</span>
           <div>
             <h2>Is a submitted bank transfer the same as a confirmed payment?</h2>
-            <p>No. A CNFans &ldquo;Payment submitted&rdquo; status records the payment step; CNFans still needs to check and confirm receipt of the funds.</p>
+            <p>No. A CNFANS &ldquo;Payment submitted&rdquo; status records the payment step; CNFANS still needs to check and confirm receipt of the funds.</p>
           </div>
         </article>
         <article>
@@ -124,7 +126,7 @@ export default function BankTransferPaymentHelpPage() {
           <span>Timing</span>
           <div>
             <h2>Does bank transfer confirmation happen instantly?</h2>
-            <p>Not necessarily. Confirmation timing can vary, so CNFans does not promise a fixed update time. The order is confirmed after the payment is checked.</p>
+            <p>Not necessarily. Confirmation timing can vary, so CNFANS does not promise a fixed update time. The order is confirmed after the payment is checked.</p>
           </div>
         </article>
         <article>
@@ -138,7 +140,7 @@ export default function BankTransferPaymentHelpPage() {
           <span>Stripe checkout</span>
           <div>
             <h2>Do I need to stay on the Stripe page?</h2>
-            <p>Follow the instructions shown on Stripe&rsquo;s secure page. Do not assume that closing it confirms payment or that it can be reopened here. If you closed it, check your CNFans order status or contact support.</p>
+            <p>Follow the instructions shown on Stripe&rsquo;s secure page. Do not assume that closing it confirms payment or that it can be reopened here. If you closed it, check your CNFANS order status or contact support.</p>
           </div>
         </article>
       </section>

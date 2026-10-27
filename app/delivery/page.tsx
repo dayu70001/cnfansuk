@@ -27,8 +27,10 @@ export default function DeliveryPage() {
   return (
     <main className="support-page support-page-flow">
       <section className="support-hero support-hero-compact">
-        <p className="support-kicker">Support</p>
-        <h1>Delivery</h1>
+        <div className="support-hero-title">
+          <p className="support-kicker">Support</p>
+          <h1>Delivery</h1>
+        </div>
         <p>Orders are reviewed and prepared before dispatch. Delivery times vary depending on destination, courier route and local processing. Tracking details will be shared when available.</p>
       </section>
 

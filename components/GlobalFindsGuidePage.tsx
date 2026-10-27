@@ -41,7 +41,7 @@ export async function GlobalFindsGuidePage({ guide }: { guide: GlobalFindsGuide 
     <main className="seo-page seo-global-finds-page">
       <JsonLd data={buildGuidePageSchemas({ path: guide.path, name: guide.h1, description: guide.description })} />
       <header className="seo-hero">
-        <p className="eyebrow">CNFans clothing discovery · 2026</p>
+        <p className="eyebrow">CNFANS clothing discovery · 2026</p>
         <h1>{guide.h1}</h1>
         <p className="seo-lead">{guide.intro}</p>
       </header>

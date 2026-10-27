@@ -4,6 +4,7 @@ import { GuideCta } from "@/components/GuideCta";
 import { GuideRelated } from "@/components/GuideRelated";
 import { JsonLd } from "@/components/JsonLd";
 import { buildGuidePageSchemas } from "@/lib/seoPage";
+import { formatVisibleBrandName } from "@/lib/visibleBrandName";
 import type { LongTailGuide } from "@/lib/phaseFourGuides";
 
 export function LongTailGuidePage({ guide }: { guide: LongTailGuide }) {
@@ -11,18 +12,18 @@ export function LongTailGuidePage({ guide }: { guide: LongTailGuide }) {
     <main className="seo-page seo-longtail-page">
       <JsonLd data={buildGuidePageSchemas({ path: guide.path, name: guide.h1, description: guide.description })} />
       <header className="seo-hero">
-        <p className="eyebrow">CNFans UK clothing guide</p>
-        <h1>{guide.h1}</h1>
-        <p className="seo-lead">{guide.intro}</p>
+        <p className="eyebrow">CNFANS UK clothing guide</p>
+        <h1>{formatVisibleBrandName(guide.h1)}</h1>
+        <p className="seo-lead">{formatVisibleBrandName(guide.intro)}</p>
       </header>
 
       {guide.sections.map((section) => (
         <section className="seo-section" key={section.heading}>
-          <h2>{section.heading}</h2>
+          <h2>{formatVisibleBrandName(section.heading)}</h2>
           {section.paragraphs.map((paragraph) => <p key={paragraph}>{renderGuideText(paragraph)}</p>)}
           {section.items ? (
             <ul>
-              {section.items.map((item) => <li key={item}>{item}</li>)}
+                {section.items.map((item) => <li key={item}>{formatVisibleBrandName(item)}</li>)}
             </ul>
           ) : null}
         </section>
@@ -45,10 +46,10 @@ function renderGuideText(text: string) {
   let cursor = 0;
   let match: RegExpExecArray | null;
   while ((match = linkPattern.exec(text))) {
-    if (match.index > cursor) parts.push(text.slice(cursor, match.index));
-    parts.push(<Link href={match[1]} key={`${match[1]}-${match.index}`}>{match[2]}</Link>);
+    if (match.index > cursor) parts.push(formatVisibleBrandName(text.slice(cursor, match.index)));
+    parts.push(<Link href={match[1]} key={`${match[1]}-${match.index}`}>{formatVisibleBrandName(match[2])}</Link>);
     cursor = match.index + match[0].length;
   }
-  if (cursor < text.length) parts.push(text.slice(cursor));
+  if (cursor < text.length) parts.push(formatVisibleBrandName(text.slice(cursor)));
   return parts;
 }

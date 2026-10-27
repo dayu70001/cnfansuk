@@ -21,10 +21,10 @@ export default async function CnfansSizeGuidePage() {
     <main className="seo-page">
       <JsonLd data={buildGuidePageSchemas({ path: "/cnfans-size-guide", name: "CNFans UK Size Guide", description: "Fit and measuring guidance for hoodies, jackets, T-shirts and bottoms from CNFans UK." })} />
       <header className="seo-hero">
-        <p className="eyebrow">CNFans UK guide</p>
-        <h1>CNFans UK Size Guide</h1>
+        <p className="eyebrow">CNFANS UK guide</p>
+        <h1>CNFANS UK Size Guide</h1>
         <p className="seo-lead">
-          Getting the size right is the best way to love what you order. CNFans UK is an independent clothing store and
+          Getting the size right is the best way to love what you order. CNFANS UK is an independent clothing store and
           product discovery site, and this guide gives simple fit advice for our main clothing types.
         </p>
       </header>

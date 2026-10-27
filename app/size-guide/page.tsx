@@ -26,8 +26,10 @@ export default function SizeGuidePage() {
   return (
     <main className="support-page size-page">
       <section className="support-hero support-hero-compact">
-        <p className="support-kicker">Support</p>
-        <h1>Size Guide</h1>
+        <div className="support-hero-title">
+          <p className="support-kicker">Support</p>
+          <h1>Size Guide</h1>
+        </div>
         <p>Use product measurements as the main reference before ordering.</p>
       </section>
 
@@ -63,7 +65,7 @@ export default function SizeGuidePage() {
           <p>If you are between sizes or unsure about the fit, email us with your height, weight, usual size, item name or link and preferred fit.</p>
         </div>
         <MetaPixelEventLink
-          href="mailto:support@cnfans.co.uk"
+          href="mailto:dayu70001@gmail.com"
           eventName="ContactEmail"
           eventParams={{
             source_page: "size_guide",
@@ -72,7 +74,7 @@ export default function SizeGuidePage() {
             destination: "email",
           }}
         >
-          support@cnfans.co.uk
+          dayu70001@gmail.com
         </MetaPixelEventLink>
       </section>
     </main>

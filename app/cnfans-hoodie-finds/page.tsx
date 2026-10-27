@@ -16,10 +16,10 @@ export default function CnfansHoodieFindsPage() {
     <main className="seo-page">
       <JsonLd data={buildGuidePageSchemas({ path: "/cnfans-hoodie-finds", name: "CNFans Hoodie Finds UK", description: "Explore everyday hoodie, sweatshirt and matching-set finds with practical fit notes for UK shoppers." })} />
       <header className="seo-hero">
-        <p className="eyebrow">CNFans UK guide</p>
-        <h1>CNFans Hoodie Finds UK</h1>
+        <p className="eyebrow">CNFANS UK guide</p>
+        <h1>CNFANS Hoodie Finds UK</h1>
         <p className="seo-lead">
-          Your starting point for everyday hoodies. CNFans UK is an independent clothing store and product discovery site,
+          Your starting point for everyday hoodies. CNFANS UK is an independent clothing store and product discovery site,
           and this page rounds up relaxed hoodies, sweatshirts and matching sets that are easy to wear on repeat.
         </p>
       </header>

@@ -21,24 +21,24 @@ export default async function CnfansSpreadsheetPage() {
     <main className="seo-page">
       <JsonLd data={buildGuidePageSchemas({ path: "/cnfans-spreadsheet", name: "CNFans Spreadsheet UK", description: "A practical guide to CNFans spreadsheets, clothing finds, product links and the checks UK shoppers can make before ordering." })} />
       <header className="seo-hero">
-        <p className="eyebrow">CNFans UK guide</p>
-        <h1>CNFans Spreadsheet UK</h1>
+        <p className="eyebrow">CNFANS UK guide</p>
+        <h1>CNFANS Spreadsheet UK</h1>
         <p className="seo-lead">
-          A plain-English look at what people mean by a &ldquo;CNFans spreadsheet&rdquo;, and how CNFans UK keeps things
+          A plain-English look at what people mean by a &ldquo;CNFANS spreadsheet&rdquo;, and how CNFANS UK keeps things
           simpler with a proper clothing shop, clear product links and honest size notes.
         </p>
       </header>
 
       <section className="seo-section">
-        <h2>What is a CNFans spreadsheet?</h2>
+        <h2>What is a CNFANS spreadsheet?</h2>
         <p>
-          A CNFans spreadsheet is usually a shared list of clothing finds &mdash; hoodies, jackets, tops and bottoms &mdash;
+          A CNFANS spreadsheet is usually a shared list of clothing finds &mdash; hoodies, jackets, tops and bottoms &mdash;
           with a photo, a short note and a link for each item. People pass these lists around so friends can browse the
           same styles without starting from scratch.
         </p>
         <p>
           The idea is handy, but spreadsheets get out of date fast. Links break, sizes go missing and it&rsquo;s hard to
-          tell what is actually available. CNFans UK is an independent clothing store and product discovery site, so
+          tell what is actually available. CNFANS UK is an independent clothing store and product discovery site, so
           instead of a loose list you get a tidy shop where every style has its own page, photos and details in one place.
         </p>
       </section>
@@ -115,7 +115,7 @@ export default async function CnfansSpreadsheetPage() {
         </p>
         <p>
           It is also simpler to trust. Every product page shows the same clear information, so you always know what you are
-          looking at. That is the whole idea behind CNFans UK &mdash; the convenience of a good finds list, with none of the
+          looking at. That is the whole idea behind CNFANS UK &mdash; the convenience of a good finds list, with none of the
           guesswork.
         </p>
       </section>
@@ -128,7 +128,7 @@ export default async function CnfansSpreadsheetPage() {
           Because every item lives on its own page, there is nothing to copy across or keep updated.
         </p>
         <p>
-          It is also worth being clear about who we are. CNFans UK is an independent clothing store and product discovery
+          It is also worth being clear about who we are. CNFANS UK is an independent clothing store and product discovery
           site &mdash; not an official channel for anyone else. What you see is our own everyday apparel, described honestly,
           so you can decide what is right for you. If you want a second opinion before ordering, our team is happy to help
           rather than leaving you to guess from a list.

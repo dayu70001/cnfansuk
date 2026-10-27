@@ -27,8 +27,10 @@ export default function ReturnsPage() {
   return (
     <main className="support-page">
       <section className="support-hero support-hero-compact">
-        <p className="support-kicker">Support</p>
-        <h1>Returns</h1>
+        <div className="support-hero-title">
+          <p className="support-kicker">Support</p>
+          <h1>Returns</h1>
+        </div>
         <p>If you need help with a return, please contact us before sending anything back so we can confirm the correct next step.</p>
       </section>
 
