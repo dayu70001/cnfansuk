@@ -7,7 +7,7 @@ export const supportConfig = {
 
 export function getWhatsappLink(orderNo?: string) {
   const text = orderNo
-    ? `Hi CNFans UK, I want to pay for order #${orderNo}.`
+    ? `Hi CNFans UK, please confirm my order #${orderNo}.`
     : "Hi CNFans UK, I would like help with an order.";
   const number = supportConfig.whatsappNumber || "0000000000";
   return `https://wa.me/${number}?text=${encodeURIComponent(text)}`;
@@ -15,7 +15,7 @@ export function getWhatsappLink(orderNo?: string) {
 
 export function getTelegramLink(orderNo?: string) {
   const text = orderNo
-    ? `Hi CNFans UK, I want to pay for order #${orderNo}.`
+    ? `Hi CNFans UK, please confirm my order #${orderNo}.`
     : "Hi CNFans UK, I would like help with an order.";
   const username = supportConfig.telegramUsername || "cnfansuk_support";
   return `https://t.me/${username}?text=${encodeURIComponent(text)}`;

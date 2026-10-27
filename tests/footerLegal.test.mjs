@@ -42,7 +42,7 @@ test("retained payment artwork assets contain no executable or external SVG cont
   }
 });
 
-test("policy pages have their own canonical metadata and required headings", () => {
+test("policy pages retain their canonical metadata and describe the current order flow", () => {
   assert.match(pages.privacy, /title: \{ absolute: "Privacy Policy \| CNFans UK" \}/);
   assert.match(pages.privacy, /canonical: `\$\{SITE_URL\}\/privacy-policy`/);
   assert.match(pages.privacy, /<h1 id="privacy-policy-title">Privacy Policy<\/h1>/);
@@ -59,12 +59,12 @@ test("policy pages have their own canonical metadata and required headings", () 
   assert.match(pages.payment, /title: \{ absolute: "Payment & Security \| CNFans UK" \}/);
   assert.match(pages.payment, /canonical: `\$\{SITE_URL\}\/payment-security`/);
   assert.match(pages.payment, /<h1 id="payment-security-title">Payment &amp; Security<\/h1>/);
-  assert.match(pages.payment, /Stripe Hosted Checkout/);
+  assert.match(pages.payment, /Online payment through the website is temporarily unavailable/);
   assert.match(pages.payment, /order details with you on WhatsApp before processing/);
+  assert.match(pages.privacy, /Online payment through the website is temporarily unavailable/);
+  assert.match(pages.terms, /submitting an order does not take payment/);
 });
 
-test("Stripe privacy links use the official host and safe new-tab attributes", () => {
-  for (const source of [pages.privacy, pages.payment]) {
-    assert.match(source, /href="https:\/\/stripe\.com\/privacy" target="_blank" rel="noopener noreferrer"/);
-  }
+test("public payment information no longer claims that Stripe processes current payments", () => {
+  for (const source of [pages.privacy, pages.terms, pages.payment]) assert.doesNotMatch(source, /Stripe|stripe\.com/i);
 });

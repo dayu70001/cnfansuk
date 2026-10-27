@@ -1,16 +1,8 @@
 import { NextResponse } from "next/server";
 import { getCatalogApiBase } from "@/lib/catalogApiBase";
 import { createOrderAccessToken } from "@/lib/orderAccessToken";
-import { getStripeBankTransferMode, isStripeLiveProductionRequest } from "@/lib/payments/stripeBankTransfer";
-import { getOrderAccessTokenCookieName, getOrderAccessTokenCookiePath } from "@/lib/orderAccessTokenKey";
-import { buildOrderAccessTokenCookie } from "@/lib/orderAccessTokenCookie";
 
 export async function POST(request: Request) {
-  const stripeMode = getStripeBankTransferMode();
-  if (stripeMode === "live" && !isStripeLiveProductionRequest(request)) {
-    return NextResponse.json({ error: "Order service is unavailable." }, { status: 403 });
-  }
-
   let baseUrl: string;
   if (process.env.NODE_ENV === "development") {
     if (!isLoopbackRequest(request)) {
@@ -38,66 +30,10 @@ export async function POST(request: Request) {
   }
   const orderNumber = result.order.orderNumber;
   const orderAccessToken = createOrderAccessToken(orderNumber);
-  const stripeAccessCookieName = stripeMode === "live" ? getOrderAccessTokenCookieName(orderNumber, "stripe") : null;
-  const confirmationAccessCookieName = stripeMode === "live" ? getOrderAccessTokenCookieName(orderNumber, "confirmation") : null;
-  const processingAccessCookieName = stripeMode === "live" || (stripeMode === "test" && isLoopbackRequest(request))
-    ? getOrderAccessTokenCookieName(orderNumber, "processing")
-    : null;
-  const localStripeAccessCookieName = stripeMode === "test" && isLoopbackRequest(request)
-    ? getOrderAccessTokenCookieName(orderNumber, "stripe")
-    : null;
-  const stripeAccessCookiePath = stripeMode === "live" ? getOrderAccessTokenCookiePath(orderNumber, "stripe") : null;
-  const confirmationAccessCookiePath = stripeMode === "live" ? getOrderAccessTokenCookiePath(orderNumber, "confirmation") : null;
-  const processingAccessCookiePath = processingAccessCookieName
-    ? getOrderAccessTokenCookiePath(orderNumber, "processing")
-    : null;
-  const localStripeAccessCookiePath = localStripeAccessCookieName
-    ? getOrderAccessTokenCookiePath(orderNumber, "stripe")
-    : null;
-  if (stripeMode === "live" && (
-    !orderAccessToken
-    || !stripeAccessCookieName
-    || !confirmationAccessCookieName
-    || !processingAccessCookieName
-    || !stripeAccessCookiePath
-    || !confirmationAccessCookiePath
-    || !processingAccessCookiePath
-  )) {
-    return NextResponse.json({ error: "Order payment access could not be prepared." }, { status: 503 });
-  }
 
   const createdOrder = { ...result.order } as typeof result.order & { orderAccessToken?: unknown };
   delete createdOrder.orderAccessToken;
-  const order = stripeMode === "live"
-    ? createdOrder
-    : { ...createdOrder, orderAccessToken };
-  const nextResponse = NextResponse.json({ ...result, order }, { status: response.status });
-
-  if (
-    stripeMode === "live"
-    && orderAccessToken
-    && stripeAccessCookieName
-    && confirmationAccessCookieName
-    && processingAccessCookieName
-    && stripeAccessCookiePath
-    && confirmationAccessCookiePath
-    && processingAccessCookiePath
-  ) {
-    nextResponse.cookies.set(buildOrderAccessTokenCookie(stripeAccessCookieName, orderAccessToken, stripeAccessCookiePath));
-    nextResponse.cookies.set(buildOrderAccessTokenCookie(confirmationAccessCookieName, orderAccessToken, confirmationAccessCookiePath));
-    nextResponse.cookies.set(buildOrderAccessTokenCookie(processingAccessCookieName, orderAccessToken, processingAccessCookiePath));
-  } else if (
-    stripeMode === "test"
-    && orderAccessToken
-    && localStripeAccessCookieName
-    && localStripeAccessCookiePath
-    && processingAccessCookieName
-    && processingAccessCookiePath
-  ) {
-    nextResponse.cookies.set(buildOrderAccessTokenCookie(localStripeAccessCookieName, orderAccessToken, localStripeAccessCookiePath));
-    nextResponse.cookies.set(buildOrderAccessTokenCookie(processingAccessCookieName, orderAccessToken, processingAccessCookiePath));
-  }
-  return nextResponse;
+  return NextResponse.json({ ...result, order: { ...createdOrder, orderAccessToken } }, { status: response.status });
 }
 
 function isLoopbackRequest(request: Request) {

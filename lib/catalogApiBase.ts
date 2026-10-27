@@ -2,13 +2,13 @@ const DEFAULT_CATALOG_API_BASE = "https://cnfansuk-catalog-api.dayu70001.workers
 
 type CatalogApiEnvironment = {
   NODE_ENV?: string;
-  STRIPE_BANK_TRANSFER_MODE?: string;
+  LOCAL_CATALOG_ISOLATION?: string;
   CATALOG_API_BASE?: string;
   NEXT_PUBLIC_CATALOG_API_BASE?: string;
 };
 
-const LOCAL_MOCK_ISOLATION_ERROR =
-  "Local Stripe mock isolation is active, but no safe local/test catalog upstream is configured. Set CATALOG_API_BASE or NEXT_PUBLIC_CATALOG_API_BASE to a loopback or .test URL; Production fallback is blocked.";
+const LOCAL_CATALOG_ISOLATION_ERROR =
+  "Local catalog isolation is active, but no safe local/test catalog upstream is configured. Set CATALOG_API_BASE or NEXT_PUBLIC_CATALOG_API_BASE to a loopback or .test URL; Production fallback is blocked.";
 
 function isSafeLocalTestApiBase(value: string): boolean {
   try {
@@ -31,10 +31,10 @@ export function resolveCatalogApiBase(env: CatalogApiEnvironment): string {
   const publicBase = env.NEXT_PUBLIC_CATALOG_API_BASE?.trim();
 
   if (env.NODE_ENV === "development"
-    && (env.STRIPE_BANK_TRANSFER_MODE === "mock" || env.STRIPE_BANK_TRANSFER_MODE === "test")) {
+    && env.LOCAL_CATALOG_ISOLATION === "true") {
     const explicitBase = privateBase || publicBase;
     if (!explicitBase || !isSafeLocalTestApiBase(explicitBase)) {
-      throw new Error(LOCAL_MOCK_ISOLATION_ERROR);
+      throw new Error(LOCAL_CATALOG_ISOLATION_ERROR);
     }
     return explicitBase.replace(/\/+$/, "");
   }

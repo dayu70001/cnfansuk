@@ -13,31 +13,30 @@ const trackOrder = read("app/track-order/page.tsx");
 const returns = read("app/returns/page.tsx");
 const sitemap = read("app/sitemap.ts");
 
-test("bank transfer help route has the approved SEO metadata and self-canonical path", () => {
+test("legacy payment-help URL keeps its self-canonical route with current order-support copy", () => {
   assert.match(paymentHelp, /path:\s*"\/bank-transfer-payment-help"/);
-  assert.match(paymentHelp, /title:\s*"Bank Transfer Payment Help \| CNFans UK"/);
-  assert.match(paymentHelp, /<h1>Bank Transfer Payment Help<\/h1>/);
+  assert.match(paymentHelp, /title:\s*"Order and Payment Help \| CNFans UK"/);
+  assert.match(paymentHelp, /<h1>Order and Payment Help<\/h1>/);
   assert.match(paymentHelp, /description:\s*"[^"]+"/);
   assert.doesNotMatch(paymentHelp, /noindex|robots:\s*\{\s*index:\s*false/i);
   assert.match(sitemap, /"\/bank-transfer-payment-help"/);
   assert.equal((sitemap.match(/"\/bank-transfer-payment-help"/g) || []).length, 1);
 });
 
-test("payment help distinguishes submitted from confirmed and gives safe pending-payment guidance", () => {
+test("payment help reflects the paused online payment flow and safe support guidance", () => {
   const content = paymentHelp.replace(/\s+/g, " ");
-  assert.match(content, /Payment submitted.*not confirmation that funds arrived/i);
-  assert.match(content, /do not pay again/i);
-  assert.match(content, /fixed update time/i);
-  assert.match(content, /If you closed the Stripe page/);
+  assert.match(content, /Online payment through the website is temporarily unavailable/i);
+  assert.match(content, /does not take payment/i);
+  assert.match(content, /Do not send another payment/i);
+  assert.match(content, /What if I have already made a payment/i);
   assert.match(content, /order number/i);
-  assert.match(content, /full card details, bank login information or passwords/i);
-  assert.doesNotMatch(content, /Stripe will return you automatically|automatically returns you to CNFans/i);
-  assert.doesNotMatch(content, /within \d+ (minutes|hours|days)/i);
-  assert.doesNotMatch(content, /FAQPage|AggregateRating|Review/);
+  assert.match(content, /full card details, bank login information, passwords/i);
+  assert.doesNotMatch(content, /Stripe|Stripe Checkout|bank transfer instructions/i);
+  assert.doesNotMatch(content, /"@type"\s*:\s*"(?:FAQPage|AggregateRating|Review)"/);
 });
 
 test("support cluster links are contextual and preserve each page's primary intent", () => {
-  assert.match(howToOrder, /<h2>Payment help after checkout<\/h2>/);
+  assert.match(howToOrder, /<h2>Confirming your order<\/h2>/);
   assert.match(howToOrder, /href="\/bank-transfer-payment-help"/);
   assert.match(delivery, /<h2>Tracking has not updated<\/h2>/);
   assert.match(delivery, /href="\/track-order"/);

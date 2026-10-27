@@ -34,22 +34,19 @@ type ConfirmationOrder = {
 
 export function OrderConfirmationDetails({
   orderNumber,
-  localMockTotal,
-  useLiveAccessCookie = false,
+  useLegacyConfirmationCookie = false,
 }: {
   orderNumber: string;
-  localMockTotal?: number;
-  useLiveAccessCookie?: boolean;
+  useLegacyConfirmationCookie?: boolean;
 }) {
   const [order, setOrder] = useState<ConfirmationOrder | null>(null);
   const [unavailable, setUnavailable] = useState(false);
 
   useEffect(() => {
-    if (localMockTotal !== undefined) return;
     let active = true;
     void Promise.resolve().then(async () => {
       let accessToken = "";
-      if (!useLiveAccessCookie) {
+      if (!useLegacyConfirmationCookie) {
         try {
           accessToken = window.sessionStorage.getItem(getOrderAccessTokenStorageKey(orderNumber)) || "";
         } catch {
@@ -57,7 +54,7 @@ export function OrderConfirmationDetails({
         }
       }
       if (!active) return;
-      if (!useLiveAccessCookie && !accessToken) {
+      if (!useLegacyConfirmationCookie && !accessToken) {
         setUnavailable(true);
         return;
       }
@@ -65,7 +62,7 @@ export function OrderConfirmationDetails({
         const response = await fetch(`/api/orders/${encodeURIComponent(orderNumber)}/confirmation`, {
           cache: "no-store",
           credentials: "same-origin",
-          headers: useLiveAccessCookie ? {} : { "X-Order-Access-Token": accessToken },
+          headers: useLegacyConfirmationCookie ? {} : { "X-Order-Access-Token": accessToken },
         });
         const result = response.ok ? await response.json() as { order?: ConfirmationOrder } : null;
         if (!active) return;
@@ -76,25 +73,7 @@ export function OrderConfirmationDetails({
       }
     });
     return () => { active = false; };
-  }, [localMockTotal, orderNumber, useLiveAccessCookie]);
-
-  if (localMockTotal !== undefined) {
-    return (
-      <div className="order-confirmation-details">
-        <section className="confirmation-card" aria-label="Local test order details">
-          <p className="eyebrow">Order details · Local test</p>
-          <div className="confirmation-item"><span>Example clothing item · Size M · Qty 1</span><strong>{formatMoney(localMockTotal, "GBP")}</strong></div>
-          <div className="confirmation-total-row"><span>Subtotal</span><strong>{formatMoney(localMockTotal, "GBP")}</strong></div>
-          <div className="confirmation-total-row"><span>Shipping · local test fixture</span><strong>£0.00</strong></div>
-          <div className="confirmation-total-row confirmation-grand-total"><span>Total</span><strong>{formatMoney(localMockTotal, "GBP")}</strong></div>
-        </section>
-        <section className="confirmation-card" aria-label="Local demo delivery details">
-          <p className="eyebrow">Delivery details</p>
-          <p>Fictional local-test details only. No customer address or order has been sent or saved.</p>
-        </section>
-      </div>
-    );
-  }
+  }, [orderNumber, useLegacyConfirmationCookie]);
 
   if (unavailable) {
     return <p className="success-unavailable">Order details are no longer available in this browser. Please use your order number when contacting us.</p>;

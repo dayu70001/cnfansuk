@@ -87,8 +87,8 @@ export default function DeliveryPage() {
       <section className="support-notice">
         <span>Payment question?</span>
         <p>
-          For help with a bank transfer or a payment status that is still pending, see our{" "}
-          <Link href="/bank-transfer-payment-help">bank transfer payment help</Link>.
+          For help with an existing order or payment question, see our{" "}
+          <Link href="/bank-transfer-payment-help">order and payment help</Link>.
         </p>
       </section>
 

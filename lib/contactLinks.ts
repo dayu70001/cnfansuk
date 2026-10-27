@@ -32,7 +32,7 @@ function directTelegramLinkFromLinks(links: ContactLinks) {
 
 function whatsappLinkFromLinks(links: ContactLinks, orderNo?: string) {
   const text = orderNo
-    ? `Hi CNFans UK, I have completed the GBP bank transfer for order #${orderNo}. Please confirm my payment.`
+    ? `Hi CNFans UK, please confirm my order #${orderNo}.`
     : "Hi CNFans UK, I would like help with an order.";
   if (links.personalWhatsappUrl) {
     return appendText(links.personalWhatsappUrl, text);
@@ -43,7 +43,7 @@ function whatsappLinkFromLinks(links: ContactLinks, orderNo?: string) {
 
 function telegramLinkFromLinks(links: ContactLinks, orderNo?: string) {
   const text = orderNo
-    ? `Hi CNFans UK, I have completed the GBP bank transfer for order #${orderNo}. Please confirm my payment.`
+    ? `Hi CNFans UK, please confirm my order #${orderNo}.`
     : "Hi CNFans UK, I would like help with an order.";
   if (links.personalTelegramUrl) {
     return appendText(links.personalTelegramUrl, text);

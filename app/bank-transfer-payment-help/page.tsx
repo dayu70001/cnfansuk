@@ -4,9 +4,9 @@ import { buildGuideMetadata } from "@/lib/seoPage";
 
 export const metadata: Metadata = buildGuideMetadata({
   path: "/bank-transfer-payment-help",
-  title: "Bank Transfer Payment Help | CNFans UK",
+  title: "Order and Payment Help | CNFans UK",
   description:
-    "Understand CNFans UK bank transfer payment statuses, what to do if a payment is pending, and how to contact support safely.",
+    "Find out what happens after placing a CNFans UK order, how to contact us on WhatsApp and how to ask about an existing order safely.",
 });
 
 export default function BankTransferPaymentHelpPage() {
@@ -14,133 +14,86 @@ export default function BankTransferPaymentHelpPage() {
     <main className="support-page support-page-flow">
       <section className="support-hero support-hero-compact">
         <div className="support-hero-title">
-          <p className="support-kicker">Payment support</p>
-          <h1>Bank Transfer Payment Help</h1>
+          <p className="support-kicker">Order support</p>
+          <h1>Order and Payment Help</h1>
         </div>
         <p>
-          If you have started a bank transfer for a CNFans order and its payment status is still pending, this page explains
-          what the status means and where to get help. A CNFANS &ldquo;Payment submitted&rdquo; status is not confirmation that funds arrived.
+          Online payment through the website is temporarily unavailable. Placing an order records your request but does not
+          take payment. Contact us on WhatsApp from the Payment step to confirm your order and receive the next steps.
         </p>
       </section>
 
       <section className="support-notice">
         <span>Keep your order number</span>
         <p>
-          Your order number helps support find the right order. Do not send your full card details, bank login information or
-          passwords when asking us about a payment.
+          Your order number helps us find the right order. Do not send full card details, bank login information, passwords
+          or one-time verification codes when asking for help.
         </p>
       </section>
 
-      <section className="delivery-flow" aria-label="Bank transfer payment guidance">
+      <section className="delivery-flow" aria-label="Order and payment guidance">
         <article>
           <span>01</span>
           <div>
-            <h2>Before you pay</h2>
+            <h2>When you place an order</h2>
             <p>
-              Check the order number and total shown in CNFANS checkout. Continue from the checkout payment step to Stripe&rsquo;s
-              secure hosted page and follow the instructions shown there. Use the payment details presented in that flow, not
-              details copied from an old message or screenshot.
+              Review your items, delivery details and total in checkout before submitting. The website currently does not
+              take online payment when an order is created.
             </p>
           </div>
         </article>
         <article>
           <span>02</span>
           <div>
-            <h2>After you start the bank transfer</h2>
+            <h2>After your order is created</h2>
             <p>
-              After the Stripe payment step starts, CNFANS may show &ldquo;Payment submitted&rdquo; or a processing message. This records
-              the payment step; it does not mean that funds have arrived. CNFANS confirms payment after the receipt has been checked.
+              Keep the order number shown in checkout, then use the WhatsApp button on the Payment step. We will confirm
+              your order details with you and provide the next steps.
             </p>
           </div>
         </article>
         <article>
           <span>03</span>
           <div>
-            <h2>If the payment is still pending</h2>
+            <h2>For an existing order</h2>
             <p>
-              A status that has not changed is not, by itself, proof that a transfer failed. Check the order using{" "}
-              <Link href="/track-order">Track Your Order</Link>. Do not pay again just because the status has not changed. If you
-              are unsure whether the transfer was sent, contact support first.
+              If you have a question about an order or a payment made previously, contact us with the order number so we can
+              check its recorded status. Do not send another payment while you are waiting for us to review it.
             </p>
           </div>
         </article>
         <article>
           <span>04</span>
           <div>
-            <h2>If money has left your bank</h2>
+            <h2>Protect your information</h2>
             <p>
-              If your bank shows that money has left but CNFANS has not confirmed the order, do not send another transfer.
-              Keep your order number and <Link href="/contact">contact support</Link> so the payment can be checked. Do not send
-              full banking credentials or account details.
-            </p>
-          </div>
-        </article>
-        <article>
-          <span>05</span>
-          <div>
-            <h2>If you closed the Stripe page</h2>
-            <p>
-              Check the order status on CNFANS using your order number, for example on the{" "}
-              <Link href="/track-order">Track Your Order</Link> page. This help page does not reopen a Stripe payment session,
-              and closing the payment page does not confirm that a transfer was received. If you are unsure what to do next,
-              contact support before making another payment attempt.
-            </p>
-          </div>
-        </article>
-        <article>
-          <span>06</span>
-          <div>
-            <h2>When to contact us</h2>
-            <p>
-              Get in touch if a payment is still not confirmed, you are unsure whether it was sent, you closed the payment flow,
-              or you need order-specific help. Include your order number and a short description. See{" "}
-              <Link href="/how-to-order">How to Order</Link> for the purchase steps or use our <Link href="/contact">contact page</Link>.
+              Share your order number and a short description of the issue. Never send passwords, bank logins, full card
+              details or verification codes. You can also use our <Link href="/contact">Contact page</Link>.
             </p>
           </div>
         </article>
       </section>
 
-      <section className="policy-list" aria-label="Bank transfer payment questions">
+      <section className="policy-list" aria-label="Order and payment questions">
         <article>
-          <span>Payment status</span>
+          <span>Order payment</span>
           <div>
-            <h2>Is a submitted bank transfer the same as a confirmed payment?</h2>
-            <p>No. A CNFANS &ldquo;Payment submitted&rdquo; status records the payment step; CNFANS still needs to check and confirm receipt of the funds.</p>
+            <h2>Does placing an order take payment?</h2>
+            <p>No. Online payment is temporarily unavailable, so no payment is taken by the website when you submit an order.</p>
           </div>
         </article>
         <article>
-          <span>Payment status</span>
+          <span>Contacting us</span>
           <div>
-            <h2>Should I pay again if my order still says payment is processing?</h2>
-            <p>Do not make another payment only because the status has not changed. Check the order and contact support if you are unsure whether the first transfer was sent.</p>
+            <h2>How do I confirm my order?</h2>
+            <p>Use the WhatsApp button shown on the Payment step after checkout. Your order number is included in the pre-filled message.</p>
           </div>
         </article>
         <article>
-          <span>Contacting support</span>
+          <span>Existing orders</span>
           <div>
-            <h2>What should I send when contacting support?</h2>
-            <p>Include your order number and a short explanation of the issue. Do not send passwords, bank logins or full card details.</p>
-          </div>
-        </article>
-        <article>
-          <span>Timing</span>
-          <div>
-            <h2>Does bank transfer confirmation happen instantly?</h2>
-            <p>Not necessarily. Confirmation timing can vary, so CNFANS does not promise a fixed update time. The order is confirmed after the payment is checked.</p>
-          </div>
-        </article>
-        <article>
-          <span>Payment status</span>
-          <div>
-            <h2>What should I do if my bank shows the money has left?</h2>
-            <p>Do not send another transfer. Keep your order number and contact support so the payment can be checked.</p>
-          </div>
-        </article>
-        <article>
-          <span>Stripe checkout</span>
-          <div>
-            <h2>Do I need to stay on the Stripe page?</h2>
-            <p>Follow the instructions shown on Stripe&rsquo;s secure page. Do not assume that closing it confirms payment or that it can be reopened here. If you closed it, check your CNFANS order status or contact support.</p>
+            <h2>What if I have already made a payment?</h2>
+            <p>Contact us with the order number so we can review the order record. Do not send another payment while we check it.</p>
           </div>
         </article>
       </section>

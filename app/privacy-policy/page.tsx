@@ -37,16 +37,9 @@ export default function PrivacyPolicyPage() {
       <section className="policy-section">
         <h2>3. Payments</h2>
         <p>
-          Payments are processed through Stripe. Where Stripe Hosted Checkout is used, payment details are entered on
-          Stripe&apos;s hosted payment page rather than in the CNFANS UK checkout form. CNFANS UK receives the order and payment
-          status information needed to handle your order.
-        </p>
-        <p>
-          You can read more in the{" "}
-          <a href="https://stripe.com/privacy" target="_blank" rel="noopener noreferrer">
-            Stripe Privacy Policy
-          </a>
-          .
+          Online payment through the website is temporarily unavailable, and submitting an order does not take payment.
+          We retain order information and any payment-status information already associated with an order so we can respond
+          to order enquiries and maintain the relevant order record. Contact us with your order number if you have a question.
         </p>
       </section>
 
@@ -62,9 +55,9 @@ export default function PrivacyPolicyPage() {
       <section className="policy-section">
         <h2>5. Service providers</h2>
         <p>
-          We use service providers to support payment processing and website measurement. Stripe processes payments;
-          Meta and Google tools are used for advertising or analytics measurement as described above. Delivery and
-          tracking information is handled as part of the order process described on our <Link href="/delivery">Delivery</Link> page.
+          We use service providers to support website operation, order management, customer contact and website measurement.
+          Meta and Google tools are used for advertising or analytics measurement as described above. Delivery and tracking
+          information is handled as part of the order process described on our <Link href="/delivery">Delivery</Link> page.
         </p>
       </section>
 

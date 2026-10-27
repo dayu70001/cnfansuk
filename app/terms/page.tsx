@@ -36,18 +36,17 @@ export default function TermsPage() {
       <section className="policy-section">
         <h2>3. Prices and payment</h2>
         <p>
-          Your order total is shown during checkout before you continue to payment. Payment is completed through the
-          payment options made available during checkout. Where Stripe Checkout is used, available payment methods may
-          vary depending on factors such as location, device and transaction.
+          Your order total is shown during checkout before you submit your order. Online payment through the website is
+          temporarily unavailable, and submitting an order does not take payment. Contact us on WhatsApp from the Payment
+          step to confirm your order and receive the next steps.
         </p>
       </section>
 
       <section className="policy-section">
         <h2>4. Orders</h2>
         <p>
-          Keep the order number shown after checkout when contacting us. A payment-submitted or processing status is not
-          confirmation that funds have been received. We review payment status separately and may ask you to confirm
-          order details with us on WhatsApp before processing.
+          Keep the order number shown after checkout when contacting us. An order request is not payment or confirmation
+          that the order has been accepted for processing. We review order details with you on WhatsApp before processing.
         </p>
       </section>
 

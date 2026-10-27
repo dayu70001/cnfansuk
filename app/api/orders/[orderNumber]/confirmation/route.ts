@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { loadAuthorizedOrder, type AuthorizedWorkerOrder } from "@/lib/authorizedOrder";
 import { getOrderAccessTokenFromCookieHeader } from "@/lib/orderAccessTokenCookie";
-import { getStripeBankTransferMode, isStripeLiveProductionRequest } from "@/lib/payments/stripeBankTransfer";
 
 type RouteContext = { params: Promise<{ orderNumber: string }> };
 
@@ -43,14 +42,24 @@ function projectConfirmationOrder(order: AuthorizedWorkerOrder) {
 
 export async function GET(request: Request, context: RouteContext) {
   const { orderNumber } = await context.params;
-  const stripeMode = getStripeBankTransferMode();
-  if (stripeMode === "live" && !isStripeLiveProductionRequest(request)) {
-    return NextResponse.json({ error: "订单访问凭证无效或已过期。" }, { status: 401 });
-  }
-  const token = stripeMode === "live"
+  const headerToken = request.headers.get("X-Order-Access-Token") || "";
+  const cookieToken = isCanonicalProductionRequest(request)
     ? getOrderAccessTokenFromCookieHeader(request.headers.get("cookie"), orderNumber, "confirmation")
-    : request.headers.get("X-Order-Access-Token") || "";
+    : "";
+  const token = headerToken || cookieToken;
   const result = await loadAuthorizedOrder(orderNumber, token);
   if (!result.ok) return NextResponse.json({ error: result.error }, { status: result.status });
   return NextResponse.json({ order: projectConfirmationOrder(result.order) }, { headers: { "Cache-Control": "no-store" } });
+}
+
+function isCanonicalProductionRequest(request: Request) {
+  try {
+    const origin = "https://www.cnfans.co.uk";
+    const requestUrl = new URL(request.url);
+    if (requestUrl.origin !== origin || request.headers.get("host")?.toLowerCase() !== "www.cnfans.co.uk") return false;
+    const requestOrigin = request.headers.get("origin");
+    return !requestOrigin || requestOrigin === origin;
+  } catch {
+    return false;
+  }
 }

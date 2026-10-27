@@ -29,5 +29,5 @@ ${order.customer.city}
 ${order.customer.postcode}
 United Kingdom
 
-Please confirm the details above. Once confirmed, we will send the payment instructions.`;
+Please confirm the details above. We will contact you with the next steps.`;
 }

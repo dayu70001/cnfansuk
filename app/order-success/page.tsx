@@ -1,73 +1,34 @@
 import Link from "next/link";
-import { notFound } from "next/navigation";
 import { OrderConfirmationDetails } from "@/components/OrderConfirmationDetails";
 import { OrderSuccessLead } from "@/components/OrderSuccessLead";
-import { StripePaymentStatus } from "@/components/StripePaymentStatus";
 import { MetaPixelEventLink } from "@/components/MetaPixelEventLink";
 import { getDirectWhatsappLinkFromSettings } from "@/lib/contactLinks";
 import { getOrderPaymentStage, orderPaymentStageLabel } from "@/lib/orderStatus";
 import { fetchSiteSettings } from "@/lib/siteSettings";
-import {
-  isLocalStripeBankTransferMockEnabled,
-  isLocalStripeBankTransferTestEnabled,
-  isStripeLiveBankTransferEnabled,
-} from "@/lib/payments/stripeBankTransfer";
 
 export default async function OrderSuccessPage({
   searchParams,
 }: {
-  searchParams: Promise<{ order?: string; payment?: string; amount?: string; session_id?: string }>;
+  searchParams: Promise<{ order?: string; payment?: string }>;
 }) {
-  const { order = "CNF-UK-10023", payment, amount, session_id: sessionId } = await searchParams;
-  if (payment === "mock" && !isLocalStripeBankTransferMockEnabled()) notFound();
-  const isStripeTestReturn = payment === "stripe_test";
-  const isStripeLiveReturn = payment === "stripe_live";
-  if (isStripeTestReturn && (
-    !isLocalStripeBankTransferTestEnabled()
-    || !/^CNF-[A-Za-z0-9-]{1,72}$/.test(order)
-    || !/^cs_test_[A-Za-z0-9]+$/.test(sessionId || "")
-  )) notFound();
-  if (isStripeLiveReturn && (
-    !isStripeLiveBankTransferEnabled()
-    || !/^CNF-[A-Za-z0-9-]{1,72}$/.test(order)
-    || !/^cs_live_[A-Za-z0-9]+$/.test(sessionId || "")
-  )) notFound();
-
-  const amountMinor = Number(amount);
-  const localMockTotal = isLocalStripeBankTransferMockEnabled()
-    && payment === "mock"
-    && order === "LOCAL-CNF-TEST"
-    && Number.isSafeInteger(amountMinor)
-    && amountMinor > 0
-    ? amountMinor / 100
-    : undefined;
+  const { order = "CNF-UK-10023", payment } = await searchParams;
+  const useLegacyConfirmationCookie = payment === "stripe_live";
   const settings = await fetchSiteSettings();
   const whatsappUrl = getOrderConfirmationWhatsappUrl(settings, order);
 
   return (
     <section className="success-wrap">
-      {localMockTotal === undefined ? <OrderSuccessLead order={order} /> : null}
+      <OrderSuccessLead order={order} />
       <div className="success-check" aria-hidden="true">
         <svg width="25" height="25" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6">
           <path d="M5 12.5l4.2 4.2L19 7" />
         </svg>
       </div>
-      <h1>{localMockTotal === undefined ? "Order placed" : "Returned to CNFANS"}</h1>
+      <h1>Order placed</h1>
       <p className="success-order-number" title={`#${order}`}>Order #{order}</p>
-      {isStripeTestReturn || isStripeLiveReturn ? (
-        <StripePaymentStatus
-          order={order}
-          sessionId={sessionId!}
-          initialPaymentStatus="unpaid"
-          mode={isStripeLiveReturn ? "live" : "test"}
-        />
-      ) : (
-        <p className="success-payment-status">
-          {localMockTotal === undefined
-            ? orderPaymentStageLabel(getOrderPaymentStage({ status: "payment_submitted" }), "en")
-            : "Bank transfer pending — waiting for payment confirmation"}
-        </p>
-      )}
+      <p className="success-payment-status">
+        {orderPaymentStageLabel(getOrderPaymentStage({ status: "payment_submitted" }), "en")}
+      </p>
       <p className="success-copy success-order-note">
         We&apos;ll verify your order with you on WhatsApp before processing.
       </p>
@@ -86,7 +47,7 @@ export default async function OrderSuccessPage({
             destination: "whatsapp_personal",
             order_number: order,
           }}
-          {...(localMockTotal === undefined ? { recordWhatsappClickForOrder: order } : {})}
+          recordWhatsappClickForOrder={order}
         >
           <span className="success-whatsapp-icon" aria-hidden="true">
             <WhatsappIcon />
@@ -98,8 +59,7 @@ export default async function OrderSuccessPage({
 
       <OrderConfirmationDetails
         orderNumber={order}
-        localMockTotal={localMockTotal}
-        useLiveAccessCookie={isStripeLiveReturn}
+        useLegacyConfirmationCookie={useLegacyConfirmationCookie}
       />
 
       <Link href="/" className="success-link">

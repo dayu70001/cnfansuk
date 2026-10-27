@@ -7,7 +7,7 @@ export function OrderSupport() {
       <div>
         <p className="eyebrow">Order support</p>
         <h2 id="support-title">WhatsApp or Telegram Order Support</h2>
-        <p>Direct order support helps us verify size, stock, delivery details and payment instructions before payment.</p>
+        <p>Direct order support helps us verify size, stock and delivery details before we process your order.</p>
       </div>
       <div className="button-row">
         <MetaPixelEventLink

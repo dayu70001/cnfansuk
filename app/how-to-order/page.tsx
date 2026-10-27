@@ -111,16 +111,16 @@ export default function HowToOrderPage() {
           &mdash; a correct postcode and phone number help your parcel move smoothly.
         </p>
         <p>
-          Checkout shows your order total and takes you to Stripe&rsquo;s secure hosted page to follow the bank transfer instructions.
+          Checkout shows your order total before you submit the order. Online payment is temporarily unavailable, so no payment is taken when the order is created.
         </p>
       </section>
 
       <section className="seo-section">
-        <h2>Payment help after checkout</h2>
+        <h2>Confirming your order</h2>
         <p>
-          A CNFANS UK &ldquo;Payment submitted&rdquo; status records the payment step; it is not confirmation that funds have arrived.
-          If your payment status is unclear, do not pay again just because it has not changed. Read our{" "}
-          <Link href="/bank-transfer-payment-help">bank transfer payment help</Link> for the next safe steps.
+          After checkout creates your order, keep the order number and use the WhatsApp button on the Payment step. We will
+          confirm your order details with you and provide the next steps. An order request is not a payment confirmation.
+          Read our <Link href="/bank-transfer-payment-help">order and payment help</Link> for more information.
         </p>
       </section>
 

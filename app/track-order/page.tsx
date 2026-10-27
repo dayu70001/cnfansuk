@@ -147,7 +147,7 @@ export default function TrackOrderPage() {
         <p>
           Read our <Link href="/delivery">delivery guidance</Link> for parcel issues, the{" "}
           <Link href="/how-to-order">How to Order guide</Link> for the purchase steps, or{" "}
-          <Link href="/bank-transfer-payment-help">bank transfer payment help</Link> if you are unsure about a payment status.
+          <Link href="/bank-transfer-payment-help">order and payment help</Link> if you are unsure about an existing order status.
         </p>
       </section>
     </main>

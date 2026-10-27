@@ -2686,18 +2686,6 @@ select {
   gap: 18px;
 }
 
-.stripe-mock-panel {
-  max-width: 640px;
-  margin: 0 auto;
-  padding: clamp(20px, 4vw, 36px);
-  border: 1px solid var(--line);
-}
-
-.stripe-mock-panel > p {
-  max-width: 62ch;
-  line-height: 1.6;
-}
-
 .checkout-step-panel h2,
 .summary-panel h2 {
   margin: 0;
@@ -2970,10 +2958,6 @@ select {
   line-height: 1.55;
 }
 
-.checkout-bank-transfer-followup {
-  margin-top: 8px;
-}
-
 .checkout-whatsapp-help {
   display: flex;
   flex-wrap: wrap;
@@ -3009,49 +2993,6 @@ select {
   margin-top: 5px;
 }
 
-.checkout-bank-intro {
-  display: grid;
-  gap: 6px;
-  border-left: 3px solid var(--ink);
-  background: var(--oat);
-  padding: 16px 18px;
-}
-
-.checkout-bank-intro strong {
-  color: var(--ink);
-  font-family: var(--serif);
-  font-size: 22px;
-  font-weight: 500;
-}
-
-.checkout-bank-intro p,
-.checkout-contact-next {
-  margin: 0;
-  color: var(--ink-soft);
-  font-size: 13px;
-  line-height: 1.6;
-}
-
-.checkout-bank-card {
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  background: var(--paper);
-  padding: 22px;
-}
-
-.checkout-bank-card-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  border-bottom: 1px solid var(--line);
-  padding-bottom: 14px;
-  color: var(--ink);
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
 .checkout-payment-summary {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -3077,63 +3018,6 @@ select {
   color: var(--ink);
   font-size: 14px;
   overflow-wrap: anywhere;
-}
-
-.checkout-bank-details {
-  margin: 0;
-}
-
-.checkout-bank-details div {
-  display: grid;
-  grid-template-columns: minmax(150px, 0.8fr) minmax(0, 1.2fr);
-  gap: 18px;
-  border-bottom: 1px solid var(--line);
-  padding: 13px 0;
-}
-
-.checkout-bank-details dt {
-  color: var(--muted);
-  font-size: 12px;
-}
-
-.checkout-bank-details dd {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  margin: 0;
-  color: var(--ink);
-  font-size: 14px;
-  font-weight: 600;
-  overflow-wrap: anywhere;
-}
-
-.checkout-copy-button {
-  flex: 0 0 auto;
-  border: 1px solid var(--line);
-  background: var(--white);
-  color: var(--ink-soft);
-  cursor: pointer;
-  font-size: 11px;
-  font-weight: 700;
-  padding: 5px 8px;
-}
-
-.checkout-copy-button:hover {
-  border-color: var(--ink);
-  color: var(--ink);
-}
-
-.checkout-bank-note {
-  margin: 16px 0 0;
-  color: var(--ink-soft);
-  font-size: 12px;
-  line-height: 1.6;
-}
-
-.checkout-contact-next {
-  padding: 14px 16px;
-  border: 1px solid var(--line);
 }
 
 .success-wrap {
@@ -3191,24 +3075,6 @@ select {
 .success-copy-secondary {
   margin-bottom: 0;
   font-size: 13px;
-}
-
-.stripe-payment-status {
-  margin: -6px auto 14px;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-}
-
-.stripe-payment-status .success-payment-status {
-  margin: 0 auto 8px;
-}
-
-.stripe-payment-status-error {
-  margin: 0;
-  color: #8b3b30;
-  font-size: 12px;
 }
 
 .ticket {
@@ -5900,20 +5766,6 @@ select {
     letter-spacing: 0.06em;
   }
 
-  .stripe-mock-panel .checkout-payment-summary {
-    grid-template-columns: minmax(0, 1fr);
-    gap: 12px;
-  }
-
-  .stripe-mock-panel .checkout-payment-summary > div {
-    min-width: 0;
-  }
-
-  .stripe-mock-panel .checkout-payment-summary strong {
-    overflow-wrap: break-word;
-    word-break: normal;
-  }
-
   .ship-option {
     gap: 10px;
     padding: 14px 12px;
@@ -5951,15 +5803,8 @@ select {
     line-height: 1.2;
   }
 
-  .success-payment-status,
-  .stripe-payment-status {
+  .success-payment-status {
     margin: 0 auto 10px;
-  }
-
-  .stripe-payment-status .success-payment-status {
-    margin: 0 auto;
-    font-size: 14px;
-    line-height: 1.35;
   }
 
   .success-copy {
@@ -6781,15 +6626,6 @@ a:focus-visible {
   .checkout-review div {
     grid-template-columns: 1fr;
     gap: 6px;
-  }
-
-  .checkout-bank-card {
-    padding: 18px 16px;
-  }
-
-  .checkout-bank-details div {
-    grid-template-columns: 1fr;
-    gap: 4px;
   }
 
   .pdp {
@@ -7776,8 +7612,7 @@ em {
 .pdp-info h1,
 .order-no,
 .success-wrap h1,
-.admin-login-card h1,
-.checkout-bank-intro strong {
+.admin-login-card h1 {
   font-family: var(--sans);
   font-style: normal;
 }

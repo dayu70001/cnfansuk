@@ -658,7 +658,7 @@ function DeliveryStep({
         </button>
         <button className="btn btn-solid" type="button" onClick={() => void onContinue()} disabled={submitting}>
           {submitting
-            ? process.env.NODE_ENV === "development" ? "Preparing local payment…" : "Creating order…"
+            ? process.env.NODE_ENV === "development" ? "Preparing local order…" : "Creating order…"
             : "Continue to Payment"}
         </button>
       </div>

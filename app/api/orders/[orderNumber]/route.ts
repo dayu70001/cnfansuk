@@ -26,7 +26,3 @@ async function proxy(request: Request, context: RouteContext, suffix = "") {
 export async function GET(request: Request, context: RouteContext) {
   return proxy(request, context);
 }
-
-export async function POST(request: Request, context: RouteContext) {
-  return proxy(request, context, "/payment-submitted");
-}
