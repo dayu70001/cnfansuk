@@ -1,6 +1,6 @@
 import type { MetadataRoute } from "next";
 import { products as localProducts } from "@/data/products";
-import { fetchCatalogFilters, fetchSitemapProducts } from "@/lib/catalogApi";
+import { fetchCatalogFilters, fetchCatalogPage, fetchSitemapProducts } from "@/lib/catalogApi";
 import { catalogSeoSubcategories, catalogSeoSubcategoryPath } from "@/lib/catalogTaxonomy";
 import { PHASE_FOUR_GUIDES } from "@/lib/phaseFourGuides";
 import { PHASE_FIVE_PUBLIC_GUIDES } from "@/lib/phaseFiveGuides";
@@ -68,13 +68,29 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     if (!productsBySlug.has(product.slug)) productsBySlug.set(product.slug, { slug: product.slug });
   }
 
+  const missingSubcategoryCountLookups = catalogFilters
+    ? await Promise.all(catalogSeoSubcategories
+      .filter((item) => (catalogFilters.counts.subcategories.find(
+        (count) => count.category === item.category && count.subcategory === item.value,
+      )?.count ?? 0) <= 0)
+      .map(async (item) => {
+        const page = await fetchCatalogPage(
+          { category: item.category, subcategory: item.value, page: 1, limit: 1 },
+          { bypassNextCache: true },
+        );
+        return [`${item.category}/${item.value}`, page?.total ?? 0] as const;
+      }))
+    : [];
+  const missingSubcategoryCounts = new Map(missingSubcategoryCountLookups);
+
   const indexableSubcategoryPaths = catalogFilters
     ? catalogSeoSubcategories
         .filter((item) => {
           const row = catalogFilters.counts.subcategories.find(
             (count) => count.category === item.category && count.subcategory === item.value,
           );
-          return (row?.count || 0) >= 5;
+          const count = row?.count ?? missingSubcategoryCounts.get(`${item.category}/${item.value}`) ?? 0;
+          return count >= 5;
         })
         .map((item) => catalogSeoSubcategoryPath(item.category, item.value))
     : [];

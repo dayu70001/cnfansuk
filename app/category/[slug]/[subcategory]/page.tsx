@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
+import { cache } from "react";
 import { CatalogSearchForm } from "@/components/CatalogSearchForm";
 import { CategoryFilterDrawer, type CategoryFilterDrawerGroup } from "@/components/CategoryFilterDrawer";
 import { JsonLd } from "@/components/JsonLd";
@@ -12,11 +13,20 @@ import {
   catalogSeoSubcategoryPath,
   availableCatalogSubcategories,
   getCatalogSeoSubcategory,
+  mergeCatalogSubcategoryCount,
 } from "@/lib/catalogTaxonomy";
 import { SITE_NAME, SITE_URL } from "@/lib/site";
 import type { Product } from "@/lib/types";
 
 const PAGE_SIZE = 20;
+
+const getSweatshirtsCatalogCount = cache(async () => {
+  const result = await fetchCatalogPage(
+    { category: "tops", subcategory: "sweatshirts", page: 1, limit: 1 },
+    { bypassNextCache: true },
+  );
+  return result?.total ?? null;
+});
 
 type SubcategoryParams = {
   params: Promise<{ slug: string; subcategory: string }>;
@@ -43,7 +53,17 @@ export async function generateMetadata({ params, searchParams }: SubcategoryPara
 
   const query = await searchParams;
   const filters = await fetchCatalogFilters();
-  const productCount = getSubcategoryCount(filters, slug, subcategory);
+  const sweatshirtFacetCount = slug === "tops" && subcategory === "sweatshirts"
+    ? filters?.counts.subcategories.find((row) => row.category === slug && row.subcategory === subcategory)?.count
+    : undefined;
+  const productCountFallback = (sweatshirtFacetCount ?? 0) <= 0
+    && slug === "tops"
+    && subcategory === "sweatshirts"
+    ? await getSweatshirtsCatalogCount()
+    : null;
+  const productCount = slug === "tops" && subcategory === "sweatshirts"
+    ? ((sweatshirtFacetCount ?? 0) > 0 ? (sweatshirtFacetCount ?? 0) : productCountFallback ?? sweatshirtFacetCount ?? null)
+    : getSubcategoryCount(filters, slug, subcategory);
   const page = cleanPage(query.page);
   const hasNonPaginationParams = Boolean(
     cleanParam(query.q) ||
@@ -92,6 +112,18 @@ export default async function SubcategoryPage({ params, searchParams }: Subcateg
     ),
     fetchCatalogFilters(),
   ]);
+  const hasSweatshirtsFacet = Boolean(filters?.counts.subcategories.some((row) =>
+    row.category === "tops" && row.subcategory === "sweatshirts" && row.count > 0,
+  ));
+  const sweatshirtCountResult = slug === "tops" && !hasSweatshirtsFacet
+    ? await getSweatshirtsCatalogCount()
+    : null;
+  const existingSweatshirtsCount = filters?.counts.subcategories.find((row) =>
+    row.category === "tops" && row.subcategory === "sweatshirts",
+  )?.count;
+  const sweatshirtsCount = (existingSweatshirtsCount ?? 0) > 0
+    ? existingSweatshirtsCount!
+    : sweatshirtCountResult ?? existingSweatshirtsCount ?? 0;
 
   const localFallback = filterLocalProducts(getProductsByCategory(slug), { q, brand, price, sort, subcategory });
   const pageProducts = catalog === null
@@ -99,8 +131,11 @@ export default async function SubcategoryPage({ params, searchParams }: Subcateg
     : catalog.products;
   const totalProducts = catalog === null ? localFallback.length : catalog.total;
   const totalPages = catalog === null ? Math.ceil(totalProducts / PAGE_SIZE) : catalog.totalPages;
-  const subcategoryProductCount = getSubcategoryCount(filters, slug, subcategory)
-    ?? getProductsByCategory(slug).filter((product) => product.style === subcategory).length;
+  const subcategoryProductCount = subcategory === "sweatshirts"
+    ? (sweatshirtsCount > 0 ? sweatshirtsCount : catalog?.total ?? 0)
+    : getSubcategoryCount(filters, slug, subcategory)
+      ?? catalog?.total
+      ?? getProductsByCategory(slug).filter((product) => product.style === subcategory).length;
 
   // Empty taxonomy pairs (including Gilets while its count is zero) are not
   // published as indexable pages.
@@ -152,7 +187,7 @@ export default async function SubcategoryPage({ params, searchParams }: Subcateg
           />
 
           <CategoryFilterDrawer
-            groups={buildDesktopFilterGroups({ slug, subcategory, parentName: parent.name, configLabel: config.label, brand, brandOptions, price, sort, q, currentPage: String(page), basePath, filters })}
+            groups={buildDesktopFilterGroups({ slug, subcategory, parentName: parent.name, configLabel: config.label, brand, brandOptions, price, sort, q, currentPage: String(page), basePath, filters, sweatshirtsCount })}
             clearAllHref={buildHref(`/category/${slug}`, { q, brand: "", price: "", sort, page: "1" })}
           />
         </div>
@@ -192,6 +227,7 @@ function buildDesktopFilterGroups({
   currentPage,
   basePath,
   filters,
+  sweatshirtsCount,
 }: {
   slug: string;
   subcategory: string;
@@ -205,12 +241,16 @@ function buildDesktopFilterGroups({
   currentPage: string;
   basePath: string;
   filters: Awaited<ReturnType<typeof fetchCatalogFilters>>;
+  sweatshirtsCount: number;
 }): CategoryFilterDrawerGroup[] {
   const current = { q, brand, price, sort, page: currentPage };
-  const siblingCounts = filters?.counts.subcategories || [];
+  const siblingCounts = filters?.counts.subcategories.length
+    ? filters.counts.subcategories
+    : getProductsByCategory(slug).map((product) => ({ category: slug, subcategory: product.style, count: 1 }));
+  const siblingCountsWithSweatshirts = mergeCatalogSubcategoryCount(siblingCounts, slug, "sweatshirts", sweatshirtsCount);
   const siblingOptions = availableCatalogSubcategories(
     slug,
-    siblingCounts.length ? siblingCounts : getProductsByCategory(slug).map((product) => ({ category: slug, subcategory: product.style, count: 1 })),
+    siblingCountsWithSweatshirts,
   );
   const categoryOptions = [
     {

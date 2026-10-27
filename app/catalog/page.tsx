@@ -3,7 +3,7 @@ import { CatalogSearchForm } from "@/components/CatalogSearchForm";
 import { ProductCard } from "@/components/ProductCard";
 import { FilterDropdown, type DropdownOption } from "@/components/FilterDropdown";
 import { fetchCatalogFilters, fetchCatalogPage } from "@/lib/catalogApi";
-import { catalogSubcategories } from "@/lib/catalogTaxonomy";
+import { catalogSubcategories, mergeCatalogSubcategoryCount } from "@/lib/catalogTaxonomy";
 
 // Rendered dynamically because it reads searchParams (filters/sort/page).
 // D1 load is reduced via fetch-layer revalidate in lib/catalogApi.ts, not via
@@ -66,10 +66,28 @@ export default async function CatalogPage({
     fetchCatalogPage({ ...filters, page, limit: PAGE_SIZE }, { bypassNextCache: true }),
     fetchCatalogFilters(),
   ]);
+  const existingSweatshirtsCount = catalogFilters?.counts.subcategories.find((row) =>
+    row.category === "tops" && row.subcategory === "sweatshirts",
+  )?.count;
+  const sweatshirtCountResult = (existingSweatshirtsCount ?? 0) <= 0
+    ? await fetchCatalogPage(
+      { category: "tops", subcategory: "sweatshirts", page: 1, limit: 1 },
+      { bypassNextCache: true },
+    )
+    : null;
+  const sweatshirtsCount = (existingSweatshirtsCount ?? 0) > 0
+    ? existingSweatshirtsCount!
+    : sweatshirtCountResult?.total ?? existingSweatshirtsCount ?? 0;
+  const verifiedSubcategoryCounts = mergeCatalogSubcategoryCount(
+    catalogFilters?.counts.subcategories || [],
+    "tops",
+    "sweatshirts",
+    sweatshirtsCount,
+  );
   const subcategoryOptions: Record<string, Option[]> = Object.fromEntries(
     Object.entries(catalogSubcategories).map(([category, options]) => [
       category,
-      options.filter((option) => catalogFilters?.counts.subcategories.some((row) =>
+      options.filter((option) => verifiedSubcategoryCounts.some((row) =>
         row.category === category && row.subcategory === option.value && row.count > 0,
       )),
     ]),

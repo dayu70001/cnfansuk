@@ -15,6 +15,7 @@ import {
   catalogCategories,
   catalogSubcategories,
   getCatalogSeoSubcategory,
+  mergeCatalogSubcategoryCount,
 } from "@/lib/catalogTaxonomy";
 import type { Product } from "@/lib/types";
 
@@ -174,6 +175,18 @@ export default async function CategoryPage({
       : Promise.resolve(null),
     isNewIn ? Promise.resolve(null) : fetchCatalogFilters(),
   ]);
+  const existingSweatshirtsCount = filters?.counts.subcategories.find((row) =>
+    row.category === "tops" && row.subcategory === "sweatshirts",
+  )?.count;
+  const sweatshirtsCountResult = !isNewIn && filterCategory === "tops" && !existingSweatshirtsCount
+    ? await fetchCatalogPage(
+      { category: "tops", subcategory: "sweatshirts", page: 1, limit: 1 },
+      { bypassNextCache: true },
+    )
+    : null;
+  const sweatshirtsCount = (existingSweatshirtsCount ?? 0) > 0
+    ? existingSweatshirtsCount!
+    : sweatshirtsCountResult?.total ?? existingSweatshirtsCount ?? 0;
   const collectionProducts = isNewIn
     ? (newInBase?.products || localProducts).slice(0, 100)
     : localProducts;
@@ -225,6 +238,7 @@ export default async function CategoryPage({
     price,
     q,
     sort,
+    sweatshirtsCount,
     subcategory,
   });
 
@@ -305,6 +319,7 @@ type DesktopFilterGroupArgs = {
   currentFilters: NormalizedFilters;
   filterCategory: string;
   filters: Awaited<ReturnType<typeof fetchCatalogFilters>>;
+  sweatshirtsCount: number;
   price: string;
   q: string;
   sort: string;
@@ -321,6 +336,7 @@ function buildDesktopFilterGroups(args: DesktopFilterGroupArgs): CategoryFilterD
     currentFilters,
     filterCategory,
     filters,
+    sweatshirtsCount,
     price,
     sort,
     subcategory,
@@ -332,6 +348,7 @@ function buildDesktopFilterGroups(args: DesktopFilterGroupArgs): CategoryFilterD
     currentFilters,
     filterCategory,
     filters,
+    sweatshirtsCount,
     subcategory,
   });
   const selectedCategoryLabels = findSelectedCategoryLabels(categoryOptions);
@@ -429,8 +446,9 @@ function buildDesktopCategoryOptions({
   currentFilters,
   filterCategory,
   filters,
+  sweatshirtsCount,
   subcategory,
-}: Pick<DesktopFilterGroupArgs, "slug" | "categoryFilter" | "collectionProducts" | "currentFilters" | "filterCategory" | "filters" | "subcategory">): CategoryFilterDrawerOption[] {
+}: Pick<DesktopFilterGroupArgs, "slug" | "categoryFilter" | "collectionProducts" | "currentFilters" | "filterCategory" | "filters" | "subcategory" | "sweatshirtsCount">): CategoryFilterDrawerOption[] {
   if (slug === "new-in") {
     const options: CategoryFilterDrawerOption[] = [
       {
@@ -474,7 +492,10 @@ function buildDesktopCategoryOptions({
 
   const parent = catalogCategories.find((item) => item.value === filterCategory);
   if (!parent) return [];
-  const styleCounts = filters?.counts.subcategories || countProductStyles(collectionProducts, filterCategory);
+  const baseStyleCounts = filters?.counts.subcategories.length
+    ? filters.counts.subcategories
+    : countProductStyles(collectionProducts, filterCategory);
+  const styleCounts = mergeCatalogSubcategoryCount(baseStyleCounts, filterCategory, "sweatshirts", sweatshirtsCount);
   const availableStyles = availableCatalogSubcategories(filterCategory, styleCounts);
   return [
     {

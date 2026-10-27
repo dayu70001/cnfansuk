@@ -16,6 +16,7 @@ export const catalogSubcategories: Record<string, Array<{ value: string; label: 
   tops: [
     { value: "t-shirts", label: "T-Shirts" },
     { value: "hoodies", label: "Hoodies" },
+    { value: "sweatshirts", label: "Sweatshirts" },
     { value: "shirts", label: "Shirts" },
     { value: "sweaters", label: "Sweaters" },
   ],
@@ -83,6 +84,14 @@ export const catalogSeoSubcategories: readonly CatalogSeoSubcategory[] = [
     h1: "Men's Hoodies",
     title: "Men's Hoodies UK | CNFans UK",
     description: "Browse men's hoodies for everyday wear and layering, with practical notes on fabric weight, fit and sizing.",
+  },
+  {
+    category: "tops",
+    value: "sweatshirts",
+    label: "Sweatshirts",
+    h1: "Men's Sweatshirts",
+    title: "Men's Sweatshirts UK | CNFans UK",
+    description: "Browse men's sweatshirts and crewneck layers for everyday wear, with practical guidance on fabric, fit and layering.",
   },
   {
     category: "tops",
@@ -181,4 +190,20 @@ export function availableCatalogSubcategories(
   return catalogSubcategories[category].filter((option) => counts.some((row) =>
     row.category === category && row.subcategory === option.value && row.count > 0,
   ));
+}
+
+export function mergeCatalogSubcategoryCount(
+  counts: Array<{ category: string; subcategory: string | null; count: number }>,
+  category: string,
+  subcategory: string,
+  verifiedCount: number,
+) {
+  if (!Number.isFinite(verifiedCount) || verifiedCount <= 0 || !isCatalogCategory(category)) return counts;
+  if (!catalogSubcategories[category].some((item) => item.value === subcategory)) return counts;
+
+  const existing = counts.find((row) => row.category === category && row.subcategory === subcategory);
+  if (existing) {
+    return counts.map((row) => row === existing ? { ...row, count: verifiedCount } : row);
+  }
+  return [...counts, { category, subcategory, count: verifiedCount }];
 }
