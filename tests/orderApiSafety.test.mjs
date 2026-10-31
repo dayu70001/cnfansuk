@@ -110,7 +110,13 @@ function loadConfirmationRoute({ allowedToken = "order-token" } = {}) {
   return loadedModule.exports;
 }
 
-function loadWhatsappClickedRoute({ env, fetch, catalogBase = "https://production-worker.invalid" }) {
+function loadWhatsappClickedRoute({
+  env,
+  fetch,
+  catalogBase = "https://production-worker.invalid",
+  workerToken = "worker-token",
+  tokenVerifier = (token, orderNumber) => token === "valid-order-token" && orderNumber === "CNF-LOCAL-0001",
+}) {
   const loadedModule = { exports: {} };
   vm.runInNewContext(ts.transpile(whatsappClickedRouteSource, { module: ts.ModuleKind.CommonJS }), {
     module: loadedModule,
@@ -127,6 +133,8 @@ function loadWhatsappClickedRoute({ env, fetch, catalogBase = "https://productio
         },
       };
       if (id === "@/lib/catalogApiBase") return { getCatalogApiBase: () => catalogBase };
+      if (id === "@/lib/adminAuth") return { getAdminWorkerToken: () => workerToken };
+      if (id === "@/lib/orderAccessToken") return { verifyOrderAccessToken: tokenVerifier };
       throw new Error(`Unexpected import: ${id}`);
     },
   });
@@ -390,27 +398,74 @@ test("local WhatsApp click tracking fails closed without a local Worker", async 
     env: { NODE_ENV: "development" },
     fetch: async () => { calls += 1; throw new Error("unexpected request"); },
   });
-  const response = await route.POST(new Request("http://localhost:4000/api/orders/CNF-LOCAL-0001/whatsapp-clicked", { method: "POST" }), {
+  const response = await route.POST(new Request("http://localhost:4000/api/orders/CNF-LOCAL-0001/whatsapp-clicked", {
+    method: "POST",
+    headers: { "X-Order-Access-Token": "valid-order-token" },
+  }), {
     params: Promise.resolve({ orderNumber: "CNF-LOCAL-0001" }),
   });
   assert.equal(response.status, 503);
   assert.equal(calls, 0);
 });
 
+test("WhatsApp click tracking rejects missing or invalid order access tokens before contacting the Worker", async () => {
+  let calls = 0;
+  const route = loadWhatsappClickedRoute({
+    env: { NODE_ENV: "production" },
+    fetch: async () => { calls += 1; throw new Error("unexpected request"); },
+  });
+  const missing = await route.POST(new Request("https://www.cnfans.co.uk/api/orders/CNF-LOCAL-0001/whatsapp-clicked", { method: "POST" }), {
+    params: Promise.resolve({ orderNumber: "CNF-LOCAL-0001" }),
+  });
+  const invalid = await route.POST(new Request("https://www.cnfans.co.uk/api/orders/CNF-LOCAL-0001/whatsapp-clicked", {
+    method: "POST",
+    headers: { "X-Order-Access-Token": "wrong-order-token" },
+  }), { params: Promise.resolve({ orderNumber: "CNF-LOCAL-0001" }) });
+  assert.equal(missing.status, 401);
+  assert.equal(invalid.status, 401);
+  assert.equal(calls, 0);
+});
+
 test("local WhatsApp click tracking uses only the configured loopback Worker", async () => {
   let target = "";
+  let requestInit;
   const route = loadWhatsappClickedRoute({
     env: { NODE_ENV: "development", LOCAL_ORDER_API_BASE: "http://127.0.0.1:8787/" },
-    fetch: async (url) => {
+    fetch: async (url, init) => {
       target = url;
+      requestInit = init;
       return new Response(JSON.stringify({ ok: true }), { status: 200, headers: { "Content-Type": "application/json" } });
     },
   });
-  const response = await route.POST(new Request("http://localhost:4000/api/orders/CNF-LOCAL-0001/whatsapp-clicked", { method: "POST" }), {
+  const response = await route.POST(new Request("http://localhost:4000/api/orders/CNF-LOCAL-0001/whatsapp-clicked", {
+    method: "POST",
+    headers: { "X-Order-Access-Token": "valid-order-token" },
+  }), {
     params: Promise.resolve({ orderNumber: "CNF-LOCAL-0001" }),
   });
   assert.equal(response.status, 200);
-  assert.equal(target, "http://127.0.0.1:8787/orders/CNF-LOCAL-0001/whatsapp-clicked");
+  assert.equal(target, "http://127.0.0.1:8787/admin/orders/CNF-LOCAL-0001/whatsapp-clicked");
+  assert.equal(requestInit.headers.Authorization, "Bearer worker-token");
+});
+
+test("Production WhatsApp click tracking verifies the order token and uses the configured Worker", async () => {
+  let target = "";
+  let requestInit;
+  const route = loadWhatsappClickedRoute({
+    env: { NODE_ENV: "production" },
+    fetch: async (url, init) => {
+      target = url;
+      requestInit = init;
+      return new Response(JSON.stringify({ ok: true }), { status: 200, headers: { "Content-Type": "application/json" } });
+    },
+  });
+  const response = await route.POST(new Request("https://www.cnfans.co.uk/api/orders/CNF-LOCAL-0001/whatsapp-clicked", {
+    method: "POST",
+    headers: { "X-Order-Access-Token": "valid-order-token" },
+  }), { params: Promise.resolve({ orderNumber: "CNF-LOCAL-0001" }) });
+  assert.equal(response.status, 200);
+  assert.equal(target, "https://production-worker.invalid/admin/orders/CNF-LOCAL-0001/whatsapp-clicked");
+  assert.equal(requestInit.headers.Authorization, "Bearer worker-token");
 });
 
 test("order confirmation reads current client tokens and scoped historical Production cookies", async () => {

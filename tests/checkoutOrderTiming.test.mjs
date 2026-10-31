@@ -87,7 +87,7 @@ test("delivery selection preserves keyboard focus and does not trigger page scro
   assert.match(delivery, /key=\{method\.id\}/);
   assert.match(selectHandler, /setShippingMethodId\(methodId\)/);
   assert.doesNotMatch(selectHandler, /scroll|router|window/);
-  assert.match(styles, /\.ship-option\.selected\s*\{\s*border-color: var\(--ink\);\s*box-shadow: 0 0 0 1px var\(--ink\) inset;/);
+  assert.match(styles, /\.ship-option\.selected\s*\{\s*border-color: #33312E;\s*box-shadow: none;/);
   assert.doesNotMatch(styles, /\.ship-option:focus-within/);
   assert.match(focusRule, /outline: 2px solid var\(--ink\);/);
   assert.match(flow, /const quoteStateMatches = quoteState\?\.key === quoteKey && quoteState\.retry === quoteRetry/);
@@ -133,9 +133,16 @@ test("Order Received keeps a compact unpaid receipt and WhatsApp payment guidanc
   assert.match(result, /You can still complete your order by contacting us on WhatsApp\. We accept <strong>PayPal and bank transfer\.<\/strong>/);
   assert.match(result, /Continue on WhatsApp/);
   assert.match(result, /No payment has been taken yet\./);
+  assert.match(result, /className="checkout-received-details-toggle"[\s\S]*?aria-expanded=\{detailsOpen\}[\s\S]*?\{detailsOpen \? "Hide details" : "View details"\}/);
+  assert.match(result, /order\.items\.map/);
+  assert.match(result, /order\.shippingMethodLabel/);
+  assert.match(flow, /showHeading=\{false\}/);
+  assert.match(flow, /\{showHeading \? <h2>Order Summary<\/h2> : null\}/);
   assert.match(styles, /\.checkout-step-panel\s*\{[^}]*gap:\s*12px;/);
-  assert.match(styles, /\.checkout-payment-info\s*\{[^}]*padding:\s*16px 0 8px;/);
-  assert.doesNotMatch(result, /Order Received<\/p>|ITEMS|DELIVERY|SUBTOTAL|CONTACT &amp; DELIVERY DETAILS|Start a new order|order\.items\.map|order\.customer\./);
+  assert.match(styles, /\.checkout-payment-info\s*\{[^}]*padding:\s*7px 0 0;/);
+  const receiptMarkup = result.slice(result.indexOf("return ("));
+  const collapsedReceipt = receiptMarkup.slice(0, receiptMarkup.indexOf('className="checkout-order-details-content"'));
+  assert.doesNotMatch(collapsedReceipt, /ITEMS|DELIVERY|SUBTOTAL|CONTACT &amp; DELIVERY DETAILS|Start a new order|order\.customer\.|addressLine1|order\.email/);
   assert.doesNotMatch(result, /Place Order|Payment successful|Paid|Payment completed/);
   assert.match(flow, /step === "payment" \? " checkout-order-received"/);
   assert.match(styles, /\.checkout-order-received \.checkout-summary-mobile,[\s\S]*?\.checkout-order-received \.checkout-summary-desktop\s*\{\s*display: none;/);
@@ -143,6 +150,10 @@ test("Order Received keeps a compact unpaid receipt and WhatsApp payment guidanc
   assert.match(flow, /result\.order\.items\?\.length/);
   assert.match(flow, /setStep\("payment"\)/);
   assert.match(flow, /setOrder\(\{ \.\.\.result\.order/);
+  assert.match(result, /<div className="checkout-payment-copy">\s*<section className="checkout-payment-info"[\s\S]*?<\/section>\s*<p className="checkout-payment-note">No payment has been taken yet\.<\/p>\s*<\/div>\s*<div className="checkout-actions checkout-received-actions">/);
+  const receivedActions = result.slice(result.indexOf('className="checkout-actions checkout-received-actions"'));
+  assert.doesNotMatch(receivedActions, /checkout-payment-note/);
+  assert.doesNotMatch(collapsedReceipt, /<h4>Items Ordered|<h4>Delivery Address/);
 });
 
 test("quote route only accepts an item-bearing request and disables caching", () => {

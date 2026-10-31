@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
+import { getAdminWorkerToken } from "@/lib/adminAuth";
 import { getCatalogApiBase } from "@/lib/catalogApiBase";
+import { verifyOrderAccessToken } from "@/lib/orderAccessToken";
 
 type RouteContext = { params: Promise<{ orderNumber: string }> };
 
@@ -8,6 +10,17 @@ function workerBaseUrl() {
 }
 
 export async function POST(request: Request, context: RouteContext) {
+  const { orderNumber } = await context.params;
+  const orderAccessToken = request.headers.get("X-Order-Access-Token") || "";
+  if (orderAccessToken.length > 512 || !verifyOrderAccessToken(orderAccessToken, orderNumber)) {
+    return NextResponse.json({ error: "Order access is unavailable." }, { status: 401, headers: { "Cache-Control": "no-store" } });
+  }
+
+  const workerToken = getAdminWorkerToken();
+  if (!workerToken) {
+    return NextResponse.json({ error: "Order service is unavailable." }, { status: 503, headers: { "Cache-Control": "no-store" } });
+  }
+
   let baseUrl: string;
   if (process.env.NODE_ENV === "development") {
     if (!isLoopbackRequest(request)) {
@@ -21,16 +34,22 @@ export async function POST(request: Request, context: RouteContext) {
   } else {
     baseUrl = workerBaseUrl();
   }
-  const { orderNumber } = await context.params;
-  const response = await fetch(`${baseUrl}/orders/${encodeURIComponent(orderNumber)}/whatsapp-clicked`, {
-    method: "POST",
-    headers: { Accept: "application/json" },
-    cache: "no-store",
-  });
-  return new NextResponse(response.body, {
-    status: response.status,
-    headers: { "Content-Type": response.headers.get("Content-Type") || "application/json" },
-  });
+  try {
+    const response = await fetch(`${baseUrl}/admin/orders/${encodeURIComponent(orderNumber)}/whatsapp-clicked`, {
+      method: "POST",
+      headers: { Accept: "application/json", Authorization: `Bearer ${workerToken}` },
+      cache: "no-store",
+    });
+    return new NextResponse(response.body, {
+      status: response.status,
+      headers: {
+        "Cache-Control": "no-store",
+        "Content-Type": response.headers.get("Content-Type") || "application/json",
+      },
+    });
+  } catch {
+    return NextResponse.json({ error: "Order service is unavailable." }, { status: 503, headers: { "Cache-Control": "no-store" } });
+  }
 }
 
 function isLoopbackRequest(request: Request) {

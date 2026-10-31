@@ -88,6 +88,16 @@ function testEnv(order) {
               }
               throw new Error(`Unexpected test query: ${sql}`);
             },
+            async run() {
+              queries.push({ sql, values });
+              if (/UPDATE\s+orders\s+SET\s+whatsapp_clicked_at/i.test(sql)) {
+                if (order.order_number !== values[0]) return { meta: { changes: 0, rows_written: 0, rows_read: 0 } };
+                order.whatsapp_clicked_at ||= "2026-10-31T00:00:00.000Z";
+                order.updated_at = order.whatsapp_clicked_at;
+                return { meta: { changes: 1, rows_written: 1, rows_read: 0 } };
+              }
+              throw new Error(`Unexpected test mutation: ${sql}`);
+            },
           };
         },
       };
@@ -157,6 +167,54 @@ test("admin order detail still returns full order and item data", async () => {
   assert.equal(body.order.payment_stage, "payment_submitted");
   assert.deepEqual(body.order.items, [{ ...item }]);
   assert.ok(queries.some(({ sql }) => /FROM\s+order_items\b/i.test(sql)));
+});
+
+test("WhatsApp click recording is admin-protected, repeat-safe, and does not change payment state", async () => {
+  const order = { ...orderBase, status: "pending", whatsapp_clicked_at: null };
+  const { env, queries } = testEnv(order);
+
+  const publicAttempt = await worker.fetch(
+    new Request(`https://worker.test/orders/${order.order_number}/whatsapp-clicked`, { method: "POST" }),
+    env,
+    {},
+  );
+  assert.equal(publicAttempt.status, 404);
+  assert.equal(queries.length, 0);
+
+  const unauthorizedAttempt = await worker.fetch(
+    new Request(`https://worker.test/admin/orders/${order.order_number}/whatsapp-clicked`, { method: "POST" }),
+    env,
+    {},
+  );
+  assert.equal(unauthorizedAttempt.status, 401);
+  assert.equal(queries.length, 0);
+
+  const clickRequest = () => new Request(`https://worker.test/admin/orders/${order.order_number}/whatsapp-clicked`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${env.ADMIN_TOKEN}` },
+  });
+  const firstClick = await worker.fetch(clickRequest(), env, {});
+  assert.equal(firstClick.status, 200);
+  const firstTimestamp = order.whatsapp_clicked_at;
+  const secondClick = await worker.fetch(clickRequest(), env, {});
+  assert.equal(secondClick.status, 200);
+  assert.equal(order.whatsapp_clicked_at, firstTimestamp);
+  assert.equal(order.status, "pending");
+  assert.equal(order.payment_confirmed_at, null);
+
+  const adminRead = await worker.fetch(
+    new Request(`https://worker.test/admin/orders/${order.order_number}`, {
+      headers: { Authorization: `Bearer ${env.ADMIN_TOKEN}` },
+    }),
+    env,
+    {},
+  );
+  assert.equal(adminRead.status, 200);
+  const body = await adminRead.json();
+  assert.equal(body.order.whatsapp_clicked, true);
+  assert.equal(body.order.status, "pending");
+  assert.equal(body.order.payment_confirmed_at, null);
+  assert.ok(queries.some(({ sql }) => /whatsapp_clicked_at\s*=\s*COALESCE/i.test(sql)));
 });
 
 test("ordinary logistics tracking still uses the existing carrier lookup", async () => {

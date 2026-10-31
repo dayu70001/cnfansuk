@@ -2,6 +2,15 @@ import { ImageResponse } from "next/og";
 import sharp from "sharp";
 import { isAdminAuthenticated, getAdminWorkerToken } from "@/lib/adminAuth";
 import { getCatalogApiBase } from "@/lib/catalogApiBase";
+import {
+  ORDER_ADDRESS_FIELD_LABELS,
+  ORDER_CONTACT_FIELD_LABELS,
+  ORDER_DELIVERY_FIELD_LABELS,
+  getOrderAddressFields,
+  getOrderContactFields,
+  getOrderDeliveryFields,
+  type OrderDisplaySnapshot,
+} from "@/lib/orderDisplayFields";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -130,9 +139,22 @@ async function loadOrder(orderNumber: string): Promise<ConfirmationOrder | null>
 }
 
 function confirmationImage(order: ConfirmationOrder, items: ConfirmationItem[], itemImages: Array<string | null>, height: number) {
-  const address = [order.address_line1, order.address_line2, order.city, order.county, order.postcode, order.country_name]
-    .filter(Boolean)
-    .join(", ") || "Not specified";
+  const displaySnapshot: OrderDisplaySnapshot = {
+    customerName: order.customer_name,
+    email: order.email,
+    phone: order.phone,
+    addressLine1: order.address_line1,
+    addressLine2: order.address_line2,
+    city: order.city,
+    county: order.county,
+    postcode: order.postcode,
+    countryName: order.country_name,
+    shippingMethodLabel: order.shipping_method_label,
+    shippingEstimate: order.shipping_estimate,
+  };
+  const contactFields = getOrderContactFields(displaySnapshot);
+  const addressFields = getOrderAddressFields(displaySnapshot);
+  const deliveryFields = getOrderDeliveryFields(displaySnapshot);
   const total = order.final_total ?? order.total ?? 0;
 
   return new ImageResponse(
@@ -166,22 +188,30 @@ function confirmationImage(order: ConfirmationOrder, items: ConfirmationItem[], 
           </div>
         </div>
 
-        <div style={{ display: "flex", gap: 36, paddingBottom: 26 }}>
+        <div style={{ display: "flex", gap: 36, paddingBottom: 22 }}>
           <div style={{ display: "flex", flexDirection: "column", gap: 12, flex: 1 }}>
             <div style={{ fontSize: 20, fontWeight: 700, letterSpacing: 1 }}>CUSTOMER DETAILS</div>
             <div style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: 20 }}>
-              <div>{`Name: ${order.customer_name || "Not specified"}`}</div>
-              <div>{`Email: ${order.email || "Not specified"}`}</div>
-              <div>{`Phone: ${order.phone || "Not specified"}`}</div>
-              <div>{`Shipping Address: ${address}`}</div>
+              {contactFields.map((field) => <div key={field.key}>{`${ORDER_CONTACT_FIELD_LABELS[field.key]}: ${field.value}`}</div>)}
             </div>
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 12, width: 380 }}>
             <div style={{ fontSize: 20, fontWeight: 700, letterSpacing: 1 }}>DELIVERY</div>
             <div style={{ display: "flex", flexDirection: "column", gap: 6, fontSize: 20 }}>
-              <div>{`Shipping Method: ${order.shipping_method_label || "Not specified"}`}</div>
-              {order.shipping_estimate ? <div>{`Estimated Delivery: ${order.shipping_estimate}`}</div> : null}
+              {deliveryFields.map((field) => <div key={field.key}>{`${ORDER_DELIVERY_FIELD_LABELS[field.key]}: ${field.value}`}</div>)}
             </div>
+          </div>
+        </div>
+
+        <div style={{ borderTop: "1px solid #d8d8d1", display: "flex", flexDirection: "column", gap: 12, padding: "18px 0 24px" }}>
+          <div style={{ fontSize: 20, fontWeight: 700, letterSpacing: 1 }}>SHIPPING ADDRESS</div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 7, fontSize: 18 }}>
+            {addressFields.length > 0 ? addressFields.map((field) => (
+              <div key={field.key} style={{ display: "flex", alignItems: "flex-start", gap: 18, lineHeight: 1.4 }}>
+                <div style={{ color: "#6b6b67", flex: "0 0 190px" }}>{ORDER_ADDRESS_FIELD_LABELS[field.key]}</div>
+                <div style={{ flex: 1, minWidth: 0, wordBreak: "break-word" }}>{field.value}</div>
+              </div>
+            )) : <div style={{ color: "#6b6b67" }}>Not specified</div>}
           </div>
         </div>
 
@@ -189,8 +219,8 @@ function confirmationImage(order: ConfirmationOrder, items: ConfirmationItem[], 
           <div style={{ fontSize: 20, fontWeight: 700, letterSpacing: 1 }}>ORDER ITEMS</div>
           {items.length > 0 ? items.map((item, index) => (
             <div key={`${item.title}-${index}`} style={{ display: "flex", gap: 22, borderTop: "1px solid #d8d8d1", padding: "16px 0" }}>
-              <div style={{ alignItems: "center", background: "#e7e7e1", display: "flex", height: 132, justifyContent: "center", overflow: "hidden", width: 106 }}>
-                {itemImages[index] ? <img alt="" src={itemImages[index] as string} style={{ height: "100%", objectFit: "cover", width: "100%" }} /> : <span style={{ color: "#6b6b67", fontSize: 16 }}>Image unavailable</span>}
+              <div style={{ alignItems: "center", background: "#fff", display: "flex", height: 132, justifyContent: "center", overflow: "hidden", width: 106 }}>
+                {itemImages[index] ? <img alt="" src={itemImages[index] as string} style={{ height: "100%", objectFit: "contain", width: "100%" }} /> : <span style={{ color: "#6b6b67", fontSize: 16, textAlign: "center" }}>Image unavailable</span>}
               </div>
               <div style={{ display: "flex", flex: 1, flexDirection: "column", gap: 7 }}>
                 <div style={{ fontSize: 23, fontWeight: 700 }}>{item.title}</div>
@@ -224,7 +254,17 @@ export async function GET(_request: Request, context: RouteContext) {
 
   const items = Array.isArray(order.items) ? order.items : [];
   const itemImages = await Promise.all(items.map((item) => imageSnapshot(item.image_url)));
-  const height = items.length <= 1 ? 920 : 1020 + (items.length - 1) * 190;
+  const addressFields = getOrderAddressFields({
+    customerName: order.customer_name,
+    addressLine1: order.address_line1,
+    addressLine2: order.address_line2,
+    city: order.city,
+    county: order.county,
+    postcode: order.postcode,
+    countryName: order.country_name,
+  });
+  const wrappedAddressLines = addressFields.reduce((count, field) => count + Math.max(0, Math.ceil(field.value.length / 95) - 1), 0);
+  const height = 1120 + Math.max(0, items.length - 1) * 190 + wrappedAddressLines * 28;
 
   return confirmationImage(order, items, itemImages, height);
 }

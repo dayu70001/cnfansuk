@@ -1129,7 +1129,7 @@ type OrderCheckoutPayloadSource = Pick<OrderRow,
   | "transfer_submitted_at" | "payment_confirmed_at" | "customer_name" | "email" | "phone"
   | "address_line1" | "address_line2" | "city" | "county" | "postcode" | "country_code"
   | "country_name" | "shipping_method_id" | "shipping_method_label" | "shipping_estimate"
->;
+> & { created_at?: string | null };
 
 function checkoutOrderPayload(order: OrderCheckoutPayloadSource, items: OrderItemRow[]) {
   return {
@@ -1145,6 +1145,7 @@ function checkoutOrderPayload(order: OrderCheckoutPayloadSource, items: OrderIte
       order.currency,
       order,
     ),
+    createdAt: order.created_at || undefined,
     customer: {
       name: order.customer_name,
       email: order.email,
@@ -1475,8 +1476,21 @@ async function handleCreateOrder(request: Request, env: WorkerEnv): Promise<Resp
     line_total: lineTotal,
     currency,
   }));
+  let createdAt: string | null = null;
+  try {
+    const createdAtRow = await d1First<Pick<OrderRow, "created_at">>(
+      env,
+      { endpoint: "/orders", label: "order_created_at_for_receipt", limit: 1, offset: 0 },
+      "SELECT created_at FROM orders WHERE id = ? LIMIT 1",
+      [orderId],
+    );
+    createdAt = createdAtRow?.created_at || null;
+  } catch {
+    // Receipt dates are optional; don't turn a successful order write into a failed response.
+  }
   const responseOrder: OrderCheckoutPayloadSource = {
     order_number: orderNumber,
+    created_at: createdAt,
     status: "pending",
     subtotal,
     shipping_fee: shippingFee,
@@ -2370,10 +2384,6 @@ export default {
       if (paymentSubmittedMatch && request.method === "POST") {
         return handlePaymentSubmitted(request, env, decodeURIComponent(paymentSubmittedMatch[1]));
       }
-      const whatsappClickedMatch = pathname.match(/^\/orders\/([^/]+)\/whatsapp-clicked$/);
-      if (whatsappClickedMatch && request.method === "POST") {
-        return handleWhatsappClicked(request, env, decodeURIComponent(whatsappClickedMatch[1]));
-      }
       const publicOrderMatch = pathname.match(/^\/orders\/([^/]+)$/);
       if (publicOrderMatch && request.method === "GET") {
         return handlePublicOrder(request, env, decodeURIComponent(publicOrderMatch[1]));
@@ -2385,6 +2395,10 @@ export default {
 
       if (pathname.startsWith("/admin/") && !(await verifyAdmin(request, env))) {
         return jsonResponse(request, { error: "未授权" }, 401);
+      }
+      const adminWhatsappClickedMatch = pathname.match(/^\/admin\/orders\/([^/]+)\/whatsapp-clicked$/);
+      if (adminWhatsappClickedMatch && request.method === "POST") {
+        return handleWhatsappClicked(request, env, decodeURIComponent(adminWhatsappClickedMatch[1]));
       }
       if (pathname === "/admin/products" && request.method === "GET") return handleAdminProducts(request, env);
       if (pathname === "/admin/classification/queue" && request.method === "GET") return handleClassificationQueue(request, env);

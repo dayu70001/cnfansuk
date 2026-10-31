@@ -27,6 +27,13 @@ import type { RawOrderStatus } from "@/lib/orderStatus";
 import type { CartItem, CustomerDetails } from "@/lib/types";
 import { getOrderAccessTokenStorageKey } from "@/lib/orderAccessTokenKey";
 import { buildPersonalWhatsAppLink } from "@/lib/personalWhatsAppLink";
+import {
+  ORDER_ADDRESS_FIELD_LABELS,
+  ORDER_CONTACT_FIELD_LABELS,
+  getOrderAddressFields,
+  getOrderContactFields,
+  type OrderDisplaySnapshot,
+} from "@/lib/orderDisplayFields";
 
 type CheckoutStep = "details" | "delivery" | "payment";
 
@@ -141,6 +148,7 @@ type CheckoutOrderCustomer = {
 
 type CheckoutOrder = {
   orderNumber: string;
+  createdAt?: string | null;
   subtotal: number;
   shippingFee: number;
   finalTotal: number;
@@ -744,14 +752,17 @@ export default function CheckoutFlow({ personalWhatsappUrl, personalWhatsappNumb
               <PaymentStep
                 order={order}
                 whatsappHref={whatsappHref}
-                onWhatsAppClick={() => trackContactWhatsApp({
-                  source_page: "checkout",
-                  placement: "payment_step",
-                  button_label: "Contact on WhatsApp",
-                  num_items: orderItems.length,
-                  value: order.finalTotal,
-                  currency: "GBP",
-                })}
+                onWhatsAppClick={() => {
+                  trackContactWhatsApp({
+                    source_page: "checkout",
+                    placement: "payment_step",
+                    button_label: "Contact on WhatsApp",
+                    num_items: orderItems.length,
+                    value: order.finalTotal,
+                    currency: "GBP",
+                  });
+                  recordWhatsAppOrderClick(order);
+                }}
               />
             ) : (
               <div className="checkout-step-panel">
@@ -893,14 +904,16 @@ function DetailsStep({
 
   return (
     <form
-      className="checkout-step-panel"
+      className="checkout-step-panel checkout-details-step-panel"
       onSubmit={(event) => {
         event.preventDefault();
         onContinue();
       }}
     >
-      <h2>Contact &amp; delivery details</h2>
-      <p className="checkout-submit-note">Enter your contact and delivery details, then choose a delivery method.</p>
+      <div className="checkout-step-intro">
+        <h2>Contact &amp; delivery details</h2>
+        <p className="checkout-submit-note">Enter your contact and delivery details, then choose a delivery method.</p>
+      </div>
       {submitError ? <p className="checkout-submit-error" role="alert">{submitError}</p> : null}
       <div className={errors.email ? "field error" : "field"}>
         <label htmlFor="checkout-email">Email *</label>
@@ -1035,7 +1048,7 @@ function DeliveryStep({
   const freeShipping = isFreeShippingApplied(selectedMethodId, eligibilitySubtotal, eligibilityCurrency);
 
   return (
-    <div className="checkout-step-panel">
+    <div className="checkout-step-panel checkout-delivery-step-panel">
       <h2>Choose your delivery</h2>
       <div className="ship-options">
         {shippingMethods.map((method) => (
@@ -1113,32 +1126,161 @@ function PaymentStep({
   whatsappHref: string | null;
   onWhatsAppClick: () => void;
 }) {
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  const displaySnapshot: OrderDisplaySnapshot = {
+    customerName: order.customer.name,
+    email: order.customer.email,
+    phone: order.customer.phone,
+    addressLine1: order.customer.addressLine1,
+    addressLine2: order.customer.addressLine2,
+    city: order.customer.city,
+    county: order.customer.county,
+    postcode: order.customer.postcode,
+    countryName: order.customer.countryName,
+  };
   return (
-    <div className="checkout-step-panel">
-      <h2>Order Received</h2>
-      <p className="checkout-submit-note">Thank you. Your order has been received.</p>
-      <div className="checkout-received-card">
-        <div><span>Order</span><strong>#{order.orderNumber}</strong></div>
-        <div><span>Amount due</span><strong>{formatMoney(order.finalTotal, "GBP")}</strong></div>
-        <div><span>Status</span><strong>Awaiting Payment</strong></div>
+    <div className="checkout-step-panel checkout-payment-step-panel">
+      <div className="checkout-received-heading-row">
+        <h2>Order Received</h2>
+        <button
+          className="checkout-received-details-toggle"
+          type="button"
+          aria-expanded={detailsOpen}
+          aria-controls="checkout-order-details-content"
+          onClick={() => setDetailsOpen((open) => !open)}
+        >
+          {detailsOpen ? "Hide details" : "View details"}
+        </button>
       </div>
-      <section className="checkout-payment-info" aria-labelledby="checkout-payment-info-heading">
-        <h3 id="checkout-payment-info-heading">Payment Information</h3>
-        <p>Our online checkout payment service is temporarily unavailable while we carry out maintenance.</p>
-        <p>You can still complete your order by contacting us on WhatsApp. We accept <strong>PayPal and bank transfer.</strong></p>
-      </section>
+      <div
+        className="checkout-order-details-content"
+        id="checkout-order-details-content"
+        hidden={!detailsOpen}
+      >
+        <section className="checkout-order-detail-section">
+          <h4>Order Information</h4>
+          <OrderDetailFields rows={[
+            { label: "Order number", value: `#${order.orderNumber}` },
+            { label: "Order date", value: formatReceiptDate(order.createdAt) },
+            { label: "Payment status", value: "Awaiting Payment" },
+          ]} />
+        </section>
+        <section className="checkout-order-detail-section">
+          <h4>Items Ordered</h4>
+          <div className="checkout-order-details-items">
+            {order.items.map((item, index) => <ReceiptOrderItem key={`${item.productCode}-${item.size}-${item.color || ""}-${index}`} item={item} />)}
+          </div>
+        </section>
+        <section className="checkout-order-detail-section">
+          <h4>Delivery Address</h4>
+          <OrderDetailFields rows={getOrderAddressFields(displaySnapshot).map((row) => ({ label: ORDER_ADDRESS_FIELD_LABELS[row.key], value: row.value }))} />
+        </section>
+        <section className="checkout-order-detail-section">
+          <h4>Contact Information</h4>
+          <OrderDetailFields rows={getOrderContactFields(displaySnapshot).filter((row) => row.key !== "name").map((row) => ({ label: ORDER_CONTACT_FIELD_LABELS[row.key], value: row.value }))} />
+        </section>
+        <section className="checkout-order-detail-section">
+          <h4>Delivery Method</h4>
+          <OrderDetailFields rows={[
+            { label: "Service", value: [order.shippingMethodLabel, order.shippingEstimate].filter(Boolean).join(" · ") },
+            { label: "Delivery fee", value: formatMoney(order.shippingFee, "GBP") },
+          ]} />
+        </section>
+        <section className="checkout-order-detail-section">
+          <h4>Order Summary</h4>
+          <dl className="checkout-order-detail-totals">
+            <div>
+              <dt>Items subtotal</dt>
+              <dd>{formatMoney(order.subtotal, "GBP")}</dd>
+            </div>
+            <div>
+              <dt>Delivery</dt>
+              <dd>{formatMoney(order.shippingFee, "GBP")}</dd>
+            </div>
+            <div className="checkout-order-detail-total">
+              <dt>Order total</dt>
+              <dd>{formatMoney(order.finalTotal, "GBP")}</dd>
+            </div>
+          </dl>
+        </section>
+      </div>
+      <p className="checkout-submit-note">Thank you. Your order has been received.</p>
+      <div className="checkout-receipt-details">
+        <div className="checkout-received-card">
+          <div><span>Order</span><strong>#{order.orderNumber}</strong></div>
+          <div><span>Amount due</span><strong>{formatMoney(order.finalTotal, "GBP")}</strong></div>
+          <div><span>Status</span><strong>Awaiting Payment</strong></div>
+        </div>
+      </div>
+      <div className="checkout-payment-copy">
+        <section className="checkout-payment-info" aria-labelledby="checkout-payment-info-heading">
+          <h3 id="checkout-payment-info-heading">Payment Information</h3>
+          <p>Our online checkout payment service is temporarily unavailable while we carry out maintenance.</p>
+          <p>You can still complete your order by contacting us on WhatsApp. We accept <strong>PayPal and bank transfer.</strong></p>
+        </section>
+        <p className="checkout-payment-note">No payment has been taken yet.</p>
+      </div>
       <div className="checkout-actions checkout-received-actions">
         {whatsappHref ? (
           <a className="btn btn-solid" href={whatsappHref} target="_blank" rel="noopener noreferrer" onClick={onWhatsAppClick}>
-            Continue on WhatsApp
+            <span className="checkout-whatsapp-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="currentColor" focusable="false">
+                <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.198-.347.223-.644.075-.297-.149-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.347-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 0 1-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 0 1-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 0 1 2.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0 0 12.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 0 0 5.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 0 0-3.48-8.363z" />
+              </svg>
+            </span>
+            <span className="checkout-whatsapp-label">Continue on WhatsApp</span>
           </a>
         ) : (
           <span className="checkout-submit-note">WhatsApp contact is temporarily unavailable. Please contact customer support.</span>
         )}
       </div>
-      <p className="checkout-payment-note">No payment has been taken yet.</p>
     </div>
   );
+}
+
+function ReceiptOrderItem({ item }: { item: CheckoutOrderItem }) {
+  const [imageAvailable, setImageAvailable] = useState(Boolean(item.image));
+
+  return (
+    <article className={`checkout-order-detail-item${imageAvailable ? " has-image" : ""}`}>
+      {imageAvailable && item.image ? <img src={item.image} alt="" loading="lazy" onError={() => setImageAvailable(false)} /> : null}
+      <div className="checkout-order-detail-copy">
+        <strong>{item.name || item.title || item.productCode}</strong>
+        <span>{[item.color, `Size ${item.size}`, `Qty ${item.quantity}`].filter(Boolean).join(" · ")}</span>
+      </div>
+      <div className="checkout-order-detail-prices">
+        <span>{formatMoney(item.unitPrice, item.currency)} each</span>
+        <strong>{formatMoney(item.lineTotal, item.currency)}</strong>
+      </div>
+    </article>
+  );
+}
+
+function OrderDetailFields({ rows }: { rows: Array<{ label: string; value?: string | null }> }) {
+  const visibleRows = rows.filter((row) => Boolean(row.value?.trim()));
+  if (visibleRows.length === 0) return null;
+
+  return (
+    <dl className="checkout-order-detail-fields">
+      {visibleRows.map((row) => (
+        <div key={row.label}>
+          <dt>{row.label}</dt>
+          <dd>{row.value}</dd>
+        </div>
+      ))}
+    </dl>
+  );
+}
+
+function recordWhatsAppOrderClick(order: CheckoutOrder) {
+  if (!order.orderAccessToken) return;
+
+  void fetch(`/api/orders/${encodeURIComponent(order.orderNumber)}/whatsapp-clicked`, {
+    method: "POST",
+    headers: { "X-Order-Access-Token": order.orderAccessToken },
+    cache: "no-store",
+    keepalive: true,
+  }).catch(() => undefined);
 }
 
 function CheckoutInput({
@@ -1235,6 +1377,7 @@ function MobileSummary({
             lineTotals={lineTotals}
             freeShippingApplied={freeShippingApplied}
             quoteReady={quoteReady}
+            showHeading={false}
           />
         ) : null}
       </div>
@@ -1252,6 +1395,7 @@ function OrderSummary({
   lineTotals,
   freeShippingApplied,
   quoteReady,
+  showHeading = true,
 }: {
   items: CartItem[];
   subtotal: number;
@@ -1262,10 +1406,11 @@ function OrderSummary({
   lineTotals?: number[];
   freeShippingApplied?: boolean;
   quoteReady: boolean;
+  showHeading?: boolean;
 }) {
   return (
     <div className="summary-panel">
-      <h2>Order Summary</h2>
+      {showHeading ? <h2>Order Summary</h2> : null}
       {items.length === 0 ? (
         <p>Your cart is empty.</p>
       ) : (
@@ -1274,7 +1419,10 @@ function OrderSummary({
             <article className="checkout-summary-item" key={`${item.productId}-${item.color}-${item.size}`}>
               {item.image ? <img src={item.image} alt="" /> : <span className="checkout-summary-image-placeholder" aria-hidden="true" />}
               <span className="checkout-summary-item-copy">
-                {[item.name, item.color, `Size ${item.size}`, `Qty ${item.quantity}`].filter(Boolean).join(" · ")}
+                <span className="checkout-summary-item-name">{item.name}</span>
+                <span className="checkout-summary-item-meta">
+                  {[item.color, `Size ${item.size}`, `Qty ${item.quantity}`].filter(Boolean).join(" · ")}
+                </span>
               </span>
               <strong>{formatMoney(lineTotals?.[index] ?? getCartItemPrice(item, "GBP") * item.quantity, "GBP")}</strong>
             </article>
@@ -1311,6 +1459,17 @@ function OrderSummary({
 
 function formatDeliveryPrice(price: number) {
   return price === 0 ? "Free" : formatMoney(price, "GBP");
+}
+
+function formatReceiptDate(value?: string | null) {
+  if (!value) return undefined;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return undefined;
+  return new Intl.DateTimeFormat("en-GB", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  }).format(date);
 }
 
 function currencyThresholdLabel(currency: CurrencyCode) {

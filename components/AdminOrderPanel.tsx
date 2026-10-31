@@ -4,6 +4,7 @@ import { FormEvent, useEffect, useState } from "react";
 import { formatMoney } from "@/lib/formatMoney";
 import { getOrderPaymentStage, type OrderPaymentStage, type RawOrderStatus } from "@/lib/orderStatus";
 import type { CurrencyCode } from "@/lib/currency";
+import { formatOrderCustomerDetailsForCopy, getOrderAddressFields, getOrderContactFields, getOrderDeliveryFields, type OrderDisplaySnapshot } from "@/lib/orderDisplayFields";
 
 type AdminOrderItem = {
   id: number;
@@ -97,6 +98,52 @@ export function adminWhatsappClicked(order: Pick<AdminOrder, "whatsapp_clicked_a
   return Boolean(order.whatsapp_clicked_at || order.whatsapp_clicked);
 }
 
+export async function writeAdminClipboard(value: string, clipboard?: Pick<Clipboard, "writeText">): Promise<boolean> {
+  try {
+    const target = clipboard ?? (typeof navigator === "undefined" ? undefined : navigator.clipboard);
+    if (!target?.writeText) return false;
+    await target.writeText(value);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+type CopyFeedback = { key: string; success: boolean } | null;
+
+function CopyIcon() {
+  return (
+    <svg aria-hidden="true" viewBox="0 0 20 20" fill="none">
+      <rect x="7" y="6" width="9" height="11" rx="1.5" stroke="currentColor" strokeWidth="1.5" />
+      <path d="M13 4.5V4a1.5 1.5 0 0 0-1.5-1.5h-7A1.5 1.5 0 0 0 3 4v9a1.5 1.5 0 0 0 1.5 1.5H5" stroke="currentColor" strokeWidth="1.5" />
+    </svg>
+  );
+}
+
+function CopyValueButton({
+  copyKey,
+  label,
+  value,
+  feedback,
+  onCopy,
+}: {
+  copyKey: string;
+  label: string;
+  value: string;
+  feedback: CopyFeedback;
+  onCopy: (copyKey: string, value: string) => void;
+}) {
+  const currentFeedback = feedback?.key === copyKey ? feedback : null;
+  return (
+    <span className="admin-order-copy-control">
+      <button className="admin-order-copy-button" type="button" aria-label={`复制${label}`} title={`复制${label}`} onClick={() => onCopy(copyKey, value)}>
+        <CopyIcon />
+      </button>
+      {currentFeedback ? <span className={`admin-order-copy-feedback${currentFeedback.success ? "" : " is-error"}`} role="status">{currentFeedback.success ? "已复制" : "复制失败，请检查浏览器权限"}</span> : null}
+    </span>
+  );
+}
+
 async function requestOrders(search: string, status: AdminOrderFilter) {
   const fetchOrders = async (filter: string) => {
     const params = new URLSearchParams({ q: search.trim(), status: filter, limit: "50" });
@@ -141,6 +188,17 @@ export function AdminOrderPanel() {
   const [savingPayment, setSavingPayment] = useState(false);
   const [generatingImage, setGeneratingImage] = useState(false);
   const [message, setMessage] = useState("");
+  const [copyFeedback, setCopyFeedback] = useState<CopyFeedback>(null);
+
+  useEffect(() => {
+    if (!copyFeedback) return;
+    const timeout = window.setTimeout(() => setCopyFeedback(null), 2200);
+    return () => window.clearTimeout(timeout);
+  }, [copyFeedback]);
+
+  async function copyOrderValue(copyKey: string, value: string) {
+    setCopyFeedback({ key: copyKey, success: await writeAdminClipboard(value) });
+  }
 
   async function loadOrderDetail(orderNumber: string) {
     setDetailLoading(true);
@@ -267,6 +325,30 @@ export function AdminOrderPanel() {
 
   const selectedStage = selected ? paymentStage(selected) : null;
   const selectedWhatsappClicked = selected ? adminWhatsappClicked(selected) : false;
+  const selectedDisplay: OrderDisplaySnapshot | null = selected ? {
+    customerName: selected.customer_name,
+    email: selected.email,
+    phone: selected.phone,
+    addressLine1: selected.address_line1,
+    addressLine2: selected.address_line2,
+    city: selected.city,
+    county: selected.county,
+    postcode: selected.postcode,
+    countryName: selected.country_name,
+    shippingMethodLabel: selected.shipping_method_label,
+    shippingEstimate: selected.shipping_estimate,
+  } : null;
+  const adminContactLabels = { name: "收件人姓名", email: "邮箱", phone: "联系电话" };
+  const adminAddressLabels = {
+    recipient: "收件人",
+    addressLine1: "地址 1",
+    addressLine2: "地址 2",
+    city: "城市",
+    county: "郡 / 省 / 州",
+    postcode: "邮编",
+    country: "国家",
+  };
+  const adminDeliveryLabels = { shippingMethod: "配送方式", estimatedDelivery: "预计时效" };
 
   return (
     <section className="admin-shell admin-orders-shell">
@@ -328,18 +410,38 @@ export function AdminOrderPanel() {
             <section className="admin-order-detail-section">
               <h3>客户资料</h3>
               <dl className="admin-order-info-list">
-                <div><dt>收货人邮箱</dt><dd>{selected.email}</dd></div>
-                <div><dt>收货人姓名</dt><dd>{selected.customer_name}</dd></div>
-                <div><dt>收货人地址</dt><dd>{[selected.address_line1, selected.address_line2, selected.city, selected.county, selected.postcode, selected.country_name].filter(Boolean).join("，")}</dd></div>
-                <div><dt>收货人电话</dt><dd>{selected.phone}</dd></div>
+                {selectedDisplay ? getOrderContactFields(selectedDisplay).map((row) => (
+                  <div key={row.key}><dt>{adminContactLabels[row.key]}</dt><dd className="admin-order-copy-value"><span className="admin-order-copy-text">{row.value}</span><CopyValueButton copyKey={`contact-${row.key}`} label={adminContactLabels[row.key]} value={row.value} feedback={copyFeedback} onCopy={copyOrderValue} /></dd></div>
+                )) : null}
+              </dl>
+            </section>
+
+            <section className="admin-order-detail-section">
+              <div className="admin-order-detail-section-heading">
+                <h3>收货地址</h3>
+                {selectedDisplay ? (
+                  <span className="admin-order-copy-control">
+                    <button className="admin-order-copy-address-button" type="button" aria-label="复制全部资料" onClick={() => void copyOrderValue("full-customer-details", formatOrderCustomerDetailsForCopy(selectedDisplay))}>
+                      <CopyIcon />
+                      <span>复制全部资料</span>
+                    </button>
+                    {copyFeedback?.key === "full-customer-details" ? <span className={`admin-order-copy-feedback${copyFeedback.success ? "" : " is-error"}`} role="status">{copyFeedback.success ? "已复制" : "复制失败，请检查浏览器剪贴板权限"}</span> : null}
+                  </span>
+                ) : null}
+              </div>
+              <dl className="admin-order-info-list">
+                {selectedDisplay ? getOrderAddressFields(selectedDisplay).map((row) => (
+                  <div key={row.key}><dt>{adminAddressLabels[row.key]}</dt><dd className="admin-order-copy-value"><span className="admin-order-copy-text">{row.value}</span><CopyValueButton copyKey={`address-${row.key}`} label={adminAddressLabels[row.key]} value={row.value} feedback={copyFeedback} onCopy={copyOrderValue} /></dd></div>
+                )) : null}
               </dl>
             </section>
 
             <section className="admin-order-detail-section">
               <h3>配送信息</h3>
               <dl className="admin-order-info-list">
-                <div><dt>配送方式</dt><dd>{selected.shipping_method_label || "—"}</dd></div>
-                <div><dt>预计时效</dt><dd>{selected.shipping_estimate || "—"}</dd></div>
+                {selectedDisplay ? getOrderDeliveryFields(selectedDisplay).map((row) => (
+                  <div key={row.key}><dt>{adminDeliveryLabels[row.key]}</dt><dd>{row.value}</dd></div>
+                )) : null}
                 <div><dt>配送费用</dt><dd>{formatMoney(selected.shipping_fee, selected.currency)}</dd></div>
               </dl>
             </section>
