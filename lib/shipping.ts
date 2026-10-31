@@ -1,7 +1,11 @@
-import { convertGbpFallback } from "./cart";
 import type { CurrencyCode } from "./currency";
 
-export const FREE_SHIPPING_THRESHOLD_GBP = 150;
+export const FREE_SHIPPING_THRESHOLD = 180;
+const FREE_SHIPPING_THRESHOLDS: Record<CurrencyCode, number> = {
+  GBP: FREE_SHIPPING_THRESHOLD,
+  EUR: FREE_SHIPPING_THRESHOLD,
+  USD: FREE_SHIPPING_THRESHOLD,
+};
 
 export const shippingMethods = [
   { id: "royal-mail-tracked", label: "Royal Mail Tracked", priceGbp: 5, estimate: "7–12 business days" },
@@ -17,19 +21,26 @@ export function getShippingMethod(id: ShippingMethodId) {
   return shippingMethods.find((method) => method.id === id) || shippingMethods[0];
 }
 
-export function hasFreeShipping(subtotalGbp: number) {
-  return subtotalGbp >= FREE_SHIPPING_THRESHOLD_GBP;
+export function hasFreeShipping(subtotalInEligibilityCurrency: number, currency: CurrencyCode) {
+  // Compare the unrounded product subtotal. Formatting/rounding is display-only
+  // and must never turn a value below the threshold into free shipping.
+  return subtotalInEligibilityCurrency >= FREE_SHIPPING_THRESHOLDS[currency];
 }
 
-export function isFreeShippingApplied(methodId: ShippingMethodId, subtotalGbp: number) {
-  return hasFreeShipping(subtotalGbp) && methodId !== "fedex-priority";
+export function isFreeShippingApplied(
+  methodId: ShippingMethodId,
+  subtotalInEligibilityCurrency: number,
+  currency: CurrencyCode,
+) {
+  return hasFreeShipping(subtotalInEligibilityCurrency, currency) && methodId !== "fedex-priority";
 }
 
 export function getShippingPrice(
   methodId: ShippingMethodId,
-  subtotalGbp: number,
-  currency: CurrencyCode,
+  subtotalInEligibilityCurrency: number,
+  eligibilityCurrency: CurrencyCode,
 ) {
-  if (isFreeShippingApplied(methodId, subtotalGbp)) return 0;
-  return convertGbpFallback(getShippingMethod(methodId).priceGbp, currency);
+  if (isFreeShippingApplied(methodId, subtotalInEligibilityCurrency, eligibilityCurrency)) return 0;
+  // Order settlement and the stored order total remain GBP.
+  return getShippingMethod(methodId).priceGbp;
 }

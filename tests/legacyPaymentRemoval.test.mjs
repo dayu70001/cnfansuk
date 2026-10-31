@@ -35,10 +35,11 @@ test("obsolete Stripe API routes, SDK helpers, and payment fixtures are removed"
 test("current Checkout still creates a normal order and offers WhatsApp confirmation only", () => {
   const checkout = read("components/CheckoutFlow.tsx");
   const orderRoute = read("app/api/orders/route.ts");
+  const orderApiProxy = read("lib/orderApiProxy.ts");
   assert.match(checkout, /fetch\("\/api\/orders"/);
-  assert.match(checkout, /Confirm Order on WhatsApp/);
+  assert.match(checkout, /Continue on WhatsApp/);
   assert.match(checkout, /Hi CNFans UK, please confirm my order #\$\{order\.orderNumber\}/);
-  assert.match(orderRoute, /LOCAL_ORDER_API_BASE/);
+  assert.match(orderApiProxy, /LOCAL_ORDER_API_BASE/);
   assert.match(orderRoute, /orderAccessToken/);
   assert.doesNotMatch(checkout + orderRoute, /stripe\.checkout\.sessions\.create|payment-submitted|STRIPE_BANK_TRANSFER_MODE/);
 });

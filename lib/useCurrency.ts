@@ -7,9 +7,11 @@ const currencyChangeEvent = "cnfans-currency-change";
 
 export function useCurrency() {
   const [currency, setCurrencyState] = useState<CurrencyCode>("GBP");
+  const [ready, setReady] = useState(false);
 
   useEffect(() => {
     setCurrencyState(normaliseCurrency(window.localStorage.getItem(CURRENCY_STORAGE_KEY)));
+    setReady(true);
 
     function handleCurrencyChange() {
       setCurrencyState(normaliseCurrency(window.localStorage.getItem(CURRENCY_STORAGE_KEY)));
@@ -26,8 +28,9 @@ export function useCurrency() {
   function setCurrency(currency: CurrencyCode) {
     window.localStorage.setItem(CURRENCY_STORAGE_KEY, currency);
     setCurrencyState(currency);
+    setReady(true);
     window.dispatchEvent(new Event(currencyChangeEvent));
   }
 
-  return { currency, setCurrency };
+  return { currency, setCurrency, ready };
 }

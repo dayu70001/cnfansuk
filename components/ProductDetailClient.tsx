@@ -117,9 +117,10 @@ export function ProductDetailClient({ product }: { product: Product }) {
       image: galleryItems[0],
       color: defaultColor,
       size,
+      availableSizes: purchaseSizes,
       quantity,
     }),
-    [defaultColor, galleryItems, product.id, product.name, product.priceEUR, product.priceGBP, product.priceUSD, product.slug, quantity, size],
+    [defaultColor, galleryItems, product.id, product.name, product.priceEUR, product.priceGBP, product.priceUSD, product.slug, purchaseSizes, quantity, size],
   );
 
   // Adds the selected item to the cart. Tracking is handled by the caller so
@@ -176,7 +177,7 @@ export function ProductDetailClient({ product }: { product: Product }) {
         value: currentPrice * quantity,
         num_items: quantity,
       });
-      router.push("/checkout");
+      router.push("/checkout?startNew=1", { scroll: false });
     }
   }
 

@@ -13,6 +13,38 @@ export function getCartSubtotal(items: CartItem[], currency: CurrencyCode = "GBP
   return items.reduce((sum, item) => sum + getCartItemPrice(item, currency) * item.quantity, 0);
 }
 
+export function getCartItemSizeOptions(item: CartItem) {
+  return Array.isArray(item.availableSizes)
+    ? Array.from(new Set(item.availableSizes.map((size) => String(size || "").trim()).filter(Boolean)))
+    : [];
+}
+
+export function mergeCartItemSizeOptions(item: CartItem, productSizes: string[]): CartItem {
+  const availableSizes = Array.from(new Set(productSizes.map((size) => String(size || "").trim()).filter(Boolean)));
+  // Keep the saved selection on the cart row, but never advertise a stale size
+  // as currently purchasable. The drawer renders it as a disabled option.
+  return { ...item, availableSizes, sizeOptionsResolved: true, sizeOptionsFailed: false };
+}
+
+export function getCartItemSizeLookupKey(item: CartItem) {
+  return item.productId || item.slug;
+}
+
+export function getCartItemLookupSlug(item: CartItem) {
+  if (item.slug?.trim()) return item.slug.trim();
+  const match = item.productUrl?.match(/\/product\/([^/?#]+)/);
+  if (!match?.[1]) return "";
+  try {
+    return decodeURIComponent(match[1]);
+  } catch {
+    return "";
+  }
+}
+
+export function hasValidCartItemSize(item: CartItem) {
+  return Boolean(item.size) && getCartItemSizeOptions(item).includes(item.size);
+}
+
 export function getCartCount(items: CartItem[]) {
   return items.reduce((sum, item) => sum + item.quantity, 0);
 }
@@ -24,6 +56,34 @@ export function sameCartItem(a: CartItem, b: CartItem) {
 export function sameCartLine(a: CartItem, b: CartItem) {
   if (a.cartLineId && b.cartLineId) return a.cartLineId === b.cartLineId;
   return sameCartItem(a, b);
+}
+
+export type SubmittedCartItem = Pick<CartItem, "cartLineId" | "productId" | "productCode" | "color" | "size" | "quantity">;
+
+export function removeSubmittedCartItems(current: CartItem[], submitted: SubmittedCartItem[]) {
+  if (submitted.length === 0 || current.length === 0) return current;
+  const remainingSnapshots = [...submitted];
+  let changed = false;
+  const next = current.flatMap((item) => {
+    const snapshotIndex = remainingSnapshots.findIndex((snapshot) => (
+      (item.cartLineId && snapshot.cartLineId
+        ? item.cartLineId === snapshot.cartLineId
+        : item.productId === snapshot.productId
+          && (item.color || "") === (snapshot.color || "")
+          && (item.size || "") === (snapshot.size || ""))
+      && item.productId === snapshot.productId
+      && (item.productCode || item.productId) === (snapshot.productCode || snapshot.productId)
+      && (item.color || "") === (snapshot.color || "")
+      && (item.size || "") === (snapshot.size || "")
+    ));
+    if (snapshotIndex < 0) return [item];
+
+    const [snapshot] = remainingSnapshots.splice(snapshotIndex, 1);
+    const quantity = item.quantity - snapshot.quantity;
+    changed = true;
+    return quantity > 0 ? [{ ...item, quantity }] : [];
+  });
+  return changed ? next : current;
 }
 
 export function getCartLineKey(item: CartItem, index = 0) {
@@ -49,7 +109,7 @@ export function ensureCartLineIds(items: CartItem[]) {
 
 export function updateCartItemSize(items: CartItem[], item: CartItem, size: string): CartItem[] {
   const sourceIndex = items.findIndex((cartItem) => sameCartLine(cartItem, item));
-  if (sourceIndex < 0 || items[sourceIndex].size === size) return items;
+  if (sourceIndex < 0 || items[sourceIndex].size === size || !getCartItemSizeOptions(items[sourceIndex]).includes(size)) return items;
 
   const sourceItem = items[sourceIndex];
   const resizedItem = { ...sourceItem, size };
@@ -64,7 +124,11 @@ export function updateCartItemSize(items: CartItem[], item: CartItem, size: stri
   return items.flatMap((cartItem, index) => {
     if (index === sourceIndex) return [];
     if (index === matchingIndex) {
-      return [{ ...cartItem, quantity: cartItem.quantity + sourceItem.quantity }];
+      return [{
+        ...cartItem,
+        quantity: cartItem.quantity + sourceItem.quantity,
+        availableSizes: cartItem.availableSizes?.length ? cartItem.availableSizes : sourceItem.availableSizes,
+      }];
     }
     return [cartItem];
   });

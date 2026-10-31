@@ -147,6 +147,11 @@ export async function fetchCatalogProductBySlug(slug: string): Promise<Product |
   return response?.product ? mapCatalogProduct(response.product) : null;
 }
 
+export async function fetchCatalogSizeOptionsBySlug(slug: string): Promise<string[] | null> {
+  const response = await requestCatalog<ProductResponse>(`/product/${encodeURIComponent(slug)}`, {}, 21600, true);
+  return response?.product ? getSupplierSizes(response.product.options) : null;
+}
+
 export async function fetchSitemapProducts(): Promise<Array<{ slug: string; lastModified?: string | null }> | null> {
   const pageSize = 1000;
   const products: Array<{ slug: string; lastModified?: string | null }> = [];

@@ -1,10 +1,22 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { NextRequest } from "next/server";
-import { GET as trackOrder } from "../../../app/api/track/route.ts";
-import workerModule from "./index.ts";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import { loadProjectTypeScript, loadWorker } from "./test-support/loadWorker.mjs";
 
+const workerModule = loadWorker();
 const worker = workerModule.default ?? workerModule;
+const projectRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
+const trackModule = loadProjectTypeScript(path.join(projectRoot, "app/api/track/route.ts"), {
+  "next/server": {
+    NextResponse: {
+      json(body, init = {}) {
+        return new Response(JSON.stringify(body), { status: init.status || 200, headers: init.headers });
+      },
+    },
+  },
+});
+const trackOrder = trackModule.GET;
 
 const orderBase = {
   id: "order-id-1",
@@ -166,7 +178,7 @@ test("ordinary logistics tracking still uses the existing carrier lookup", async
   };
 
   try {
-    const response = await trackOrder(new NextRequest("http://localhost/api/track?number=ZX123456"));
+    const response = await trackOrder({ nextUrl: new URL("http://localhost/api/track?number=ZX123456") });
     assert.equal(response.status, 200);
     assert.ok(requestedUrl.startsWith("http://zxdexpress.com/logistic.html"));
     assert.equal(requestInit?.method, "POST");

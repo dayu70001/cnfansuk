@@ -1,5 +1,5 @@
 import { catalogCategories, catalogSubcategories, canUpdateCatalogClassification, isValidCatalogClassification } from "../../../lib/catalogTaxonomy";
-import { getOrderPaymentStage, type OrderPaymentStage, type RawOrderStatus } from "../../../lib/orderStatus";
+import { getOrderPaymentStage, type RawOrderStatus } from "../../../lib/orderStatus";
 import {
   DEEPSEEK_API_URL,
   KIMI_API_URL,
@@ -198,8 +198,7 @@ const ALLOWED_ORIGINS = new Set([
   "https://www.cnfans.co.uk",
   "http://localhost:4000",
 ]);
-const ORDER_STATUSES = new Set<OrderStatus>(["pending", "awaiting_payment", "payment_submitted", "payment_confirmed", "confirmed", "paid", "processing", "shipped", "completed", "cancelled"]);
-const FREE_SHIPPING_THRESHOLD_GBP = 150;
+const FREE_SHIPPING_THRESHOLD = 180;
 const SHIPPING_METHODS = {
   "royal-mail-tracked": { label: "Royal Mail Tracked", estimate: "7–12 business days", priceGbp: 5 },
   "dhl-express": { label: "DHL Express", estimate: "7–12 business days", priceGbp: 5 },
@@ -227,8 +226,8 @@ const CATALOG_SIZE_STATS_CACHE_SECONDS = 86400;
 // rows. Future data writes should continue to use the normal version check.
 const CATALOG_CACHE_NAMESPACE = "v3-hard-delete-20260915";
 
-function calculateShippingFee(methodId: keyof typeof SHIPPING_METHODS, subtotalGbp: number) {
-  return subtotalGbp >= FREE_SHIPPING_THRESHOLD_GBP && methodId !== "fedex-priority"
+function calculateShippingFee(methodId: keyof typeof SHIPPING_METHODS, eligibilitySubtotal: number) {
+  return eligibilitySubtotal >= FREE_SHIPPING_THRESHOLD && methodId !== "fedex-priority"
     ? 0
     : SHIPPING_METHODS[methodId].priceGbp;
 }
@@ -938,6 +937,154 @@ function getCurrencyPrice(product: ProductRow, currency: CurrencyCode): number {
   return Number(product.price_gbp);
 }
 
+type RequestedOrderLine = { productCode: string; size: string; color: string; quantity: number };
+type OrderQuote = {
+  subtotal: number;
+  shippingFee: number;
+  finalTotal: number;
+  currency: "GBP";
+  eligibilityCurrency: CurrencyCode;
+  eligibilitySubtotal: number;
+  freeShippingApplied: boolean;
+  lineItems: Array<{ productCode: string; size: string; quantity: number; unitPrice: number; lineTotal: number }>;
+};
+
+function roundMoney(value: number) {
+  return Math.round((value + Number.EPSILON) * 100) / 100;
+}
+
+function resolveEligibilityCurrency(value: unknown): CurrencyCode | null {
+  if (value === undefined || value === null || value === "") return "GBP";
+  return value === "GBP" || value === "EUR" || value === "USD" ? value : null;
+}
+
+function buildOrderQuote(
+  requestedItems: RequestedOrderLine[],
+  productsByCode: Map<string, ProductRow>,
+  shippingMethodId: keyof typeof SHIPPING_METHODS,
+  eligibilityCurrency: CurrencyCode,
+): OrderQuote {
+  let subtotalGbp = 0;
+  let eligibilitySubtotal = 0;
+  const lineItems = requestedItems.map((item) => {
+    const product = productsByCode.get(item.productCode)!;
+    const unitPrice = getCurrencyPrice(product, "GBP");
+    const lineTotal = unitPrice * item.quantity;
+    subtotalGbp += lineTotal;
+    eligibilitySubtotal += getCurrencyPrice(product, eligibilityCurrency) * item.quantity;
+    return { productCode: item.productCode, size: item.size, quantity: item.quantity, unitPrice, lineTotal };
+  });
+  const subtotal = roundMoney(subtotalGbp);
+  const shippingFee = calculateShippingFee(shippingMethodId, eligibilitySubtotal);
+  return {
+    subtotal,
+    shippingFee,
+    finalTotal: roundMoney(subtotal + shippingFee),
+    currency: "GBP",
+    eligibilityCurrency,
+    eligibilitySubtotal,
+    freeShippingApplied: shippingFee === 0 && shippingMethodId !== "fedex-priority",
+    lineItems,
+  };
+}
+
+function expectedQuoteMatches(expected: unknown, quote: OrderQuote) {
+  if (!isRecord(expected)) return false;
+  const expectedLineItems = expected.lineItems;
+  const expectedValues = [expected.subtotal, expected.shippingFee, expected.finalTotal, expected.eligibilitySubtotal];
+  if (expectedValues.some((value) => typeof value !== "number" || !Number.isFinite(value))) return false;
+  if (expected.currency !== quote.currency
+    || expected.eligibilityCurrency !== quote.eligibilityCurrency
+    || expected.freeShippingApplied !== quote.freeShippingApplied
+    || expected.subtotal !== quote.subtotal
+    || expected.shippingFee !== quote.shippingFee
+    || expected.finalTotal !== quote.finalTotal
+    || expected.eligibilitySubtotal !== quote.eligibilitySubtotal
+    || !Array.isArray(expectedLineItems)
+    || expectedLineItems.length !== quote.lineItems.length) return false;
+
+  return quote.lineItems.every((line, index) => {
+    const expectedLine = expectedLineItems[index];
+    return isRecord(expectedLine)
+      && expectedLine.productCode === line.productCode
+      && expectedLine.size === line.size
+      && expectedLine.quantity === line.quantity
+      && expectedLine.unitPrice === line.unitPrice
+      && expectedLine.lineTotal === line.lineTotal;
+  });
+}
+
+async function handleOrderQuote(request: Request, env: WorkerEnv): Promise<Response> {
+  const body = await readBoundedJson(request);
+  if (!isRecord(body) || !Array.isArray(body.items)) {
+    return jsonResponse(request, { error: "报价请求格式无效" }, 400);
+  }
+  if (body.items.length < 1 || body.items.length > 50) {
+    return jsonResponse(request, { error: "商品数量无效" }, 400);
+  }
+  const eligibilityCurrency = resolveEligibilityCurrency(body.eligibilityCurrency);
+  if (!eligibilityCurrency) return jsonResponse(request, { error: "包邮资格币种无效" }, 400);
+  const shippingMethodId = cleanText(body.shippingMethodId, 40) as keyof typeof SHIPPING_METHODS;
+  if (!SHIPPING_METHODS[shippingMethodId]) return jsonResponse(request, { error: "配送方式无效" }, 400);
+
+  const requestedItems: RequestedOrderLine[] = [];
+  for (const rawItem of body.items) {
+    if (!isRecord(rawItem)) return jsonResponse(request, { error: "商品数据无效" }, 400);
+    const productCode = cleanText(rawItem.productCode, 120);
+    const quantity = Number(rawItem.quantity);
+    if (!productCode || !Number.isInteger(quantity) || quantity < 1 || quantity > 20) {
+      return jsonResponse(request, { error: "商品编号或数量无效" }, 400);
+    }
+    requestedItems.push({
+      productCode,
+      size: cleanText(rawItem.size, 60),
+      color: cleanText(rawItem.color, 60),
+      quantity,
+    });
+  }
+
+  const uniqueCodes = Array.from(new Set(requestedItems.map((item) => item.productCode)));
+  const placeholders = uniqueCodes.map(() => "?").join(", ");
+  const { results: products = [] } = await d1All<ProductRow>(
+    env,
+    { endpoint: "/orders/quote", label: "quote_products_by_codes", limit: uniqueCodes.length },
+    `SELECT * FROM products WHERE status = 'active' AND product_code IN (${placeholders})`,
+    uniqueCodes,
+  );
+  if (products.length !== uniqueCodes.length) {
+    return jsonResponse(request, { error: "订单包含不存在或已下架商品" }, 400);
+  }
+
+  const { results: sizeOptions = [] } = await d1All<ProductOptionRow>(
+    env,
+    { endpoint: "/orders/quote", label: "quote_product_sizes_by_codes", limit: uniqueCodes.length },
+    `SELECT * FROM product_options
+     WHERE product_code IN (${placeholders}) AND LOWER(option_name) = 'size'
+     ORDER BY product_code, position, id`,
+    uniqueCodes,
+  );
+  const sizesByProductCode = new Map<string, Set<string>>();
+  for (const option of sizeOptions) {
+    const sizes = sizesByProductCode.get(option.product_code) || new Set<string>();
+    sizes.add(String(option.option_value || "").trim());
+    sizesByProductCode.set(option.product_code, sizes);
+  }
+  if (requestedItems.some((item) => !sizesByProductCode.get(item.productCode)?.has(item.size))) {
+    return jsonResponse(request, {
+      error: "One or more selected sizes are no longer available. Please review your cart.",
+      code: "SIZE_UNAVAILABLE",
+    }, 400);
+  }
+
+  const quote = buildOrderQuote(
+    requestedItems,
+    new Map(products.map((product) => [product.product_code, product])),
+    shippingMethodId,
+    eligibilityCurrency,
+  );
+  return jsonResponse(request, { quote });
+}
+
 function createOrderNumber() {
   const date = new Date().toISOString().slice(2, 10).replaceAll("-", "");
   const random = new Uint32Array(1);
@@ -976,13 +1123,139 @@ function orderPayload(
   };
 }
 
+type OrderCheckoutPayloadSource = Pick<OrderRow,
+  | "order_number" | "status" | "subtotal" | "shipping_fee" | "payment_method" | "payment_fee"
+  | "payment_fee_rate" | "final_total" | "currency" | "payment_page_viewed_at"
+  | "transfer_submitted_at" | "payment_confirmed_at" | "customer_name" | "email" | "phone"
+  | "address_line1" | "address_line2" | "city" | "county" | "postcode" | "country_code"
+  | "country_name" | "shipping_method_id" | "shipping_method_label" | "shipping_estimate"
+>;
+
+function checkoutOrderPayload(order: OrderCheckoutPayloadSource, items: OrderItemRow[]) {
+  return {
+    ...orderPayload(
+      order.order_number,
+      order.status,
+      order.subtotal,
+      order.shipping_fee,
+      order.payment_method,
+      order.payment_fee,
+      order.payment_fee_rate,
+      order.final_total,
+      order.currency,
+      order,
+    ),
+    customer: {
+      name: order.customer_name,
+      email: order.email,
+      phone: order.phone,
+      addressLine1: order.address_line1,
+      addressLine2: order.address_line2,
+      city: order.city,
+      county: order.county,
+      postcode: order.postcode,
+      countryCode: order.country_code,
+      countryName: order.country_name,
+    },
+    items: items.map((item) => ({
+      productId: item.product_code,
+      productCode: item.product_code,
+      name: item.title,
+      title: item.title,
+      slug: item.slug,
+      productUrl: item.product_url,
+      image: item.image_url || undefined,
+      color: item.color || undefined,
+      size: item.size,
+      quantity: item.quantity,
+      priceGBP: item.unit_price,
+      unitPrice: item.unit_price,
+      lineTotal: item.line_total,
+      currency: item.currency,
+    })),
+    shippingMethodId: order.shipping_method_id,
+    shippingMethodLabel: order.shipping_method_label,
+    shippingEstimate: order.shipping_estimate,
+  };
+}
+
+function checkoutSubmissionMatches(
+  order: OrderRow,
+  storedItems: OrderItemRow[],
+  input: {
+    customerName: string;
+    email: string;
+    phone: string;
+    preferredContact: string | null;
+    whatsapp: string | null;
+    telegram: string | null;
+    countryCode: string;
+    countryName: string;
+    addressLine1: string;
+    addressLine2: string | null;
+    city: string;
+    county: string | null;
+    postcode: string;
+    shippingMethodId: string;
+    items: RequestedOrderLine[];
+  },
+) {
+  const customerMatches = order.customer_name === input.customerName
+    && order.email === input.email
+    && order.phone === input.phone
+    && order.preferred_contact === input.preferredContact
+    && order.whatsapp === input.whatsapp
+    && order.telegram === input.telegram
+    && order.country_code === input.countryCode
+    && order.country_name === input.countryName
+    && order.address_line1 === input.addressLine1
+    && order.address_line2 === input.addressLine2
+    && order.city === input.city
+    && order.county === input.county
+    && order.postcode === input.postcode
+    && order.shipping_method_id === input.shippingMethodId;
+  if (!customerMatches || storedItems.length !== input.items.length) return false;
+
+  const signature = (item: { product_code?: string; productCode?: string; size: string; color?: string | null; quantity: number }) =>
+    JSON.stringify([item.product_code || item.productCode, item.size, item.color || "", item.quantity]);
+  const stored = storedItems.map(signature).sort();
+  const requested = input.items.map((item) => signature({
+    productCode: item.productCode,
+    size: item.size,
+    color: item.color,
+    quantity: item.quantity,
+  })).sort();
+  return stored.every((item, index) => item === requested[index]);
+}
+
+function checkoutSessionConflict(request: Request) {
+  return jsonResponse(request, {
+    error: "This checkout session has already been used for different order details. Please start a new checkout.",
+    code: "CHECKOUT_SESSION_CONFLICT",
+  }, 409);
+}
+
 async function handleCreateOrder(request: Request, env: WorkerEnv): Promise<Response> {
   const body = await readBoundedJson(request);
   if (!isRecord(body) || !isRecord(body.customer) || !Array.isArray(body.items)) {
     return jsonResponse(request, { error: "订单数据格式无效" }, 400);
   }
-  const checkoutSessionId = cleanText(body.checkoutSessionId, 160) || null;
+  const checkoutSessionId = body.checkoutSessionId;
+  if (typeof checkoutSessionId !== "string" || !/^[A-Za-z0-9][A-Za-z0-9_-]{7,159}$/.test(checkoutSessionId)) {
+    return jsonResponse(request, {
+      error: "Your checkout session is invalid. Please refresh checkout and try again.",
+      code: "CHECKOUT_SESSION_ID_INVALID",
+    }, 400);
+  }
+  if (!isRecord(body.expectedQuote)) {
+    return jsonResponse(request, {
+      error: "This checkout page is out of date. Please refresh checkout to review your delivery options and confirm the latest total.",
+      code: "QUOTE_REQUIRED",
+    }, 409);
+  }
   const currency: CurrencyCode = "GBP";
+  const eligibilityCurrency = resolveEligibilityCurrency(body.eligibilityCurrency);
+  if (!eligibilityCurrency) return jsonResponse(request, { error: "包邮资格币种无效" }, 400);
   const shippingMethodId = cleanText(body.shippingMethodId, 40) as keyof typeof SHIPPING_METHODS;
   const shippingMethod = SHIPPING_METHODS[shippingMethodId];
   if (!shippingMethod) return jsonResponse(request, { error: "配送方式无效" }, 400);
@@ -1003,7 +1276,7 @@ async function handleCreateOrder(request: Request, env: WorkerEnv): Promise<Resp
     return jsonResponse(request, { error: "请填写完整有效的客户与地址信息" }, 400);
   }
 
-  const requestedItems: Array<{ productCode: string; size: string; color: string; quantity: number }> = [];
+  const requestedItems: RequestedOrderLine[] = [];
   for (const rawItem of body.items) {
     if (!isRecord(rawItem)) return jsonResponse(request, { error: "商品数据无效" }, 400);
     const productCode = cleanText(rawItem.productCode, 120);
@@ -1016,6 +1289,43 @@ async function handleCreateOrder(request: Request, env: WorkerEnv): Promise<Resp
     requestedItems.push({ productCode, size, color, quantity });
   }
 
+  const checkoutSubmission = {
+    customerName,
+    email,
+    phone,
+    preferredContact: cleanText(customer.preferredContact, 30) || null,
+    whatsapp: cleanText(customer.whatsapp, 100) || null,
+    telegram: cleanText(customer.telegram, 100) || null,
+    countryCode,
+    countryName,
+    addressLine1,
+    addressLine2: cleanText(customer.addressLine2, 200) || null,
+    city: cleanText(customer.city, 100),
+    county: cleanText(customer.county, 100) || null,
+    postcode,
+    shippingMethodId,
+    items: requestedItems,
+  };
+
+  if (checkoutSessionId) {
+    const existing = await d1First<OrderRow>(
+      env,
+      { endpoint: "/orders", label: "order_by_checkout_session", limit: 1, offset: 0 },
+      "SELECT * FROM orders WHERE checkout_session_id = ? LIMIT 1",
+      [checkoutSessionId],
+    );
+    if (existing) {
+      const { results: existingItems = [] } = await d1All<OrderItemRow>(
+        env,
+        { endpoint: "/orders", label: "order_items_by_checkout_session", limit: 50 },
+        "SELECT * FROM order_items WHERE order_id = ? ORDER BY id LIMIT 50",
+        [existing.id],
+      );
+      if (!checkoutSubmissionMatches(existing, existingItems, checkoutSubmission)) return checkoutSessionConflict(request);
+      return jsonResponse(request, { order: checkoutOrderPayload(existing, existingItems) });
+    }
+  }
+
   const uniqueCodes = Array.from(new Set(requestedItems.map((item) => item.productCode)));
   const placeholders = uniqueCodes.map(() => "?").join(", ");
   const { results: products = [] } = await d1All<ProductRow>(
@@ -1025,23 +1335,63 @@ async function handleCreateOrder(request: Request, env: WorkerEnv): Promise<Resp
     uniqueCodes,
   );
   if (products.length !== uniqueCodes.length) return jsonResponse(request, { error: "订单包含不存在或已下架商品" }, 400);
+
+  const { results: availableSizeRows = [] } = await d1All<ProductOptionRow>(
+    env,
+    { endpoint: "/orders", label: "order_product_sizes_by_codes", limit: uniqueCodes.length },
+    `SELECT * FROM product_options
+     WHERE product_code IN (${placeholders}) AND LOWER(option_name) = 'size'
+     ORDER BY product_code, position, id`,
+    uniqueCodes,
+  );
+  const sizesByCode = new Map<string, Set<string>>();
+  for (const option of availableSizeRows) {
+    const sizes = sizesByCode.get(option.product_code) || new Set<string>();
+    sizes.add(String(option.option_value || "").trim());
+    sizesByCode.set(option.product_code, sizes);
+  }
+  if (requestedItems.some((item) => !sizesByCode.get(item.productCode)?.has(item.size))) {
+    return jsonResponse(request, {
+      error: "One or more selected sizes are no longer available. Please review your cart.",
+      code: "SIZE_UNAVAILABLE",
+    }, 400);
+  }
+
   const productsByCode = new Map(products.map((product) => [product.product_code, product]));
   const images = await imagesForProducts(env, "/orders", uniqueCodes);
 
   let subtotal = 0;
+  let eligibilitySubtotal = 0;
   const orderItems = requestedItems.map((item) => {
     const product = productsByCode.get(item.productCode)!;
     const unitPrice = getCurrencyPrice(product, currency);
     const lineTotal = unitPrice * item.quantity;
     subtotal += lineTotal;
+    eligibilitySubtotal += getCurrencyPrice(product, eligibilityCurrency) * item.quantity;
     return { item, product, unitPrice, lineTotal, imageUrl: images.get(item.productCode)?.[0]?.imageUrl || null };
   });
   subtotal = Math.round(subtotal * 100) / 100;
-  const shippingFee = calculateShippingFee(shippingMethodId, subtotal);
+  const shippingFee = calculateShippingFee(shippingMethodId, eligibilitySubtotal);
   const paymentFee = Math.round((subtotal + shippingFee) * paymentMethod.feeRate * 100) / 100;
   const finalTotal = Math.round((subtotal + shippingFee + paymentFee) * 100) / 100;
+  const currentQuote: OrderQuote = {
+    subtotal,
+    shippingFee,
+    finalTotal,
+    currency,
+    eligibilityCurrency,
+    eligibilitySubtotal,
+    freeShippingApplied: shippingFee === 0 && shippingMethodId !== "fedex-priority",
+    lineItems: orderItems.map(({ item, unitPrice, lineTotal }) => ({
+      productCode: item.productCode,
+      size: item.size,
+      quantity: item.quantity,
+      unitPrice,
+      lineTotal,
+    })),
+  };
   const customerValues = [
-    customerName, email, phone, cleanText(customer.preferredContact, 30),
+    customerName, email, phone, cleanText(customer.preferredContact, 30) || null,
     cleanText(customer.whatsapp, 100) || null, cleanText(customer.telegram, 100) || null,
     countryCode, countryName, addressLine1, cleanText(customer.addressLine2, 200) || null,
     city, cleanText(customer.county, 100) || null, postcode,
@@ -1059,37 +1409,12 @@ async function handleCreateOrder(request: Request, env: WorkerEnv): Promise<Resp
     item.size, item.color || null, item.quantity, unitPrice, lineTotal, currency,
   ));
 
-  if (checkoutSessionId) {
-    const existing = await d1First<OrderRow>(
-      env,
-      { endpoint: "/orders", label: "order_by_checkout_session", limit: 1, offset: 0 },
-      "SELECT * FROM orders WHERE checkout_session_id = ? LIMIT 1",
-      [checkoutSessionId],
-    );
-    if (existing && (existing.status === "awaiting_payment" || existing.status === "pending")) {
-      const status: OrderStatus = existing.status;
-      await env.DB.batch([
-        env.DB.prepare(
-          `UPDATE orders SET
-            customer_name = ?, email = ?, phone = ?, preferred_contact = ?, whatsapp = ?, telegram = ?,
-            country_code = ?, country_name = ?, address_line1 = ?, address_line2 = ?, city = ?, county = ?, postcode = ?,
-            shipping_method_id = ?, shipping_method_label = ?, shipping_estimate = ?, shipping_fee = ?,
-            subtotal = ?, total = ?, currency = ?, payment_method = ?, payment_fee = ?, payment_fee_rate = ?, final_total = ?,
-            status = ?, updated_at = CURRENT_TIMESTAMP
-          WHERE id = ?`,
-        ).bind(...customerValues, status, existing.id),
-        env.DB.prepare("DELETE FROM order_items WHERE order_id = ?").bind(existing.id),
-        ...itemStatements(existing.id),
-      ]);
-      return jsonResponse(request, {
-        order: orderPayload(existing.order_number, status, subtotal, shippingFee, paymentMethod.label, paymentFee, paymentMethod.feeRate, finalTotal, currency, existing),
-      });
-    }
-    if (existing) {
-      return jsonResponse(request, {
-        order: orderPayload(existing.order_number, existing.status, existing.subtotal, existing.shipping_fee, existing.payment_method, existing.payment_fee, existing.payment_fee_rate, existing.final_total, existing.currency, existing),
-      });
-    }
+  if (!expectedQuoteMatches(body.expectedQuote, currentQuote)) {
+    return jsonResponse(request, {
+      error: "Order totals changed. Please review the updated total before placing your order.",
+      code: body.expectedQuote === undefined ? "QUOTE_REQUIRED" : "QUOTE_CHANGED",
+      quote: currentQuote,
+    }, 409);
   }
 
   const orderId = crypto.randomUUID();
@@ -1120,15 +1445,70 @@ async function handleCreateOrder(request: Request, env: WorkerEnv): Promise<Resp
         [checkoutSessionId],
       );
       if (existing) {
+        const { results: existingItems = [] } = await d1All<OrderItemRow>(
+          env,
+          { endpoint: "/orders", label: "order_items_by_checkout_session_after_race", limit: 50 },
+          "SELECT * FROM order_items WHERE order_id = ? ORDER BY id LIMIT 50",
+          [existing.id],
+        );
+        if (!checkoutSubmissionMatches(existing, existingItems, checkoutSubmission)) return checkoutSessionConflict(request);
         return jsonResponse(request, {
-          order: orderPayload(existing.order_number, existing.status, existing.subtotal, existing.shipping_fee, existing.payment_method, existing.payment_fee, existing.payment_fee_rate, existing.final_total, existing.currency, existing),
+          order: checkoutOrderPayload(existing, existingItems),
         });
       }
     }
     throw error;
   }
+
+  const responseItems: OrderItemRow[] = orderItems.map(({ item, product, unitPrice, lineTotal, imageUrl }, index) => ({
+    id: index + 1,
+    order_id: orderId,
+    product_code: product.product_code,
+    title: product.title,
+    slug: product.slug,
+    product_url: `${STOREFRONT_BASE_URL}/product/${encodeURIComponent(product.slug)}`,
+    image_url: imageUrl,
+    size: item.size,
+    color: item.color || null,
+    quantity: item.quantity,
+    unit_price: unitPrice,
+    line_total: lineTotal,
+    currency,
+  }));
+  const responseOrder: OrderCheckoutPayloadSource = {
+    order_number: orderNumber,
+    status: "pending",
+    subtotal,
+    shipping_fee: shippingFee,
+    payment_method: paymentMethod.label,
+    payment_fee: paymentFee,
+    payment_fee_rate: paymentMethod.feeRate,
+    final_total: finalTotal,
+    currency,
+    payment_page_viewed_at: null,
+    transfer_submitted_at: null,
+    payment_confirmed_at: null,
+    customer_name: customerName,
+    email,
+    phone,
+    address_line1: addressLine1,
+    address_line2: cleanText(customer.addressLine2, 200) || null,
+    city: cleanText(customer.city, 100),
+    county: cleanText(customer.county, 100) || null,
+    postcode,
+    country_code: countryCode,
+    country_name: countryName,
+    shipping_method_id: shippingMethodId,
+    shipping_method_label: shippingMethod.label,
+    shipping_estimate: shippingMethod.estimate,
+  };
   return jsonResponse(request, {
-    order: orderPayload(orderNumber, "pending", subtotal, shippingFee, paymentMethod.label, paymentFee, paymentMethod.feeRate, finalTotal, currency),
+    order: {
+      ...checkoutOrderPayload(responseOrder, responseItems),
+      eligibilityCurrency,
+      eligibilitySubtotal,
+      freeShippingApplied: shippingFee === 0 && shippingMethodId !== "fedex-priority",
+    },
   }, 201);
 }
 
@@ -1980,6 +2360,7 @@ export default {
       if (pathname === "/catalog-size-stats" && request.method === "GET") return cachedCatalogSizeStats(request, env, ctx);
       if (pathname === "/sitemap-products" && request.method === "GET") return cachedSitemapProducts(request, env, ctx);
       if (pathname === "/site-settings" && request.method === "GET") return handleSiteSettings(request, env);
+      if (pathname === "/orders/quote" && request.method === "POST") return handleOrderQuote(request, env);
       if (pathname === "/orders" && request.method === "POST") return handleCreateOrder(request, env);
       const paymentViewedMatch = pathname.match(/^\/orders\/([^/]+)\/payment-viewed$/);
       if (paymentViewedMatch && request.method === "POST") {

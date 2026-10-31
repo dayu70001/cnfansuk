@@ -50,9 +50,9 @@ test("checkout WhatsApp message contains only the current saved order number", (
   assert.doesNotMatch(messageSource, /product|size|quantity|amount|items|subtotal|address|phone|email/i);
   assert.match(checkoutFlowSource, /target="_blank" rel="noopener noreferrer"/);
   assert.match(detailSource, /Order now/);
-  assert.match(detailSource, /router\.push\("\/checkout"\)/);
-  assert.match(cartSource, /href="\/checkout"/);
-  assert.match(cartSource, /updateSize\(item, size\)/);
+  assert.match(detailSource, /router\.push\("\/checkout\?startNew=1", \{ scroll: false \}\)/);
+  assert.match(cartSource, /href="\/checkout\?startNew=1"/);
+  assert.match(cartSource, /onChange=\{\(event\) => updateSize\(item, event\.currentTarget\.value\)\}/);
   assert.doesNotMatch(checkoutFlowSource, /clearCart|payment-submitted|add_payment_info|stripe\/start|stripe\/checkout/);
   assert.doesNotMatch(cartSource, /Contact on WhatsApp|clearCart/);
   assert.doesNotMatch(detailSource, /Contact on WhatsApp/);

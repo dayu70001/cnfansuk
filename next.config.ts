@@ -20,6 +20,9 @@ const securityHeaders = [
 ];
 
 const nextConfig: NextConfig = {
+  ...(process.env.CNFANS_LOCAL_QA_PREVIEW === "1"
+    ? { distDir: ".next-qa-preview", allowedDevOrigins: ["127.0.0.1"] }
+    : {}),
   async headers() {
     return [
       {

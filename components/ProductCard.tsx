@@ -44,6 +44,7 @@ export function ProductCard({ product }: { product: Product }) {
               image,
               color,
               size,
+              availableSizes: product.sizes,
               quantity: 1,
             });
             trackAddToCart({

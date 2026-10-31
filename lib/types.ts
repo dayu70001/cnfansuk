@@ -45,6 +45,12 @@ export type CartItem = {
   image?: string;
   color?: string;
   size: string;
+  /** Product-specific customer size options persisted with this local cart row. */
+  availableSizes?: string[];
+  /** Marks a completed read-only lookup so empty results are not fetched again. */
+  sizeOptionsResolved?: boolean;
+  /** Transient lookup failure; omitted from persisted cart JSON to allow retry. */
+  sizeOptionsFailed?: boolean;
   quantity: number;
 };
 
