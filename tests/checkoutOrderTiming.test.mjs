@@ -73,8 +73,9 @@ test("fresh cart checkout lets the destination position itself before paint with
   assert.match(cart, /closeCart\(\)/);
   assert.match(providerSource, /closeCart: \(\) => setIsOpen\(false\)/);
   assert.doesNotMatch(providerSource, /scrollToTop|skipScrollRestoreOnClose/);
-  assert.match(product, /router\.push\("\/checkout\?startNew=1", \{ scroll: false \}\)/);
-  assert.doesNotMatch(product, /scrollPageInstantlyToTop|window\.scrollTo/);
+  const orderNow = product.slice(product.indexOf("function orderNow("), product.indexOf("function selectSize(", product.indexOf("function orderNow(")));
+  assert.match(orderNow, /router\.push\("\/checkout\?startNew=1", \{ scroll: false \}\)/);
+  assert.doesNotMatch(orderNow, /scrollPageInstantlyToTop|window\.scrollTo/);
   assert.match(flow, /const shouldPositionFreshEntry = startNewCheckout && !startEntryTopHandled\.current/);
   assert.match(flow, /router\.replace\("\/checkout", \{ scroll: false \}\)/);
   assert.doesNotMatch(flow, /startIntentHandled\.current = true;\s*scrollPageInstantly\(0\)/);

@@ -4,16 +4,10 @@ import Link from "next/link";
 import { Product } from "@/lib/types";
 import { formatMoney } from "@/lib/formatMoney";
 import { getProductPrice } from "@/lib/productPrice";
-import { productToGoogleAnalyticsItem, trackGoogleAnalyticsEvent } from "@/lib/googleAnalytics";
-import { trackAddToCart } from "@/lib/metaPixel";
 import { useCurrency } from "@/lib/useCurrency";
-import { useCart } from "./CartProvider";
 
 export function ProductCard({ product }: { product: Product }) {
-  const { addItem } = useCart();
   const { currency } = useCurrency();
-  const color = product.colors.find((item) => item?.trim());
-  const size = "";
   const swatches = product.colors.filter((item) => item?.trim()).slice(0, 3);
   const image = product.images.find((item) => item && item !== "placeholder");
   const currentPrice = getProductPrice(product, currency);
@@ -26,49 +20,6 @@ export function ProductCard({ product }: { product: Product }) {
           <span className="product-placeholder-mark">CNFANS UK</span>
           <span className="product-placeholder-sub">Product preview</span>
         </span>
-        <button
-          className="add"
-          type="button"
-          onClick={(event) => {
-            event.preventDefault();
-            addItem({
-              productId: product.id,
-              productCode: product.id,
-              slug: product.slug,
-              name: product.name,
-              title: product.name,
-              productUrl: `/product/${product.slug}`,
-              priceGBP: product.priceGBP,
-              priceEUR: product.priceEUR,
-              priceUSD: product.priceUSD,
-              image,
-              color,
-              size,
-              availableSizes: product.sizes,
-              quantity: 1,
-            });
-            trackAddToCart({
-              source_page: "product_card",
-              placement: "product_card_add_to_cart",
-              button_label: "Add to cart",
-              content_name: product.name,
-              content_ids: [product.id],
-              product_slug: product.slug,
-              product_code: product.id,
-              content_type: "product",
-              currency,
-              value: currentPrice,
-              num_items: 1,
-            });
-            trackGoogleAnalyticsEvent("add_to_cart", {
-              currency,
-              value: currentPrice,
-              items: [productToGoogleAnalyticsItem(product, currentPrice)],
-            });
-          }}
-        >
-          Add to cart
-        </button>
       </Link>
       <div className="meta">
         <Link className="pname" href={`/product/${product.slug}`}>

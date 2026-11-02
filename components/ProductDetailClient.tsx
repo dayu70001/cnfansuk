@@ -1,6 +1,6 @@
 "use client";
 
-import { type MouseEvent, type UIEvent, useEffect, useMemo, useRef, useState } from "react";
+import { type CSSProperties, type MouseEvent, type PointerEvent, type TouchEvent, type UIEvent, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { formatMoney } from "@/lib/formatMoney";
@@ -9,12 +9,22 @@ import { productToGoogleAnalyticsItem, trackGoogleAnalyticsEvent } from "@/lib/g
 import { trackAddToCart, trackInitiateCheckout, trackViewContent } from "@/lib/metaPixel";
 import { useCurrency } from "@/lib/useCurrency";
 import { getCustomerPurchaseSizes } from "@/lib/productSizes";
+import { clampGalleryIndex, getAdjacentGalleryIndex, getNearestGalleryIndex } from "@/lib/productGallery";
+import { getProductCategoryLabel } from "@/lib/productCategoryLabel";
 import type { CartItem, Product } from "@/lib/types";
 import { useCart } from "./CartProvider";
 
-const galleryLabels = ["Front", "Back", "Detail", "Fabric", "Fit", "Styling", "Close-up", "Inside", "Extra"];
+const EMPTY_GALLERY_IMAGES: string[] = [];
+const EMPTY_GALLERY_ASPECT_RATIOS: Record<string, string> = {};
 
 type AccordionKey = "details" | "fit" | "material" | "delivery" | "returns";
+type GalleryState = {
+  productId: string;
+  activeIndex: number;
+  failedImages: string[];
+  imageAspectRatios: Record<string, string>;
+  previewOpen: boolean;
+};
 
 const PURE_SIZE_TOKEN = /^(?:XS|S|M|L|XL|XXL|XXXL|[2-5]XL|\d{2,3})$/i;
 const LETTER_SIZE_RANGE = /^(?:XS|S|M|L|XL|XXL|XXXL|[2-5]XL)\s*(?:-|–|—|~|～|to)\s*(?:XS|S|M|L|XL|XXL|XXXL|[2-5]XL)$/i;
@@ -66,18 +76,212 @@ export function ProductDetailClient({ product }: { product: Product }) {
   const [quantity, setQuantity] = useState(1);
   const [sizeError, setSizeError] = useState(false);
   const [openSection, setOpenSection] = useState<AccordionKey | null>(null);
-  const [activeIndex, setActiveIndex] = useState(0);
+  const [galleryState, setGalleryState] = useState<GalleryState>(() => ({
+    productId: product.id,
+    activeIndex: 0,
+    failedImages: [],
+    imageAspectRatios: {},
+    previewOpen: false,
+  }));
+  const galleryStateIsCurrent = galleryState.productId === product.id;
+  const activeIndex = galleryStateIsCurrent ? galleryState.activeIndex : 0;
+  const failedGalleryImages = galleryStateIsCurrent ? galleryState.failedImages : EMPTY_GALLERY_IMAGES;
+  const galleryAspectRatios = galleryStateIsCurrent ? galleryState.imageAspectRatios : EMPTY_GALLERY_ASPECT_RATIOS;
+  const isImagePreviewOpen = galleryStateIsCurrent && galleryState.previewOpen;
+  const mainTrackRef = useRef<HTMLDivElement | null>(null);
+  const lightboxRef = useRef<HTMLDialogElement | null>(null);
+  const mobileScrollUpdateRef = useRef(false);
+  const zoomReturnScrollPositionRef = useRef<{ left: number; top: number } | null>(null);
+  const mainImageGestureRef = useRef<{ pointerId: number; startX: number; startY: number } | null>(null);
+  const suppressMainImageClickRef = useRef(false);
+  const lightboxTouchStartRef = useRef<{ x: number; y: number } | null>(null);
+  const zoomReturnFocusRef = useRef<HTMLButtonElement | null>(null);
   const defaultColor = product.colors.find((item) => item?.trim());
   const purchaseSizes = useMemo(
     () => getCustomerPurchaseSizes(product.category, product.sizes),
     [product.category, product.sizes],
   );
-  const galleryItems = useMemo(() => product.images.filter((item) => item && item !== "placeholder").slice(0, 9), [product.images]);
+  const galleryItems = useMemo(
+    () => product.images.filter((item) => item && item !== "placeholder" && !failedGalleryImages.includes(item)),
+    [failedGalleryImages, product.images],
+  );
+  const currentIndex = clampGalleryIndex(activeIndex, galleryItems.length);
+  const activeImage = galleryItems[currentIndex];
+  const activeImageAspectRatio = activeImage ? galleryAspectRatios[activeImage] || "3 / 4" : "3 / 4";
   const currentPrice = getProductPrice(product, currency);
   const publicProductCode = product.productCode?.trim() || product.id;
-  const details = useMemo(() => productDetailFacts(product), [product.description, product.productDetails]);
-  const fitFacts = useMemo(() => sizeFitFacts(product), [product.sizeFit]);
-  const material = useMemo(() => materialValue(product), [product.description, product.material]);
+  const details = useMemo(() => productDetailFacts(product), [product]);
+  const fitFacts = useMemo(() => sizeFitFacts(product), [product]);
+  const material = useMemo(() => materialValue(product), [product]);
+
+  useEffect(() => {
+    const images = Array.from(mainTrackRef.current?.querySelectorAll("img") || []);
+    const loadedRatios = Object.fromEntries(images
+      .filter((image) => image.naturalWidth > 0 && image.naturalHeight > 0)
+      .map((image) => [image.currentSrc || image.src, `${image.naturalWidth} / ${image.naturalHeight}`]));
+    if (!Object.keys(loadedRatios).length) return;
+
+    setGalleryState((current) => {
+      const state = current.productId === product.id ? current : {
+        productId: product.id,
+        activeIndex: 0,
+        failedImages: [],
+        imageAspectRatios: {},
+        previewOpen: false,
+      };
+      const nextRatios = { ...state.imageAspectRatios, ...loadedRatios };
+      return Object.keys(loadedRatios).every((image) => state.imageAspectRatios[image] === loadedRatios[image])
+        ? state
+        : { ...state, imageAspectRatios: nextRatios };
+    });
+  }, [galleryItems, product.id]);
+
+  function updateGalleryState(updater: (current: GalleryState) => GalleryState) {
+    setGalleryState((current) => updater(current.productId === product.id ? current : {
+      productId: product.id,
+      activeIndex: 0,
+      failedImages: [],
+      imageAspectRatios: {},
+      previewOpen: false,
+    }));
+  }
+
+  function setActiveIndex(value: number | ((previous: number) => number)) {
+    updateGalleryState((current) => ({
+      ...current,
+      activeIndex: typeof value === "function" ? value(current.activeIndex) : value,
+    }));
+  }
+
+  function setFailedGalleryImages(value: string[] | ((previous: string[]) => string[])) {
+    updateGalleryState((current) => ({
+      ...current,
+      failedImages: typeof value === "function" ? value(current.failedImages) : value,
+    }));
+  }
+
+  function setGalleryImageAspectRatio(image: string, naturalWidth: number, naturalHeight: number) {
+    if (!naturalWidth || !naturalHeight) return;
+    const ratio = `${naturalWidth} / ${naturalHeight}`;
+    const source = new URL(image, window.location.href).href;
+    updateGalleryState((current) => current.imageAspectRatios[source] === ratio
+      ? current
+      : { ...current, imageAspectRatios: { ...current.imageAspectRatios, [source]: ratio } });
+  }
+
+  function setIsImagePreviewOpen(value: boolean | ((previous: boolean) => boolean)) {
+    updateGalleryState((current) => ({
+      ...current,
+      previewOpen: typeof value === "function" ? value(current.previewOpen) : value,
+    }));
+  }
+
+  useEffect(() => {
+    const track = mainTrackRef.current;
+    if (!track) return;
+
+    const syncSlidePosition = () => {
+      if (!window.matchMedia("(max-width: 860px)").matches) return;
+      if (mobileScrollUpdateRef.current) {
+        mobileScrollUpdateRef.current = false;
+        return;
+      }
+      const currentTrack = mainTrackRef.current;
+      const currentSlide = currentTrack?.children.item(currentIndex) as HTMLElement | null | undefined;
+      if (!currentTrack || !currentSlide) return;
+      const trackRect = currentTrack.getBoundingClientRect();
+      const paddingLeft = Number.parseFloat(window.getComputedStyle(currentTrack).paddingLeft) || 0;
+      const snapStart = trackRect.left + currentTrack.clientLeft + paddingLeft;
+      const targetScrollLeft = currentTrack.scrollLeft + currentSlide.getBoundingClientRect().left - snapStart;
+      currentTrack.scrollLeft = Math.max(0, targetScrollLeft);
+    };
+
+    syncSlidePosition();
+    const resizeObserver = new ResizeObserver(syncSlidePosition);
+    resizeObserver.observe(track);
+    window.addEventListener("resize", syncSlidePosition);
+    return () => {
+      resizeObserver.disconnect();
+      window.removeEventListener("resize", syncSlidePosition);
+    };
+  }, [currentIndex, galleryItems]);
+
+  useEffect(() => {
+    if (!isImagePreviewOpen) return;
+    const dialog = lightboxRef.current;
+    if (!dialog) return;
+
+    const previousBodyStyles = {
+      overflow: document.body.style.overflow,
+      position: document.body.style.position,
+      top: document.body.style.top,
+      left: document.body.style.left,
+      width: document.body.style.width,
+    };
+    const previousScrollPosition = zoomReturnScrollPositionRef.current || {
+      left: window.scrollX,
+      top: window.scrollY,
+    };
+    zoomReturnScrollPositionRef.current = null;
+    document.body.style.position = "fixed";
+    document.body.style.top = `${-previousScrollPosition.top}px`;
+    document.body.style.left = `${-previousScrollPosition.left}px`;
+    document.body.style.width = "100%";
+    document.body.style.overflow = "hidden";
+    if (!dialog.open) dialog.showModal();
+
+    return () => {
+      if (dialog.open) dialog.close();
+      document.body.style.overflow = previousBodyStyles.overflow;
+      document.body.style.position = previousBodyStyles.position;
+      document.body.style.top = previousBodyStyles.top;
+      document.body.style.left = previousBodyStyles.left;
+      document.body.style.width = previousBodyStyles.width;
+      const root = document.documentElement;
+      const previousScrollBehavior = root.style.scrollBehavior;
+      root.style.scrollBehavior = "auto";
+      window.scrollTo({ left: previousScrollPosition.left, top: previousScrollPosition.top, behavior: "instant" });
+      root.style.scrollBehavior = previousScrollBehavior;
+      if (zoomReturnFocusRef.current?.isConnected) {
+        zoomReturnFocusRef.current.focus({ preventScroll: true });
+      }
+    };
+  }, [isImagePreviewOpen]);
+
+  useEffect(() => {
+    if (!isImagePreviewOpen) return;
+
+    function handleGalleryKeyDown(event: KeyboardEvent) {
+      if (event.key === "ArrowLeft") {
+        event.preventDefault();
+        setGalleryState((current) => {
+          const state = current.productId === product.id ? current : {
+            productId: product.id,
+            activeIndex: 0,
+            failedImages: [],
+            imageAspectRatios: {},
+            previewOpen: false,
+          };
+          return { ...state, activeIndex: getAdjacentGalleryIndex(state.activeIndex, -1, galleryItems.length) };
+        });
+      } else if (event.key === "ArrowRight") {
+        event.preventDefault();
+        setGalleryState((current) => {
+          const state = current.productId === product.id ? current : {
+            productId: product.id,
+            activeIndex: 0,
+            failedImages: [],
+            imageAspectRatios: {},
+            previewOpen: false,
+          };
+          return { ...state, activeIndex: getAdjacentGalleryIndex(state.activeIndex, 1, galleryItems.length) };
+        });
+      }
+    }
+
+    window.addEventListener("keydown", handleGalleryKeyDown);
+    return () => window.removeEventListener("keydown", handleGalleryKeyDown);
+  }, [galleryItems.length, isImagePreviewOpen, product.id]);
 
   // Fire ViewContent once per product. Guarding by product id prevents a
   // re-render (currency change, gallery state, etc.) from re-sending the event.
@@ -188,32 +392,130 @@ export function ProductDetailClient({ product }: { product: Product }) {
 
   function showPrevious(event: MouseEvent<HTMLButtonElement>) {
     event.stopPropagation();
-    setActiveIndex((index) => (index === 0 ? Math.max(galleryItems.length - 1, 0) : index - 1));
+    setActiveIndex((index) => getAdjacentGalleryIndex(index, -1, galleryItems.length));
   }
 
   function showNext(event: MouseEvent<HTMLButtonElement>) {
     event.stopPropagation();
-    setActiveIndex((index) => (index + 1) % Math.max(galleryItems.length, 1));
+    setActiveIndex((index) => getAdjacentGalleryIndex(index, 1, galleryItems.length));
   }
 
   function updateMobileIndex(event: UIEvent<HTMLDivElement>) {
     const target = event.currentTarget;
-    const nextIndex = Math.round(target.scrollLeft / target.clientWidth);
-    if (nextIndex !== activeIndex) {
+    const trackRect = target.getBoundingClientRect();
+    const paddingLeft = Number.parseFloat(window.getComputedStyle(target).paddingLeft) || 0;
+    const snapStart = trackRect.left + target.clientLeft + paddingLeft;
+    const snapOffsets = Array.from(target.children).map((slide) => {
+      return slide.getBoundingClientRect().left - snapStart + target.scrollLeft;
+    });
+    const nextIndex = getNearestGalleryIndex(target.scrollLeft, snapOffsets);
+    if (nextIndex !== currentIndex) {
+      mobileScrollUpdateRef.current = true;
       setActiveIndex(nextIndex);
     }
   }
+
+  function markGalleryImageFailed(image: string) {
+    const failedIndex = galleryItems.indexOf(image);
+    setFailedGalleryImages((current) => current.includes(image) ? current : [...current, image]);
+    if (failedIndex >= 0) {
+      setActiveIndex((current) => {
+        if (current > failedIndex) return current - 1;
+        if (current === failedIndex && failedIndex > 0) return failedIndex - 1;
+        return current;
+      });
+    }
+  }
+
+  function handleMainImagePointerDown(event: PointerEvent<HTMLButtonElement>) {
+    suppressMainImageClickRef.current = false;
+    mainImageGestureRef.current = {
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+    };
+  }
+
+  function handleMainImagePointerMove(event: PointerEvent<HTMLButtonElement>) {
+    const gesture = mainImageGestureRef.current;
+    if (!gesture || gesture.pointerId !== event.pointerId) return;
+    if (Math.abs(event.clientX - gesture.startX) > 10 || Math.abs(event.clientY - gesture.startY) > 10) {
+      suppressMainImageClickRef.current = true;
+    }
+  }
+
+  function openImagePreview(event: MouseEvent<HTMLButtonElement>) {
+    if (suppressMainImageClickRef.current && event.detail > 0) {
+      suppressMainImageClickRef.current = false;
+      mainImageGestureRef.current = null;
+      return;
+    }
+    suppressMainImageClickRef.current = false;
+    mainImageGestureRef.current = null;
+    zoomReturnFocusRef.current = event.currentTarget;
+    zoomReturnScrollPositionRef.current = { left: window.scrollX, top: window.scrollY };
+    setIsImagePreviewOpen(true);
+  }
+
+  function handleLightboxTouchStart(event: TouchEvent<HTMLDivElement>) {
+    const touch = event.touches[0];
+    if (!touch) return;
+    lightboxTouchStartRef.current = { x: touch.clientX, y: touch.clientY };
+  }
+
+  function handleLightboxTouchEnd(event: TouchEvent<HTMLDivElement>) {
+    const start = lightboxTouchStartRef.current;
+    const touch = event.changedTouches[0];
+    lightboxTouchStartRef.current = null;
+    if (!start || !touch) return;
+
+    const deltaX = touch.clientX - start.x;
+    const deltaY = touch.clientY - start.y;
+    if (Math.abs(deltaX) < 40 || Math.abs(deltaX) <= Math.abs(deltaY)) return;
+    setActiveIndex((index) => getAdjacentGalleryIndex(index, deltaX < 0 ? 1 : -1, galleryItems.length));
+  }
+
+  const purchaseActions = (
+    <>
+      <button className="btn btn-solid pdp-action" type="button" onClick={handleAddToCart}>
+        Add to cart
+      </button>
+      <button className="btn pdp-action" type="button" onClick={orderNow}>
+        Order now
+      </button>
+    </>
+  );
 
   return (
     <section className="pdp wrap">
       <div className="pdp-gallery" aria-label={`${product.name} gallery`}>
         <div className="pdp-main-frame">
-          <div className="pdp-main-viewport">
-            <div className="pdp-main-track" style={{ transform: `translateX(-${activeIndex * 100}%)` }} onScroll={updateMobileIndex}>
+          <div className="pdp-main-viewport" style={{ "--pdp-image-ratio": activeImageAspectRatio } as CSSProperties}>
+            <div
+              className="pdp-main-track"
+              ref={mainTrackRef}
+              style={{ transform: `translateX(-${currentIndex * 100}%)` }}
+              onScroll={updateMobileIndex}
+            >
               {galleryItems.length ? galleryItems.map((image, index) => (
-                <div className={`pdp-image pdp-image-${(index % 7) + 1}`} key={index}>
-                  <img src={image} alt={`${product.name} ${galleryLabels[index] || `Detail ${index + 1}`}`} onError={(event) => event.currentTarget.classList.add("image-error")} />
-                  <span>{galleryLabels[index] || `Detail ${index + 1}`}</span>
+                <div className="pdp-image" key={`${image}-${index}`}>
+                  <button
+                    className="pdp-main-image-trigger"
+                    type="button"
+                    aria-label={`Enlarge image ${index + 1} of ${galleryItems.length}`}
+                    onClick={openImagePreview}
+                    onPointerDown={handleMainImagePointerDown}
+                    onPointerMove={handleMainImagePointerMove}
+                    onPointerCancel={() => { mainImageGestureRef.current = null; }}
+                  >
+                    <img
+                      src={image}
+                      alt={`${product.name} image ${index + 1}`}
+                      draggable={false}
+                      onLoad={(event) => setGalleryImageAspectRatio(event.currentTarget.currentSrc || image, event.currentTarget.naturalWidth, event.currentTarget.naturalHeight)}
+                      onError={() => markGalleryImageFailed(image)}
+                    />
+                  </button>
                 </div>
               )) : (
                 <div className="pdp-image pdp-image-empty">
@@ -222,41 +524,97 @@ export function ProductDetailClient({ product }: { product: Product }) {
               )}
             </div>
           </div>
-          <button className="pdp-gallery-arrow previous" type="button" onClick={showPrevious} aria-label="Previous image">
-            ‹
-          </button>
-          <button className="pdp-gallery-arrow next" type="button" onClick={showNext} aria-label="Next image">
-            ›
-          </button>
-          <span className="pdp-count">
-            {Math.min(activeIndex + 1, Math.max(galleryItems.length, 1))} / {Math.max(galleryItems.length, 1)}
-          </span>
-        </div>
-        <div className="pdp-thumbs" aria-label="Select product image">
-          {galleryItems.map((image, index) => (
-            <button
-              className={index === activeIndex ? "pdp-thumb selected" : "pdp-thumb"}
-              key={index}
-              type="button"
-              onClick={() => setActiveIndex(index)}
-              aria-label={`Show image ${index + 1}`}
-              aria-current={index === activeIndex ? "true" : undefined}
-            >
-              <span className={`pdp-image pdp-image-${(index % 7) + 1}`}>
-                <img src={image} alt="" onError={(event) => event.currentTarget.classList.add("image-error")} />
+          {galleryItems.length > 1 ? (
+            <>
+              {currentIndex > 0 ? (
+                <button className="pdp-gallery-arrow previous" type="button" onClick={showPrevious} aria-label="Previous image">
+                  <svg aria-hidden="true" viewBox="0 0 24 24" focusable="false"><path d="m14.5 5-7 7 7 7" /></svg>
+                </button>
+              ) : null}
+              {currentIndex < galleryItems.length - 1 ? (
+                <button className="pdp-gallery-arrow next" type="button" onClick={showNext} aria-label="Next image">
+                  <svg aria-hidden="true" viewBox="0 0 24 24" focusable="false"><path d="m9.5 5 7 7-7 7" /></svg>
+                </button>
+              ) : null}
+              <span className="pdp-count" aria-live="polite">
+                {currentIndex + 1} / {galleryItems.length}
               </span>
-            </button>
-          ))}
+            </>
+          ) : null}
         </div>
-        <div className="pdp-dots" aria-hidden="true">
-          {Array.from({ length: Math.max(galleryItems.length, 1) }).map((_, index) => (
-            <span className={index === activeIndex ? "active" : ""} key={index} />
-          ))}
-        </div>
+        {galleryItems.length > 1 ? (
+          <>
+            <div className="pdp-thumbs" aria-label="Select product image">
+              {galleryItems.map((image, index) => (
+                <button
+                  className={index === currentIndex ? "pdp-thumb selected" : "pdp-thumb"}
+                  key={`${image}-${index}`}
+                  type="button"
+                  onClick={() => setActiveIndex(index)}
+                  aria-label={`Show image ${index + 1}`}
+                  aria-current={index === currentIndex ? "true" : undefined}
+                >
+                  <span className="pdp-image">
+                    <img src={image} alt="" onLoad={(event) => setGalleryImageAspectRatio(event.currentTarget.currentSrc || image, event.currentTarget.naturalWidth, event.currentTarget.naturalHeight)} onError={() => markGalleryImageFailed(image)} />
+                  </span>
+                </button>
+              ))}
+            </div>
+          </>
+        ) : null}
       </div>
 
+      <dialog
+        ref={lightboxRef}
+        className="pdp-lightbox"
+        aria-label={`${product.name} image preview`}
+        onCancel={(event) => {
+          event.preventDefault();
+          setIsImagePreviewOpen(false);
+        }}
+        onClick={(event) => {
+          if (event.target === event.currentTarget) setIsImagePreviewOpen(false);
+        }}
+      >
+        <div className="pdp-lightbox-content">
+          <button className="pdp-lightbox-close" type="button" autoFocus onClick={() => setIsImagePreviewOpen(false)} aria-label="Close image preview">
+            ×
+          </button>
+          {galleryItems.length > 1 ? (
+            currentIndex > 0 ? (
+              <button className="pdp-lightbox-arrow previous" type="button" onClick={showPrevious} aria-label="Previous image">
+                ‹
+              </button>
+            ) : null
+          ) : null}
+          <div
+            className="pdp-lightbox-stage"
+            onTouchStart={handleLightboxTouchStart}
+            onTouchEnd={handleLightboxTouchEnd}
+          >
+            {activeImage ? (
+              <img
+                src={activeImage}
+                alt={`${product.name} enlarged image ${currentIndex + 1}`}
+                draggable={false}
+              />
+            ) : <span>Image unavailable</span>}
+          </div>
+          {galleryItems.length > 1 ? (
+            currentIndex < galleryItems.length - 1 ? (
+              <button className="pdp-lightbox-arrow next" type="button" onClick={showNext} aria-label="Next image">
+                ›
+              </button>
+            ) : null
+          ) : null}
+          {galleryItems.length > 1 ? (
+            <span className="pdp-lightbox-count" aria-live="polite">{currentIndex + 1} / {galleryItems.length}</span>
+          ) : null}
+        </div>
+      </dialog>
+
       <aside className="pdp-info">
-        <p className="eyebrow">{product.category.replace("-", " ")}</p>
+        <p className="eyebrow">{getProductCategoryLabel(product.category, product.style)}</p>
         <h1>{product.name}</h1>
         <p className="pdp-price">{formatMoney(currentPrice, currency)}</p>
 
@@ -289,16 +647,11 @@ export function ProductDetailClient({ product }: { product: Product }) {
           </button>
         </div>
 
-        <button className="btn btn-solid pdp-action" type="button" onClick={handleAddToCart}>
-          Add to cart
-        </button>
-        <button className="btn pdp-action" type="button" onClick={orderNow}>
-          Order now
-        </button>
+        <div className="pdp-purchase-actions">{purchaseActions}</div>
 
         <div className="pdp-accordion">
           <AccordionItem
-            title="Product Details"
+            title="Product details"
             open={openSection === "details"}
             onToggle={() => setOpenSection(openSection === "details" ? null : "details")}
           >
@@ -306,7 +659,7 @@ export function ProductDetailClient({ product }: { product: Product }) {
             <p className="pdp-product-code"><strong>Product Code:</strong> {publicProductCode}</p>
           </AccordionItem>
           <AccordionItem
-            title="Size & Fit"
+            title="Size & fit"
             open={openSection === "fit"}
             onToggle={() => setOpenSection(openSection === "fit" ? null : "fit")}
           >

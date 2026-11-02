@@ -44,15 +44,14 @@ const item = (size, quantity = 1, color = "Black") => ({
   quantity,
 });
 
-test("card additions stay unselected while product detail still requires and passes its chosen size", () => {
-  assert.match(cardSource, /const size = "";/);
-  assert.doesNotMatch(cardSource, /product\.sizes\[0\]/);
-  assert.match(cardSource, /availableSizes:\s*product\.sizes/);
+test("product cards only link to details while product detail still requires and passes its chosen size", () => {
+  assert.doesNotMatch(cardSource, /Add to cart|useCart|addItem|trackAddToCart|product_card_add_to_cart/);
+  assert.match(cardSource, /<Link href=\{`\/product\/\$\{product\.slug\}`\} className="shot"/);
+  assert.match(cardSource, /<Link className="pname" href=\{`\/product\/\$\{product\.slug\}`\}>/);
   assert.match(detailSource, /if \(!size\)\s*\{\s*setSizeError\(true\)/);
   assert.match(detailSource, /availableSizes:\s*purchaseSizes/);
   assert.match(detailSource, /size,\s*availableSizes:\s*purchaseSizes,\s*quantity,/);
-  assert.match(cssSource, /\.product \.add\s*\{[^}]*display:\s*block;[^}]*opacity:\s*1;[^}]*transform:\s*none;/s);
-  assert.doesNotMatch(cssSource, /\.product \.add\s*\{\s*display:\s*none;/);
+  assert.doesNotMatch(cssSource, /\.product \.add\b/);
 });
 
 test("cart uses one compact native select populated from each product's current options", () => {

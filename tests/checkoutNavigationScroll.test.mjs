@@ -20,7 +20,8 @@ test("cart checkout entry leaves the old page in place and positions Checkout af
   assert.match(read("components/CheckoutFlow.tsx"), /const shouldPositionFreshEntry = startNewCheckout && !startEntryTopHandled\.current/);
 });
 test("product Order now navigates without pre-scrolling the source page", () => {
-  assert.doesNotMatch(product, /scrollPageInstantlyToTop|window\.scrollTo/);
-  assert.match(product, /router\.push\("\/checkout\?startNew=1", \{ scroll: false \}\)/);
+  const orderNow = product.slice(product.indexOf("function orderNow("), product.indexOf("function selectSize(", product.indexOf("function orderNow(")));
+  assert.doesNotMatch(orderNow, /scrollPageInstantlyToTop|window\.scrollTo/);
+  assert.match(orderNow, /router\.push\("\/checkout\?startNew=1", \{ scroll: false \}\)/);
   assert.match(read("components/CheckoutFlow.tsx"), /window\.scrollTo\(\{ top, left: 0, behavior: "instant" \}\)/);
 });

@@ -43,6 +43,12 @@ function loadProductDetailClient() {
     },
     "@/lib/useCurrency": { useCurrency: () => ({ currency: "GBP" }) },
     "@/lib/productSizes": { getCustomerPurchaseSizes: () => ["M", "L", "XL", "XXL"] },
+    "@/lib/productCategoryLabel": { getProductCategoryLabel: (category, subcategory) => `${category.toUpperCase()} / ${subcategory.toUpperCase()}` },
+    "@/lib/productGallery": {
+      clampGalleryIndex: (index, count) => count <= 0 ? 0 : Math.max(0, Math.min(Math.trunc(index), count - 1)),
+      getAdjacentGalleryIndex: (index, direction, count) => count <= 0 ? 0 : Math.max(0, Math.min(index + direction, count - 1)),
+      getNearestGalleryIndex: (position, offsets) => offsets.reduce((nearest, offset, index) => Math.abs(offset - position) < Math.abs(offsets[nearest] - position) ? index : nearest, 0),
+    },
     "./CartProvider": { useCart: () => ({ addItem() {} }) },
   };
   const loadedModule = { exports: {} };
@@ -60,6 +66,7 @@ const fixtureProduct = {
   slug: "test-product",
   name: "SSR Accordion Test Product",
   category: "Outerwear",
+  style: "jackets",
   priceGBP: 25,
   priceEUR: 30,
   priceUSD: 35,
@@ -77,18 +84,22 @@ test("Product page accordion content is present in initial server HTML while all
   const html = renderToString(React.createElement(ProductDetailClient, { product: fixtureProduct }));
 
   assert.match(html, /SSR Product Details fixture text\./);
+  assert.match(html, /Product details/);
+  assert.match(html, /Size &amp; fit/);
   assert.match(html, /<strong>Product Code:<\/strong> <!-- -->CNF-SSR-000001/);
   assert.match(html, /SSR Size &amp; Fit fixture text\./);
   assert.match(html, /Not sure which size to choose\?/);
+  assert.match(html, /<p class="eyebrow">OUTERWEAR \/ JACKETS<\/p>\s*<h1>SSR Accordion Test Product<\/h1>/);
   assert.match(html, /<a class="pdp-accordion-link" href="\/size-recommender">Use our Size Recommender →<\/a>/);
   assert.match(html, /SSR Material fixture text\./);
   assert.match(html, /Tracked delivery across the UK and Europe\./);
   assert.match(html, /View returns information/);
   assert.equal((html.match(/aria-expanded="false"/g) || []).length, 5);
   assert.equal((html.match(/class="pdp-accordion-content" hidden=""/g) || []).length, 5);
-  assert.ok(html.indexOf("SSR Product Details fixture text.") < html.indexOf("Product Code:", html.indexOf("Product Details")));
+  assert.doesNotMatch(html, /pdp-gallery-arrow|class="pdp-count"|class="pdp-thumbs"|pdp-dots/);
+  assert.ok(html.indexOf("SSR Product Details fixture text.") < html.indexOf("Product Code:", html.indexOf("Product details")));
 
-  const sizeFitStart = componentSource.indexOf('title="Size & Fit"');
+  const sizeFitStart = componentSource.indexOf('title="Size & fit"');
   const materialStart = componentSource.indexOf('title="Material"', sizeFitStart);
   const sizeFitSource = componentSource.slice(sizeFitStart, materialStart);
   assert.match(sizeFitSource, /Not sure which size to choose\?/);
