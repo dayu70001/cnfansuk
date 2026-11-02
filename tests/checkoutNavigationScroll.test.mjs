@@ -16,7 +16,7 @@ test("cart checkout entry leaves the old page in place and positions Checkout af
   assert.match(provider, /closeCart: \(\) => setIsOpen\(false\)/);
   assert.doesNotMatch(provider, /scrollToTop|skipScrollRestoreOnClose/);
   assert.match(provider, /window\.scrollTo\(\{ top: lockedScrollY\.current, left: 0, behavior: "instant" \}\)/);
-  assert.match(css, /html\s*\{\s*scroll-behavior:\s*smooth;/);
+  assert.match(css, /html\s*\{\s*scroll-behavior:\s*auto;/);
   assert.match(read("components/CheckoutFlow.tsx"), /const shouldPositionFreshEntry = startNewCheckout && !startEntryTopHandled\.current/);
 });
 test("product Order now navigates without pre-scrolling the source page", () => {

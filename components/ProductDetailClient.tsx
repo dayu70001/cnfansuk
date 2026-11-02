@@ -1,6 +1,6 @@
 "use client";
 
-import { type CSSProperties, type MouseEvent, type PointerEvent, type TouchEvent, type UIEvent, useEffect, useMemo, useRef, useState } from "react";
+import { type MouseEvent, type PointerEvent, type TouchEvent, type UIEvent, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { formatMoney } from "@/lib/formatMoney";
@@ -15,14 +15,12 @@ import type { CartItem, Product } from "@/lib/types";
 import { useCart } from "./CartProvider";
 
 const EMPTY_GALLERY_IMAGES: string[] = [];
-const EMPTY_GALLERY_ASPECT_RATIOS: Record<string, string> = {};
 
 type AccordionKey = "details" | "fit" | "material" | "delivery" | "returns";
 type GalleryState = {
   productId: string;
   activeIndex: number;
   failedImages: string[];
-  imageAspectRatios: Record<string, string>;
   previewOpen: boolean;
 };
 
@@ -80,13 +78,11 @@ export function ProductDetailClient({ product }: { product: Product }) {
     productId: product.id,
     activeIndex: 0,
     failedImages: [],
-    imageAspectRatios: {},
     previewOpen: false,
   }));
   const galleryStateIsCurrent = galleryState.productId === product.id;
   const activeIndex = galleryStateIsCurrent ? galleryState.activeIndex : 0;
   const failedGalleryImages = galleryStateIsCurrent ? galleryState.failedImages : EMPTY_GALLERY_IMAGES;
-  const galleryAspectRatios = galleryStateIsCurrent ? galleryState.imageAspectRatios : EMPTY_GALLERY_ASPECT_RATIOS;
   const isImagePreviewOpen = galleryStateIsCurrent && galleryState.previewOpen;
   const mainTrackRef = useRef<HTMLDivElement | null>(null);
   const lightboxRef = useRef<HTMLDialogElement | null>(null);
@@ -107,41 +103,17 @@ export function ProductDetailClient({ product }: { product: Product }) {
   );
   const currentIndex = clampGalleryIndex(activeIndex, galleryItems.length);
   const activeImage = galleryItems[currentIndex];
-  const activeImageAspectRatio = activeImage ? galleryAspectRatios[activeImage] || "3 / 4" : "3 / 4";
   const currentPrice = getProductPrice(product, currency);
   const publicProductCode = product.productCode?.trim() || product.id;
   const details = useMemo(() => productDetailFacts(product), [product]);
   const fitFacts = useMemo(() => sizeFitFacts(product), [product]);
   const material = useMemo(() => materialValue(product), [product]);
 
-  useEffect(() => {
-    const images = Array.from(mainTrackRef.current?.querySelectorAll("img") || []);
-    const loadedRatios = Object.fromEntries(images
-      .filter((image) => image.naturalWidth > 0 && image.naturalHeight > 0)
-      .map((image) => [image.currentSrc || image.src, `${image.naturalWidth} / ${image.naturalHeight}`]));
-    if (!Object.keys(loadedRatios).length) return;
-
-    setGalleryState((current) => {
-      const state = current.productId === product.id ? current : {
-        productId: product.id,
-        activeIndex: 0,
-        failedImages: [],
-        imageAspectRatios: {},
-        previewOpen: false,
-      };
-      const nextRatios = { ...state.imageAspectRatios, ...loadedRatios };
-      return Object.keys(loadedRatios).every((image) => state.imageAspectRatios[image] === loadedRatios[image])
-        ? state
-        : { ...state, imageAspectRatios: nextRatios };
-    });
-  }, [galleryItems, product.id]);
-
   function updateGalleryState(updater: (current: GalleryState) => GalleryState) {
     setGalleryState((current) => updater(current.productId === product.id ? current : {
       productId: product.id,
       activeIndex: 0,
       failedImages: [],
-      imageAspectRatios: {},
       previewOpen: false,
     }));
   }
@@ -158,15 +130,6 @@ export function ProductDetailClient({ product }: { product: Product }) {
       ...current,
       failedImages: typeof value === "function" ? value(current.failedImages) : value,
     }));
-  }
-
-  function setGalleryImageAspectRatio(image: string, naturalWidth: number, naturalHeight: number) {
-    if (!naturalWidth || !naturalHeight) return;
-    const ratio = `${naturalWidth} / ${naturalHeight}`;
-    const source = new URL(image, window.location.href).href;
-    updateGalleryState((current) => current.imageAspectRatios[source] === ratio
-      ? current
-      : { ...current, imageAspectRatios: { ...current.imageAspectRatios, [source]: ratio } });
   }
 
   function setIsImagePreviewOpen(value: boolean | ((previous: boolean) => boolean)) {
@@ -259,7 +222,6 @@ export function ProductDetailClient({ product }: { product: Product }) {
             productId: product.id,
             activeIndex: 0,
             failedImages: [],
-            imageAspectRatios: {},
             previewOpen: false,
           };
           return { ...state, activeIndex: getAdjacentGalleryIndex(state.activeIndex, -1, galleryItems.length) };
@@ -271,7 +233,6 @@ export function ProductDetailClient({ product }: { product: Product }) {
             productId: product.id,
             activeIndex: 0,
             failedImages: [],
-            imageAspectRatios: {},
             previewOpen: false,
           };
           return { ...state, activeIndex: getAdjacentGalleryIndex(state.activeIndex, 1, galleryItems.length) };
@@ -490,7 +451,7 @@ export function ProductDetailClient({ product }: { product: Product }) {
     <section className="pdp wrap">
       <div className="pdp-gallery" aria-label={`${product.name} gallery`}>
         <div className="pdp-main-frame">
-          <div className="pdp-main-viewport" style={{ "--pdp-image-ratio": activeImageAspectRatio } as CSSProperties}>
+          <div className="pdp-main-viewport">
             <div
               className="pdp-main-track"
               ref={mainTrackRef}
@@ -512,7 +473,6 @@ export function ProductDetailClient({ product }: { product: Product }) {
                       src={image}
                       alt={`${product.name} image ${index + 1}`}
                       draggable={false}
-                      onLoad={(event) => setGalleryImageAspectRatio(event.currentTarget.currentSrc || image, event.currentTarget.naturalWidth, event.currentTarget.naturalHeight)}
                       onError={() => markGalleryImageFailed(image)}
                     />
                   </button>
@@ -543,24 +503,15 @@ export function ProductDetailClient({ product }: { product: Product }) {
           ) : null}
         </div>
         {galleryItems.length > 1 ? (
-          <>
-            <div className="pdp-thumbs" aria-label="Select product image">
-              {galleryItems.map((image, index) => (
-                <button
-                  className={index === currentIndex ? "pdp-thumb selected" : "pdp-thumb"}
-                  key={`${image}-${index}`}
-                  type="button"
-                  onClick={() => setActiveIndex(index)}
-                  aria-label={`Show image ${index + 1}`}
-                  aria-current={index === currentIndex ? "true" : undefined}
-                >
-                  <span className="pdp-image">
-                    <img src={image} alt="" onLoad={(event) => setGalleryImageAspectRatio(event.currentTarget.currentSrc || image, event.currentTarget.naturalWidth, event.currentTarget.naturalHeight)} onError={() => markGalleryImageFailed(image)} />
-                  </span>
-                </button>
-              ))}
-            </div>
-          </>
+          <div className="pdp-gallery-progress" role="img" aria-label={`Image ${currentIndex + 1} of ${galleryItems.length}`}>
+            {galleryItems.map((_, index) => (
+              <span
+                className={index === currentIndex ? "pdp-gallery-progress-segment is-active" : "pdp-gallery-progress-segment"}
+                key={`progress-${index}`}
+                aria-hidden="true"
+              />
+            ))}
+          </div>
         ) : null}
       </div>
 

@@ -22,7 +22,7 @@
 }
 
 html {
-  scroll-behavior: smooth;
+  scroll-behavior: auto;
 }
 
 [id] {
@@ -7033,9 +7033,13 @@ main:has(> .checkout-flow) {
   position: relative;
 }
 
+.pdp .pdp-gallery-progress {
+  display: none;
+}
+
 .pdp-main-viewport {
   width: 100%;
-  aspect-ratio: var(--pdp-image-ratio, 3 / 4);
+  aspect-ratio: 1 / 1;
   overflow: hidden;
   border-radius: 3px;
   background: var(--paper);
@@ -7054,7 +7058,7 @@ main:has(> .checkout-flow) {
 }
 
 .pdp-main-track .pdp-image img {
-  object-fit: contain;
+  object-fit: cover;
 }
 
 .pdp-main-image-trigger {
@@ -7070,10 +7074,6 @@ main:has(> .checkout-flow) {
   border: 0;
   background: transparent;
   cursor: zoom-in;
-}
-
-.pdp-main-image-trigger img {
-  object-fit: contain;
 }
 
 .pdp-main-image-trigger:focus-visible {
@@ -7255,41 +7255,6 @@ main:has(> .checkout-flow) {
   font-size: 13px;
   font-variant-numeric: tabular-nums;
   transform: translateX(-50%);
-}
-
-.pdp-thumbs {
-  display: flex;
-  gap: 9px;
-  margin-top: 10px;
-  overflow-x: auto;
-  padding-bottom: 2px;
-  scrollbar-width: none;
-}
-
-.pdp-thumbs::-webkit-scrollbar {
-  display: none;
-}
-
-.pdp-thumb {
-  flex: 0 0 66px;
-  width: 66px;
-  box-sizing: border-box;
-  border: 1px solid var(--pdp-line);
-  border-radius: 2px;
-  background: transparent;
-  cursor: pointer;
-  padding: 0;
-}
-
-.pdp-thumb.selected {
-  border-color: var(--pdp-ink);
-  border-width: 2px;
-  box-shadow: none;
-}
-
-.pdp-thumb .pdp-image {
-  aspect-ratio: 1 / 1;
-  border-radius: 0;
 }
 
 .pdp-info {
@@ -7554,6 +7519,45 @@ a:focus-visible {
   }
 }
 
+@media (min-width: 861px) {
+  .pdp-gallery {
+    width: min(100%, 540px);
+    justify-self: center;
+    align-self: start;
+  }
+
+  .pdp .pdp-gallery-progress {
+    display: flex;
+    width: 100%;
+    gap: 6px;
+    margin-top: 12px;
+  }
+
+  .pdp-gallery-progress-segment {
+    flex: 1 1 0;
+    min-width: 0;
+    height: 3px;
+    border-radius: 3px;
+    background: #dedad4;
+  }
+
+  .pdp-gallery-progress-segment.is-active {
+    background: #272623;
+  }
+
+  .pdp-purchase-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+
+  .pdp-action {
+    min-width: 0;
+    padding-inline: 6px;
+    white-space: nowrap;
+  }
+}
+
 @media (max-width: 860px) {
   .checkout-flow {
     padding-top: 26px;
@@ -7691,14 +7695,6 @@ a:focus-visible {
   .pdp-main-track .pdp-image {
     min-width: 0;
     scroll-snap-align: center;
-  }
-
-  .pdp-main-track .pdp-image img {
-    object-fit: cover;
-  }
-
-  .pdp-thumbs {
-    display: none;
   }
 
   .pdp-gallery-arrow {
