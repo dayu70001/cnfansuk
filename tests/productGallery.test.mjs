@@ -76,6 +76,13 @@ test("image preview has native dialog semantics, keyboard controls, and touch-sw
   assert.match(detailSource, /document\.body\.style\.overflow = "hidden"/);
 });
 
+test("lightbox grid tracks are explicitly shrinkable within the dialog viewport", () => {
+  assert.match(cssSource, /\.pdp-lightbox\s*\{[\s\S]*grid-template-rows:\s*minmax\(0,\s*1fr\);/);
+  assert.match(cssSource, /\.pdp-lightbox-content\s*\{[\s\S]*min-width:\s*0;[\s\S]*min-height:\s*0;[\s\S]*grid-template-rows:\s*minmax\(0,\s*1fr\);/);
+  assert.match(cssSource, /\.pdp-lightbox-stage\s*\{[\s\S]*grid-template-rows:\s*minmax\(0,\s*1fr\);/);
+  assert.match(cssSource, /\.pdp-lightbox-stage img\s*\{[\s\S]*width:\s*100%;[\s\S]*height:\s*100%;[\s\S]*object-fit:\s*contain;/);
+});
+
 test("product detail imagery uses a square cropped viewport while the lightbox contains the full source image", () => {
   assert.match(cssSource, /\.pdp-main-track \.pdp-image img\s*\{\s*object-fit:\s*cover;/);
   assert.match(cssSource, /\.pdp-lightbox-stage img\s*\{[\s\S]*object-fit:\s*contain;/);

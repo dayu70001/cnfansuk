@@ -3647,6 +3647,78 @@ main:has(> .checkout-flow) {
   display: none;
 }
 
+@media (min-width: 861px) {
+  .checkout .checkout-steps {
+    width: min(100%, 880px);
+    margin-right: auto;
+    margin-left: auto;
+  }
+
+  .checkout .checkout-layout {
+    width: min(100%, 1160px);
+    margin-right: auto;
+    margin-left: auto;
+    grid-template-columns: minmax(0, 1fr) 390px;
+    gap: clamp(32px, 3vw, 48px);
+  }
+
+  .checkout.checkout-order-received .checkout-layout {
+    width: min(100%, 780px);
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .checkout.checkout-order-received .checkout-received-actions .btn {
+    display: inline-flex;
+    width: min(100%, 420px);
+    height: 56px;
+    min-height: 56px;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    padding: 0 20px;
+    border: 0;
+    border-radius: 12px;
+    background: linear-gradient(105deg, #59CC6D 0%, #409B83 100%);
+    box-shadow: none;
+    color: #FFFFFF;
+    font-size: 16px;
+    font-weight: 600;
+    letter-spacing: 0.1px;
+    text-align: center;
+    text-decoration: none;
+    white-space: nowrap;
+  }
+
+  .checkout.checkout-order-received .checkout-received-actions .btn:hover,
+  .checkout.checkout-order-received .checkout-received-actions .btn:active,
+  .checkout.checkout-order-received .checkout-received-actions .btn:focus {
+    border: 0;
+    background: linear-gradient(105deg, #59CC6D 0%, #409B83 100%);
+    box-shadow: none;
+    color: #FFFFFF;
+  }
+
+  .checkout.checkout-order-received .checkout-received-actions .btn:focus-visible {
+    outline: 2px solid #1E1E1C;
+    outline-offset: 2px;
+  }
+
+  .checkout.checkout-order-received .checkout-received-actions .checkout-whatsapp-icon {
+    display: block;
+    flex: 0 0 24px;
+    width: 24px;
+    height: 24px;
+    color: #FFFFFF;
+  }
+
+  .checkout.checkout-order-received .checkout-received-actions .checkout-whatsapp-icon svg {
+    display: block;
+    width: 24px;
+    height: 24px;
+    fill: currentColor;
+  }
+}
+
 .success-wrap {
   width: 100%;
   max-width: 560px;
@@ -7153,6 +7225,7 @@ main:has(> .checkout-flow) {
 .pdp-lightbox {
   position: fixed;
   inset: 0;
+  grid-template-rows: minmax(0, 1fr);
   width: 100%;
   max-width: none;
   height: 100%;
@@ -7177,9 +7250,12 @@ main:has(> .checkout-flow) {
 .pdp-lightbox-content {
   position: relative;
   display: grid;
+  min-width: 0;
+  min-height: 0;
   width: min(100%, 1280px);
   height: min(100%, 960px);
   grid-template-columns: 56px minmax(0, 1fr) 56px;
+  grid-template-rows: minmax(0, 1fr);
   align-items: center;
   margin: auto;
   padding: 56px 0 44px;
@@ -7187,6 +7263,7 @@ main:has(> .checkout-flow) {
 
 .pdp-lightbox-stage {
   display: grid;
+  grid-template-rows: minmax(0, 1fr);
   width: 100%;
   height: 100%;
   min-width: 0;
@@ -7200,10 +7277,10 @@ main:has(> .checkout-flow) {
 
 .pdp-lightbox-stage img {
   display: block;
-  max-width: 100%;
-  max-height: 100%;
-  width: auto;
-  height: auto;
+  min-width: 0;
+  min-height: 0;
+  width: 100%;
+  height: 100%;
   object-fit: contain;
   user-select: none;
 }

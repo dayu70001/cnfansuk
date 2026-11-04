@@ -1,0 +1,260 @@
+.popup {
+  position: fixed;
+  z-index: 45;
+  right: 16px;
+  bottom: 16px;
+  display: flex;
+  width: 240px;
+  height: 320px;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid rgba(39, 38, 35, 0.12);
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 8px 28px rgba(20, 18, 16, 0.2);
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(4px);
+  transition: opacity 160ms ease, transform 160ms ease, visibility 160ms ease;
+  visibility: hidden;
+}
+
+.visible {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(0);
+  visibility: visible;
+}
+
+.preparing {
+  pointer-events: none;
+  visibility: hidden;
+}
+
+.coverLink {
+  position: relative;
+  display: block;
+  flex: 0 0 46%;
+  overflow: hidden;
+  background: #e9e6e1;
+  color: inherit;
+}
+
+.coverLink::after {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0.15), transparent 34%, transparent 60%, rgba(0, 0, 0, 0.3));
+  content: "";
+  pointer-events: none;
+}
+
+.cover {
+  object-fit: cover;
+  object-position: 58% 48%;
+}
+
+.previewLabel {
+  position: absolute;
+  z-index: 1;
+  color: #fff;
+  font-family: inherit;
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.45);
+}
+
+.previewLabel {
+  top: 12px;
+  left: 12px;
+}
+
+.play {
+  position: absolute;
+  z-index: 1;
+  top: 50%;
+  left: 50%;
+  display: grid;
+  width: 42px;
+  height: 42px;
+  place-items: center;
+  border: 1px solid rgba(255, 255, 255, 0.8);
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.9);
+  color: #272623;
+  transform: translate(-50%, -50%);
+}
+
+.play svg {
+  width: 19px;
+  height: 19px;
+  fill: currentColor;
+  transform: translateX(1px);
+}
+
+.body {
+  display: flex;
+  min-height: 0;
+  flex: 1 1 auto;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0;
+  padding: 9px 12px 10px;
+  color: #272623;
+}
+
+.body h2 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.15;
+}
+
+.subtitle {
+  margin: 3px 0 6px;
+  color: #625e58;
+  font-size: 11px;
+  line-height: 1.2;
+}
+
+.features {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin: 0 0 7px;
+  padding: 0;
+  list-style: none;
+}
+
+.features li {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 7px;
+  color: #514d47;
+  font-size: 10px;
+  line-height: 1.2;
+}
+
+.features svg {
+  width: 14px;
+  height: 14px;
+  flex: 0 0 14px;
+  fill: none;
+  stroke: #218b54;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.5;
+}
+
+.cta {
+  display: flex;
+  min-height: 42px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 6px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 8px;
+  background: linear-gradient(135deg, #25d366 0%, #128c7e 100%);
+  box-shadow: 0 4px 12px rgba(37, 211, 102, 0.3);
+  color: #fff;
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1;
+  text-decoration: none;
+  transition: filter 140ms ease;
+}
+
+.cta:hover {
+  filter: brightness(0.96);
+}
+
+.cta:focus-visible,
+.coverLink:focus-visible,
+.close:focus-visible {
+  outline: 2px solid #272623;
+  outline-offset: 2px;
+}
+
+.cta svg {
+  width: 20px;
+  height: 20px;
+  flex: 0 0 20px;
+  fill: currentColor;
+}
+
+.close {
+  position: absolute;
+  z-index: 3;
+  top: 8px;
+  right: 8px;
+  display: grid;
+  width: 30px;
+  height: 30px;
+  place-items: center;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.75);
+  border-radius: 50%;
+  background: rgba(25, 24, 22, 0.45);
+  color: #fff;
+  cursor: pointer;
+  font: inherit;
+  font-size: 21px;
+  line-height: 1;
+}
+
+.close span {
+  transform: translateY(-1px);
+}
+
+@media (max-width: 860px) {
+  .popup {
+    right: calc(12px + env(safe-area-inset-right, 0px));
+    bottom: calc(12px + env(safe-area-inset-bottom, 0px));
+    left: auto;
+    width: min(220px, calc(100vw - 24px));
+    height: 293px;
+  }
+
+  .visible {
+    transform: translateY(0);
+  }
+
+  .coverLink {
+    flex-basis: 43%;
+  }
+
+  .body {
+    padding: 8px 11px 9px;
+  }
+
+  .body h2 {
+    font-size: 15px;
+  }
+
+  .features {
+    gap: 4px;
+    margin-bottom: 6px;
+  }
+
+  .features li {
+    gap: 6px;
+    font-size: 10px;
+  }
+
+  .cta {
+    min-height: 42px;
+    flex-wrap: nowrap;
+    white-space: nowrap;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .popup,
+  .cta {
+    transition: none;
+  }
+}

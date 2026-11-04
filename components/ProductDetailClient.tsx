@@ -11,6 +11,7 @@ import { useCurrency } from "@/lib/useCurrency";
 import { getCustomerPurchaseSizes } from "@/lib/productSizes";
 import { clampGalleryIndex, getAdjacentGalleryIndex, getNearestGalleryIndex } from "@/lib/productGallery";
 import { getProductCategoryLabel } from "@/lib/productCategoryLabel";
+import { CHANNEL_POPUP_CART_ADD_EVENT } from "@/lib/whatsappChannelPopup";
 import type { CartItem, Product } from "@/lib/types";
 import { useCart } from "./CartProvider";
 
@@ -304,6 +305,9 @@ export function ProductDetailClient({ product }: { product: Product }) {
   function handleAddToCart(event?: MouseEvent<HTMLButtonElement>) {
     event?.stopPropagation();
     if (addSelectedItem(true)) {
+      window.dispatchEvent(new CustomEvent(CHANNEL_POPUP_CART_ADD_EVENT, {
+        detail: { productSlug: product.slug },
+      }));
       trackAddToCart({
         source_page: "product_detail",
         placement: "add_to_cart",

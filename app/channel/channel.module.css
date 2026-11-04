@@ -37,19 +37,19 @@
   border-top: 1px solid var(--channel-border);
 }
 
-:global(body:has([data-channel-page="true"])) {
+:global(body):has(.channelPage) {
   background: #f5f7fb;
 }
 
-:global(body:has([data-channel-page="true"]) .announce),
-:global(body:has([data-channel-page="true"]) .site-header),
-:global(body:has([data-channel-page="true"]) footer),
-:global(body:has([data-channel-page="true"]) .cart-backdrop),
-:global(body:has([data-channel-page="true"]) .cart-drawer) {
+:global(body):has(.channelPage) :global(.announce),
+:global(body):has(.channelPage) :global(.site-header),
+:global(body):has(.channelPage) :global(footer),
+:global(body):has(.channelPage) :global(.cart-backdrop),
+:global(body):has(.channelPage) :global(.cart-drawer) {
   display: none !important;
 }
 
-:global(body:has([data-channel-page="true"]) main) {
+:global(body):has(.channelPage) :global(main) {
   min-height: 0;
   overflow: visible;
 }

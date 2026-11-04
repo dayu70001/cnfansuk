@@ -49,6 +49,7 @@ function loadProductDetailClient() {
       getAdjacentGalleryIndex: (index, direction, count) => count <= 0 ? 0 : Math.max(0, Math.min(index + direction, count - 1)),
       getNearestGalleryIndex: (position, offsets) => offsets.reduce((nearest, offset, index) => Math.abs(offset - position) < Math.abs(offsets[nearest] - position) ? index : nearest, 0),
     },
+    "@/lib/whatsappChannelPopup": { CHANNEL_POPUP_CART_ADD_EVENT: "cnfans:channel-popup-cart-add" },
     "./CartProvider": { useCart: () => ({ addItem() {} }) },
   };
   const loadedModule = { exports: {} };

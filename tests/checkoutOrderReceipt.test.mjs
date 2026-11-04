@@ -101,3 +101,18 @@ test("WhatsApp navigation remains immediate while an authorized click event uses
   assert.match(checkoutSource, /"X-Order-Access-Token": order\.orderAccessToken/);
   assert.match(checkoutSource, /keepalive:\s*true/);
 });
+
+test("desktop checkout shares a compact step bar and column layout, with the receipt WhatsApp button styled independently", () => {
+  const desktopBlockStart = checkoutStyles.indexOf("@media (min-width: 861px) {\n  .checkout .checkout-steps {");
+  assert.notEqual(desktopBlockStart, -1);
+  const desktopBlockEnd = checkoutStyles.indexOf("\n}\n", desktopBlockStart);
+  const desktopBlock = checkoutStyles.slice(desktopBlockStart, desktopBlockEnd + 2);
+  assert.match(desktopBlock, /\.checkout \.checkout-steps\s*\{[^}]*width:\s*min\(100%, 880px\)/);
+  assert.match(desktopBlock, /\.checkout \.checkout-layout\s*\{[^}]*width:\s*min\(100%, 1160px\)[^}]*grid-template-columns:\s*minmax\(0, 1fr\) 390px[^}]*gap:\s*clamp\(32px, 3vw, 48px\)/);
+  assert.match(desktopBlock, /\.checkout\.checkout-order-received \.checkout-layout\s*\{[^}]*width:\s*min\(100%, 780px\)[^}]*grid-template-columns:\s*minmax\(0, 1fr\)/);
+  assert.match(desktopBlock, /\.checkout\.checkout-order-received \.checkout-received-actions \.btn\s*\{[\s\S]*?height:\s*56px[\s\S]*?border-radius:\s*12px[\s\S]*?linear-gradient\(105deg, #59CC6D 0%, #409B83 100%\)[\s\S]*?font-size:\s*16px[\s\S]*?font-weight:\s*600/);
+  assert.match(desktopBlock, /\.checkout\.checkout-order-received \.checkout-received-actions \.checkout-whatsapp-icon\s*\{[^}]*display:\s*block[^}]*width:\s*24px[^}]*height:\s*24px/);
+  assert.match(receiptSource, /<a className="btn btn-solid" href=\{whatsappHref\} target="_blank" rel="noopener noreferrer" onClick=\{onWhatsAppClick\}>/);
+  assert.match(receiptSource, /<span className="checkout-whatsapp-label">Continue on WhatsApp<\/span>/);
+  assert.match(checkoutStyles, /\.checkout-order-received \.checkout-received-actions \.btn\s*\{[\s\S]*?height:\s*56px[\s\S]*?background:\s*linear-gradient\(105deg, #59CC6D 0%, #409B83 100%\)/);
+});
