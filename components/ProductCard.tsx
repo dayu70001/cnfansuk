@@ -14,7 +14,7 @@ export function ProductCard({ product }: { product: Product }) {
 
   return (
     <article className="product">
-      <Link href={`/product/${product.slug}`} className="shot" aria-label={product.name}>
+      <Link href={`/product/${product.slug}`} className="shot" aria-label={product.name} prefetch={false}>
         <span className={image ? "fill product-preview has-product-image" : "fill product-preview"}>
           {image ? <img src={image} alt={product.name} loading="lazy" onError={(event) => event.currentTarget.classList.add("image-error")} /> : null}
           <span className="product-placeholder-mark">CNFANS UK</span>
@@ -22,7 +22,7 @@ export function ProductCard({ product }: { product: Product }) {
         </span>
       </Link>
       <div className="meta">
-        <Link className="pname" href={`/product/${product.slug}`}>
+        <Link className="pname" href={`/product/${product.slug}`} prefetch={false}>
           {product.name}
         </Link>
         <span className="price">{formatMoney(currentPrice, currency)}</span>

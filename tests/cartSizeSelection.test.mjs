@@ -44,10 +44,10 @@ const item = (size, quantity = 1, color = "Black") => ({
   quantity,
 });
 
-test("product cards only link to details while product detail still requires and passes its chosen size", () => {
+test("product cards link to details without automatic prefetch while product detail still requires the chosen size", () => {
   assert.doesNotMatch(cardSource, /Add to cart|useCart|addItem|trackAddToCart|product_card_add_to_cart/);
-  assert.match(cardSource, /<Link href=\{`\/product\/\$\{product\.slug\}`\} className="shot"/);
-  assert.match(cardSource, /<Link className="pname" href=\{`\/product\/\$\{product\.slug\}`\}>/);
+  assert.match(cardSource, /<Link href=\{`\/product\/\$\{product\.slug\}`\} className="shot" aria-label=\{product\.name\} prefetch=\{false\}>/);
+  assert.match(cardSource, /<Link className="pname" href=\{`\/product\/\$\{product\.slug\}`\} prefetch=\{false\}>/);
   assert.match(detailSource, /if \(!size\)\s*\{\s*setSizeError\(true\)/);
   assert.match(detailSource, /availableSizes:\s*purchaseSizes/);
   assert.match(detailSource, /size,\s*availableSizes:\s*purchaseSizes,\s*quantity,/);
