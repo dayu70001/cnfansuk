@@ -48,6 +48,24 @@ test("policy pages retain their canonical metadata and describe the current orde
   assert.match(pages.privacy, /<h1 id="privacy-policy-title">Privacy Policy<\/h1>/);
   assert.match(pages.privacy, /Google Analytics|Google Tag Manager/);
   assert.match(pages.privacy, /Meta Pixel/);
+  assert.match(pages.privacy, /6\. Newsletter subscriptions/);
+  assert.match(pages.privacy, /not\s+pre-ticked/);
+  assert.match(pages.privacy, /directly to the CNFans Newsletter list/);
+  assert.match(pages.privacy, /not send a confirmation email or require a confirmation link/);
+  assert.match(pages.privacy, /OPT_IN contact attribute/);
+  assert.match(pages.privacy, /form-submission event logs identify the form and submission time/);
+  assert.doesNotMatch(pages.privacy, /double opt-in/i);
+  assert.match(pages.privacy, /Brevo provides the newsletter form and email delivery service/);
+  assert.match(pages.privacy, /unsubscribe at any time/);
+  assert.match(pages.privacy, /Data Processing Agreement/);
+  assert.match(pages.privacy, /do not specify a fixed retention period/);
+  assert.match(pages.privacy, /restrict or object to certain processing/);
+  assert.match(pages.privacy, /CNFANS TRADING LTD/);
+  assert.match(pages.privacy, /mailto:support@cnfans\.co\.uk/);
+  assert.match(pages.privacy, /298 Stattler Attercliffe Rd/);
+  assert.match(pages.privacy, /Sheffield/);
+  assert.match(pages.privacy, /S4 7WZ/);
+  assert.doesNotMatch(pages.privacy, /dayu70001@gmail\.com|Paris/i);
 
   assert.match(pages.terms, /title: \{ absolute: "Terms & Conditions \| CNFans UK" \}/);
   assert.match(pages.terms, /canonical: `\$\{SITE_URL\}\/terms`/);

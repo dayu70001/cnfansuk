@@ -14,7 +14,7 @@ export default function PrivacyPolicyPage() {
       <header className="policy-header">
         <p className="eyebrow">Legal</p>
         <h1 id="privacy-policy-title">Privacy Policy</h1>
-        <p className="policy-updated">Last updated: 15 October 2026</p>
+        <p className="policy-updated">Last updated: 6 November 2026</p>
       </header>
 
       <section className="policy-section">
@@ -62,7 +62,39 @@ export default function PrivacyPolicyPage() {
       </section>
 
       <section className="policy-section">
-        <h2>6. Your choices and privacy questions</h2>
+        <h2>6. Newsletter subscriptions</h2>
+        <p>
+          If you choose to subscribe, we collect your email address and marketing consent. The consent box is not
+          pre-ticked, and you must actively select it to subscribe. When you submit the form, your address is added
+          directly to the CNFans Newsletter list; we do not send a confirmation email or require a confirmation link.
+          We use these details to send occasional emails about new arrivals, real product videos and CNFans updates.
+        </p>
+        <p>
+          Brevo provides the newsletter form and email delivery service and processes subscription details for these
+          purposes. Brevo records the consent-field response in the OPT_IN contact attribute and the date a contact is
+          added; its form-submission event logs identify the form and submission time. These records help us evidence
+          the subscription and consent choice. Brevo states that its database processing and hosting servers are in
+          the European Union, including hosting in France, Germany and Belgium. For details about Brevo&apos;s processors
+          and applicable international-transfer safeguards, see its{" "}
+          <a href="https://www.brevo.com/legal/termsofuse/">Data Processing Agreement</a> and{" "}
+          <a href="https://www.brevo.com/legal/privacypolicy/">Privacy Policy</a>.
+        </p>
+        <p>
+          You can unsubscribe at any time using the link in a marketing email. We will stop sending newsletter marketing
+          after you unsubscribe. We keep subscription and preference records while needed to operate the newsletter,
+          honour your choice and meet legal obligations; a record needed to prevent further marketing may remain after
+          unsubscribing. We do not specify a fixed retention period here.
+        </p>
+        <p>
+          You can ask us to access, correct or erase your information, restrict or object to certain processing, and
+          exercise any other rights available under data protection law, including data portability where applicable,
+          by using our <Link href="/contact">Contact page</Link>. You may withdraw your marketing consent at any time;
+          this does not affect processing that took place before withdrawal.
+        </p>
+      </section>
+
+      <section className="policy-section">
+        <h2>7. Your choices and privacy questions</h2>
         <p>
           If you have a question or request about information connected with an order, contact us through the{" "}
           <Link href="/contact">Contact page</Link>. Including your order number can help us locate the relevant order.
@@ -70,10 +102,17 @@ export default function PrivacyPolicyPage() {
       </section>
 
       <section className="policy-section">
-        <h2>7. Contact</h2>
+        <h2>8. Contact</h2>
         <p>
-          For privacy questions, email <a href="mailto:dayu70001@gmail.com">dayu70001@gmail.com</a> or use our{" "}
+          For privacy questions, contact CNFANS TRADING LTD at{" "}
+          <a href="mailto:support@cnfans.co.uk">support@cnfans.co.uk</a> or use our{" "}
           <Link href="/contact">Contact page</Link>.
+        </p>
+        <p>
+          298 Stattler Attercliffe Rd<br />
+          Sheffield<br />
+          S4 7WZ<br />
+          United Kingdom
         </p>
       </section>
     </article>

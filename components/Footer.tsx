@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { MetaPixelEventLink } from "@/components/MetaPixelEventLink";
 import { FooterBrand } from "@/components/FooterBrand";
+import { FooterNewsletter } from "@/components/FooterNewsletter";
 import { fetchSiteSettings } from "@/lib/siteSettings";
 
 export async function Footer() {
@@ -34,6 +35,7 @@ export async function Footer() {
   return (
     <footer>
       <div className="wrap">
+        <FooterNewsletter />
         <div className="foot-top">
           <div className="foot-brand">
             <FooterBrand />

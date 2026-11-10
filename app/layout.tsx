@@ -7,6 +7,7 @@ import { FacebookPixel } from "@/components/FacebookPixel";
 import { Footer } from "@/components/Footer";
 import GoogleAnalytics from "@/components/GoogleAnalytics";
 import { Header } from "@/components/Header";
+import { AnnouncementBar } from "@/components/AnnouncementBar";
 import { SITE_NAME, SITE_URL } from "@/lib/site";
 import { fetchSiteSettings } from "@/lib/siteSettings";
 import { WhatsAppChannelPopup } from "@/components/WhatsAppChannelPopup";
@@ -51,7 +52,7 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
     <html lang="en" className={inter.variable}>
       <body>
         <CartProvider>
-          <div className="announce">New season styles now in</div>
+          <AnnouncementBar channelUrl={links.whatsappChannelUrl} />
           <Header />
           <main>{children}</main>
           <Footer />
