@@ -620,10 +620,10 @@ export function ProductDetailClient({ product }: { product: Product }) {
           >
             <FactList facts={fitFacts} />
             <p>Not sure which size to choose?</p>
-            <Link className="pdp-accordion-link" href="/size-recommender">
+            <Link className="pdp-accordion-link" href="/size-recommender" prefetch={false}>
               Use our Size Recommender →
             </Link>
-            <Link className="pdp-accordion-link" href="/cnfans-size-guide">
+            <Link className="pdp-accordion-link" href="/cnfans-size-guide" prefetch={false}>
               View size guide →
             </Link>
           </AccordionItem>
@@ -642,7 +642,7 @@ export function ProductDetailClient({ product }: { product: Product }) {
             onToggle={() => setOpenSection(openSection === "delivery" ? null : "delivery")}
           >
             <p>Tracked delivery across the UK and Europe.</p>
-            <Link className="pdp-accordion-link" href="/delivery">
+            <Link className="pdp-accordion-link" href="/delivery" prefetch={false}>
               View delivery information →
             </Link>
           </AccordionItem>
@@ -652,7 +652,7 @@ export function ProductDetailClient({ product }: { product: Product }) {
             onToggle={() => setOpenSection(openSection === "returns" ? null : "returns")}
           >
             <p>Returns and exchanges are subject to our return policy.</p>
-            <Link className="pdp-accordion-link" href="/returns">
+            <Link className="pdp-accordion-link" href="/returns" prefetch={false}>
               View returns information →
             </Link>
           </AccordionItem>

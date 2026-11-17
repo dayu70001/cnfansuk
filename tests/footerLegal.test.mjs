@@ -26,6 +26,23 @@ test("footer keeps its navigation and legal links while temporarily hiding payme
   assert.doesNotMatch(footer, /Payments processed securely by Stripe|foot-payment-logos|payment-methods\//);
 });
 
+test("footer disables prefetch only for the requested informational links", () => {
+  const supportLinks = footer.match(/const supportLinks = \[([\s\S]*?)\n  \];/)?.[1] ?? "";
+  const companyLinks = footer.match(/const companyLinks = \[([\s\S]*?)\n  \];/)?.[1] ?? "";
+  for (const route of ["/delivery", "/returns", "/size-guide", "/track-order", "/contact"]) {
+    assert.ok(supportLinks.includes(`href: "${route}"`), `${route} remains in support navigation`);
+  }
+  for (const route of ["/about", "/how-to-order", "/guides"]) {
+    assert.ok(companyLinks.includes(`href: "${route}"`), `${route} remains in company navigation`);
+  }
+  assert.equal((footer.match(/<Link href=\{item\.href\} key=\{item\.href\} prefetch=\{false\}>/g) ?? []).length, 2);
+  assert.match(footer, /<Link href="\/privacy-policy" prefetch=\{false\}>Privacy Policy<\/Link>/);
+  assert.match(footer, /<Link href="\/payment-security" prefetch=\{false\}>Payment &amp; Security<\/Link>/);
+  assert.match(footer, /<Link href="\/terms">Terms &amp; Conditions<\/Link>/);
+  const shopNavigation = footer.slice(footer.indexOf('<nav className="foot-col" aria-label="Shop">'), footer.indexOf('<nav className="foot-col" aria-label="Support">'));
+  assert.doesNotMatch(shopNavigation, /prefetch=\{false\}/);
+});
+
 test("sitemap includes each of the three policy URLs exactly once", () => {
   const sitemap = read("app/sitemap.ts");
   for (const route of ["/privacy-policy", "/terms", "/payment-security"]) {

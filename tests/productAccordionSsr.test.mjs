@@ -22,7 +22,7 @@ function loadProductDetailClient() {
       esModuleInterop: true,
     },
   });
-  const link = ({ children, ...props }) => React.createElement("a", props, children);
+  const link = ({ children, ...props }) => React.createElement("a", Object.fromEntries(Object.entries(props).filter(([key]) => key !== "prefetch")), children);
   const mocks = {
     react: React,
     "react/jsx-runtime": require("react/jsx-runtime"),
@@ -149,4 +149,11 @@ test("accordion keeps children mounted and uses native hidden for closed content
   assert.doesNotMatch(cssSource, /\.pdp-accordion-panel/);
   assert.doesNotMatch(cssSource, /\.pdp-accordion-content\s*\[hidden\]\s*\{[^}]*display\s*:/s);
   assert.doesNotMatch(accordionRules.map(([, , declarations]) => declarations).join("\n"), /grid-template-rows|max-height|visibility|opacity|overflow|pointer-events/);
+});
+
+test("product-detail informational links disable prefetch without changing their routes", () => {
+  for (const route of ["/size-recommender", "/cnfans-size-guide", "/delivery", "/returns"]) {
+    const routePattern = new RegExp(`<Link className="pdp-accordion-link" href="${route}" prefetch=\\{false\\}>`);
+    assert.match(componentSource, routePattern, `${route} remains a Next Link with prefetch disabled`);
+  }
 });

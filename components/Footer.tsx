@@ -52,7 +52,7 @@ export async function Footer() {
           <nav className="foot-col" aria-label="Support">
             <h4>Support</h4>
             {supportLinks.map((item) => (
-              <Link href={item.href} key={item.href}>
+              <Link href={item.href} key={item.href} prefetch={false}>
                 {item.label}
               </Link>
             ))}
@@ -96,7 +96,7 @@ export async function Footer() {
           <nav className="foot-col" aria-label="Company">
             <h4>Company</h4>
             {companyLinks.map((item) => (
-              <Link href={item.href} key={item.href}>
+              <Link href={item.href} key={item.href} prefetch={false}>
                 {item.label}
               </Link>
             ))}
@@ -106,11 +106,11 @@ export async function Footer() {
           <div className="foot-bottom-legal">
             <small>© 2026 CNFANS UK. All rights reserved.</small>
             <nav className="foot-legal-links" aria-label="Legal">
-              <Link href="/privacy-policy">Privacy Policy</Link>
+              <Link href="/privacy-policy" prefetch={false}>Privacy Policy</Link>
               <span aria-hidden="true">·</span>
               <Link href="/terms">Terms &amp; Conditions</Link>
               <span aria-hidden="true">·</span>
-              <Link href="/payment-security">Payment &amp; Security</Link>
+              <Link href="/payment-security" prefetch={false}>Payment &amp; Security</Link>
             </nav>
           </div>
         </div>
