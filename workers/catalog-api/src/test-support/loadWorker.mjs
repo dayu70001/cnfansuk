@@ -64,6 +64,7 @@ function loadTypeScriptModule(filename, cache, mocks) {
     clearInterval,
     fetch: (...args) => globalThis.fetch(...args),
     process,
+    caches: globalThis.caches,
   };
   vm.runInNewContext(compiled.outputText, globals, { filename: absolutePath });
   return loadedModule.exports;

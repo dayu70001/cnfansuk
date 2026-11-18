@@ -1,4 +1,5 @@
 import { catalogCategories, catalogSubcategories, canUpdateCatalogClassification, isValidCatalogClassification } from "../../../lib/catalogTaxonomy";
+import { buildDuplicateTitleGroups, countExactTitleGroups, normalizeProductTitle } from "../../../lib/productDuplicates";
 import { getOrderPaymentStage, type RawOrderStatus } from "../../../lib/orderStatus";
 import {
   DEEPSEEK_API_URL,
@@ -614,6 +615,24 @@ async function optionsForProduct(env: WorkerEnv, endpoint: string, productCode: 
   return ["M", "L", "XL", "XXL"].map((size, index) => ({
     id: index + 1, product_code: productCode, option_name: "Size", option_value: size, position: index + 1,
   }));
+}
+
+async function optionsForProducts(env: WorkerEnv, endpoint: string, productCodes: string[]) {
+  if (!productCodes.length) return new Map<string, ProductOptionRow[]>();
+  const placeholders = productCodes.map(() => "?").join(", ");
+  const { results = [] } = await d1All<ProductOptionRow>(
+    env,
+    { endpoint, label: "product_options_by_codes", limit: productCodes.length },
+    `SELECT * FROM product_options WHERE product_code IN (${placeholders}) ORDER BY product_code, position, id`,
+    productCodes,
+  );
+  const grouped = new Map<string, ProductOptionRow[]>();
+  for (const option of results) {
+    const current = grouped.get(option.product_code) || [];
+    current.push(option);
+    grouped.set(option.product_code, current);
+  }
+  return grouped;
 }
 
 async function handleCatalog(request: Request, env: WorkerEnv, ctx: ExecutionContext): Promise<Response> {
@@ -2049,29 +2068,247 @@ async function handleClassificationScanOne(request: Request, env: WorkerEnv) {
 async function handleAdminProducts(request: Request, env: WorkerEnv) {
   const url = new URL(request.url);
   const q = cleanText(url.searchParams.get("q"), 100);
+  const status = url.searchParams.get("status") === "all" ? "all" : "active";
+  const page = normalisePage(url.searchParams.get("page"));
+  const limit = normaliseLimit(url.searchParams.get("limit"), 24, 100);
+  const offset = (page - 1) * limit;
   const values: D1Value[] = [];
-  let where = "WHERE 1 = 0";
+  const clauses = status === "all" ? [] : ["status = ?"];
+  if (status !== "all") values.push(status);
   if (q) {
-    where = "WHERE product_code LIKE ? COLLATE NOCASE OR title LIKE ? COLLATE NOCASE OR brand LIKE ? COLLATE NOCASE";
+    clauses.push("(CAST(id AS TEXT) LIKE ? COLLATE NOCASE OR product_code LIKE ? COLLATE NOCASE OR title LIKE ? COLLATE NOCASE OR brand LIKE ? COLLATE NOCASE)");
     const term = `%${q}%`;
-    values.push(term, term, term);
+    values.push(term, term, term, term);
   }
-  const limit = normaliseLimit(url.searchParams.get("limit"), 50, MAX_LIST_LIMIT);
-  const { results = [] } = await d1All<ProductRow>(
-    env,
-    { endpoint: "/admin/products", label: "admin_products_search", limit, offset: 0 },
-    `SELECT * FROM products ${where} ORDER BY updated_at DESC, id DESC LIMIT ?`,
-    [...values, limit],
-  );
+  const where = clauses.length ? `WHERE ${clauses.join(" AND ")}` : "";
+  const [productResult, countResult] = await Promise.all([
+    d1All<ProductRow>(
+      env,
+      { endpoint: "/admin/products", label: "admin_products_search", limit, offset },
+      `SELECT * FROM products ${where} ORDER BY updated_at DESC, id DESC LIMIT ? OFFSET ?`,
+      [...values, limit, offset],
+    ),
+    d1First<{ total: number }>(
+      env,
+      { endpoint: "/admin/products", label: "admin_products_search_count", limit, offset },
+      `SELECT COUNT(*) AS total FROM products ${where}`,
+      values,
+    ),
+  ]);
+  const results = productResult.results || [];
   const images = await imagesForProducts(env, "/admin/products", results.map((product) => product.product_code));
+  const options = await optionsForProducts(env, "/admin/products", results.map((product) => product.product_code));
+  const total = Number(countResult?.total || 0);
   const subcategories = Object.entries(catalogSubcategories).flatMap(([category, values]) =>
     values.map(({ value }) => ({ category, subcategory: value })),
   );
   return jsonResponse(request, {
-    products: results.map((product) => ({ ...mapProduct(product), images: images.get(product.product_code) ?? [] })),
+    products: results.map((product) => ({
+      ...mapProduct(product),
+      images: images.get(product.product_code) ?? [],
+      options: options.get(product.product_code) ?? [],
+    })),
+    total,
+    page,
+    limit,
+    totalPages: limit > 0 ? Math.ceil(total / limit) : 0,
     categories: catalogCategories.map(({ value }) => value),
     subcategories,
   });
+}
+
+async function adminProductRows(env: WorkerEnv, endpoint: string, status: string) {
+  const clause = status === "all" ? "" : " WHERE status = ?";
+  const { results = [] } = await d1All<ProductRow>(
+    env,
+    { endpoint, label: "admin_duplicate_product_titles", limit: 10_000, offset: 0 },
+    `SELECT id, product_code, slug, title, category, subcategory, brand, price_gbp, status, updated_at FROM products${clause} ORDER BY id`,
+    status === "all" ? [] : ["active"],
+  );
+  return results;
+}
+
+async function handleAdminDuplicateGroups(request: Request, env: WorkerEnv) {
+  const url = new URL(request.url);
+  const status = url.searchParams.get("status") === "all" ? "all" : "active";
+  const page = normalisePage(url.searchParams.get("page"));
+  const limit = normaliseLimit(url.searchParams.get("limit"), 24, 100);
+  const query = cleanText(url.searchParams.get("q"), 100);
+  const queryKey = normalizeProductTitle(query);
+  const rows = await adminProductRows(env, "/admin/products/duplicates", status);
+  const groups = buildDuplicateTitleGroups(rows);
+  const exactGroupCount = countExactTitleGroups(rows);
+  const filtered = query
+    ? groups.filter((group) => (queryKey ? group.key.includes(queryKey) : false)
+      || group.rawTitles.some((title) => title.toLocaleLowerCase("en").includes(query.toLocaleLowerCase("en")))
+      || group.products.some((product) => String(product.id).includes(query)
+        || product.product_code.toLocaleLowerCase("en").includes(query.toLocaleLowerCase("en"))))
+    : groups;
+  const totalPages = Math.ceil(filtered.length / limit);
+  const safePage = Math.min(page, Math.max(totalPages, 1));
+  const start = (safePage - 1) * limit;
+  return jsonResponse(request, {
+    totalProducts: rows.length,
+    duplicateGroupCount: groups.length,
+    exactDuplicateGroupCount: exactGroupCount,
+    normalizedVariantGroupCount: groups.filter((group) => group.kind === "normalized").length,
+    affectedProductCount: new Set(groups.flatMap((group) => group.products.map((product) => product.id))).size,
+    filteredGroupCount: filtered.length,
+    page: safePage,
+    limit,
+    totalPages,
+    groups: filtered.slice(start, start + limit).map((group) => ({
+      key: group.key,
+      title: group.title,
+      count: group.count,
+      kind: group.kind,
+      rawTitles: group.rawTitles,
+      productIds: group.productIds,
+      productCodes: group.productCodes,
+    })),
+  });
+}
+
+async function handleAdminDuplicateItems(request: Request, env: WorkerEnv) {
+  const url = new URL(request.url);
+  const key = cleanText(url.searchParams.get("key"), 240);
+  if (!key || normalizeProductTitle(key) !== key) return jsonResponse(request, { error: "重复标题组标识无效。" }, 400);
+  const status = url.searchParams.get("status") === "all" ? "all" : "active";
+  const page = normalisePage(url.searchParams.get("page"));
+  const limit = normaliseLimit(url.searchParams.get("limit"), 12, 24);
+  const rows = await adminProductRows(env, "/admin/products/duplicate-items", status);
+  const items = rows.filter((product) => normalizeProductTitle(product.title) === key)
+    .sort((a, b) => Number(a.id) - Number(b.id));
+  const totalPages = Math.ceil(items.length / limit);
+  const safePage = Math.min(page, Math.max(totalPages, 1));
+  const pageItems = items.slice((safePage - 1) * limit, safePage * limit);
+  const codes = pageItems.map((product) => product.product_code);
+  const [images, options] = await Promise.all([
+    imagesForProducts(env, "/admin/products/duplicate-items", codes),
+    optionsForProducts(env, "/admin/products/duplicate-items", codes),
+  ]);
+  return jsonResponse(request, {
+    total: items.length,
+    page: safePage,
+    limit,
+    totalPages,
+    products: pageItems.map((product) => ({
+      ...mapProduct(product),
+      images: images.get(product.product_code) ?? [],
+      options: options.get(product.product_code) ?? [],
+    })),
+  });
+}
+
+async function handleAdminProductTitleUpdate(request: Request, env: WorkerEnv, productId: number) {
+  const body = await readBoundedJson(request);
+  if (!isRecord(body)) return jsonResponse(request, { error: "商品数据无效。" }, 400);
+  const code = cleanText(body.productCode, 80);
+  const expectedTitle = cleanText(body.expectedTitle, 240);
+  const expectedUpdatedAt = cleanText(body.expectedUpdatedAt, 40);
+  const title = cleanText(body.title, 240);
+  if (!code || !expectedTitle || !expectedUpdatedAt || !title) {
+    return jsonResponse(request, { error: "商品编号、当前版本及新标题均为必填。" }, 400);
+  }
+  const existing = await d1First<ProductRow>(
+    env,
+    { endpoint: "/admin/products/by-id/:id", label: "admin_product_title_before_update", limit: 1, offset: 0 },
+    "SELECT * FROM products WHERE id = ? AND product_code = ? LIMIT 1",
+    [productId, code],
+  );
+  if (!existing) return jsonResponse(request, { error: "指定商品不存在。" }, 404);
+  if (existing.title !== expectedTitle || existing.updated_at !== expectedUpdatedAt) {
+    return jsonResponse(request, { error: "商品已被其他管理员修改，请刷新后重试。" }, 409);
+  }
+  const result = await d1Run(
+    env,
+    { endpoint: "/admin/products/by-id/:id", label: "admin_product_title_update" },
+    `UPDATE products SET title = ?, updated_at = strftime('%Y-%m-%d %H:%M:%f', 'now')
+     WHERE id = ? AND product_code = ? AND title = ? AND updated_at = ?`,
+    [title, productId, code, expectedTitle, expectedUpdatedAt],
+  );
+  if (!result.meta.changes) return jsonResponse(request, { error: "商品内容已发生变化，请刷新后重试。" }, 409);
+  const updated = await d1First<ProductRow>(
+    env,
+    { endpoint: "/admin/products/by-id/:id", label: "admin_product_title_after_update", limit: 1, offset: 0 },
+    "SELECT * FROM products WHERE id = ? AND product_code = ? LIMIT 1",
+    [productId, code],
+  );
+  return jsonResponse(request, { product: updated ? mapProduct(updated) : null });
+}
+
+async function handleAdminProductSoftDelete(request: Request, env: WorkerEnv, productId: number) {
+  const body = await readBoundedJson(request);
+  if (!isRecord(body)) return jsonResponse(request, { error: "商品数据无效。" }, 400);
+  const code = cleanText(body.productCode, 80);
+  const expectedTitle = cleanText(body.expectedTitle, 240);
+  const expectedUpdatedAt = cleanText(body.expectedUpdatedAt, 40);
+  if (!code || !expectedTitle || !expectedUpdatedAt) {
+    return jsonResponse(request, { error: "商品编号及当前商品版本为必填。" }, 400);
+  }
+  const existing = await d1First<ProductRow>(
+    env,
+    { endpoint: "/admin/products/by-id/:id", label: "admin_product_before_unpublish", limit: 1, offset: 0 },
+    "SELECT * FROM products WHERE id = ? AND product_code = ? LIMIT 1",
+    [productId, code],
+  );
+  if (!existing) return jsonResponse(request, { error: "指定商品不存在。" }, 404);
+  if (existing.status !== "active") return jsonResponse(request, { error: "该商品已不是在售状态，请刷新后确认。" }, 409);
+  if (existing.title !== expectedTitle || existing.updated_at !== expectedUpdatedAt) {
+    return jsonResponse(request, { error: "商品已被其他管理员修改，请刷新后重试。" }, 409);
+  }
+  const result = await d1Run(
+    env,
+    { endpoint: "/admin/products/by-id/:id", label: "admin_product_unpublish" },
+    `UPDATE products SET status = 'inactive', updated_at = strftime('%Y-%m-%d %H:%M:%f', 'now')
+     WHERE id = ? AND product_code = ? AND title = ? AND updated_at = ? AND status = 'active'`,
+    [productId, code, expectedTitle, expectedUpdatedAt],
+  );
+  if (!result.meta.changes) return jsonResponse(request, { error: "商品状态已发生变化，请刷新后重试。" }, 409);
+  const updated = await d1First<ProductRow>(
+    env,
+    { endpoint: "/admin/products/by-id/:id", label: "admin_product_after_unpublish", limit: 1, offset: 0 },
+    "SELECT * FROM products WHERE id = ? AND product_code = ? LIMIT 1",
+    [productId, code],
+  );
+  return jsonResponse(request, { product: updated ? mapProduct(updated) : null, softDeleted: true });
+}
+
+async function handleAdminProductRestore(request: Request, env: WorkerEnv, productId: number) {
+  const body = await readBoundedJson(request);
+  if (!isRecord(body)) return jsonResponse(request, { error: "商品数据无效。" }, 400);
+  const code = cleanText(body.productCode, 80);
+  const expectedTitle = cleanText(body.expectedTitle, 240);
+  const expectedUpdatedAt = cleanText(body.expectedUpdatedAt, 40);
+  if (!code || !expectedTitle || !expectedUpdatedAt) {
+    return jsonResponse(request, { error: "商品编号及当前商品版本为必填。" }, 400);
+  }
+  const existing = await d1First<ProductRow>(
+    env,
+    { endpoint: "/admin/products/by-id/:id/restore", label: "admin_product_before_restore", limit: 1, offset: 0 },
+    "SELECT * FROM products WHERE id = ? AND product_code = ? LIMIT 1",
+    [productId, code],
+  );
+  if (!existing) return jsonResponse(request, { error: "指定商品不存在。" }, 404);
+  if (existing.status !== "inactive") return jsonResponse(request, { error: "该商品当前并非已移除状态，无法撤销。" }, 409);
+  if (existing.title !== expectedTitle || existing.updated_at !== expectedUpdatedAt) {
+    return jsonResponse(request, { error: "商品已被其他管理员修改，请刷新后重试。" }, 409);
+  }
+  const result = await d1Run(
+    env,
+    { endpoint: "/admin/products/by-id/:id/restore", label: "admin_product_restore" },
+    `UPDATE products SET status = 'active', updated_at = strftime('%Y-%m-%d %H:%M:%f', 'now')
+     WHERE id = ? AND product_code = ? AND title = ? AND updated_at = ? AND status = 'inactive'`,
+    [productId, code, expectedTitle, expectedUpdatedAt],
+  );
+  if (!result.meta.changes) return jsonResponse(request, { error: "商品状态已发生变化，请刷新后重试。" }, 409);
+  const updated = await d1First<ProductRow>(
+    env,
+    { endpoint: "/admin/products/by-id/:id/restore", label: "admin_product_after_restore", limit: 1, offset: 0 },
+    "SELECT * FROM products WHERE id = ? AND product_code = ? LIMIT 1",
+    [productId, code],
+  );
+  return jsonResponse(request, { product: updated ? mapProduct(updated) : null, restored: true });
 }
 
 async function handleAdminProductUpdate(request: Request, env: WorkerEnv, productCode: string) {
@@ -2401,6 +2638,8 @@ export default {
         return handleWhatsappClicked(request, env, decodeURIComponent(adminWhatsappClickedMatch[1]));
       }
       if (pathname === "/admin/products" && request.method === "GET") return handleAdminProducts(request, env);
+      if (pathname === "/admin/products/duplicates" && request.method === "GET") return handleAdminDuplicateGroups(request, env);
+      if (pathname === "/admin/products/duplicate-items" && request.method === "GET") return handleAdminDuplicateItems(request, env);
       if (pathname === "/admin/classification/queue" && request.method === "GET") return handleClassificationQueue(request, env);
       if (pathname === "/admin/classification/summary" && request.method === "GET") return handleClassificationSummary(request, env);
       if (pathname === "/admin/classification/suggestions" && request.method === "GET") return handleClassificationSuggestions(request, env);
@@ -2409,6 +2648,11 @@ export default {
       if (pathname === "/admin/site-settings" && request.method === "PUT") return handleAdminSiteSettings(request, env);
       const adminProductMatch = pathname.match(/^\/admin\/products\/([^/]+)$/);
       if (adminProductMatch && request.method === "PATCH") return handleAdminProductUpdate(request, env, decodeURIComponent(adminProductMatch[1]));
+      const adminProductByIdMatch = pathname.match(/^\/admin\/products\/by-id\/(\d+)$/);
+      if (adminProductByIdMatch && request.method === "PATCH") return handleAdminProductTitleUpdate(request, env, Number(adminProductByIdMatch[1]));
+      if (adminProductByIdMatch && request.method === "DELETE") return handleAdminProductSoftDelete(request, env, Number(adminProductByIdMatch[1]));
+      const adminProductRestoreMatch = pathname.match(/^\/admin\/products\/by-id\/(\d+)\/restore$/);
+      if (adminProductRestoreMatch && request.method === "POST") return handleAdminProductRestore(request, env, Number(adminProductRestoreMatch[1]));
       if (pathname === "/admin/orders" && request.method === "GET") return handleAdminOrders(request, env);
       const paymentConfirmedMatch = pathname.match(/^\/admin\/orders\/([^/]+)\/payment-confirmed$/);
       if (paymentConfirmedMatch && request.method === "PATCH") {

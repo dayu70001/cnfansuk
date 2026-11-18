@@ -1,4 +1,5 @@
 import { ProductAdminPanel } from "@/components/ProductAdminPanel";
+import { ProductDuplicateManager } from "@/components/ProductDuplicateManager";
 import { requireAdmin } from "@/lib/adminAuth";
 
 export default async function AdminProductsPage() {
@@ -6,12 +7,12 @@ export default async function AdminProductsPage() {
 
   return (
     <section className="page-shell">
-      <div className="page-heading">
-        <p className="eyebrow">管理后台</p>
-        <h1>产品管理</h1>
-        <p>按商品标题、商品编号或品牌搜索，修改标题、分类、子类目和品牌后直接保存到 D1。</p>
-      </div>
-      <ProductAdminPanel />
+      <ProductDuplicateManager />
+      <details className="admin-duplicate-legacy">
+        <summary>旧版产品管理与 AI 分类扫描</summary>
+        <p>原有分类、品牌编辑和分类扫描功能仍保留在这里。</p>
+        <ProductAdminPanel />
+      </details>
     </section>
   );
 }

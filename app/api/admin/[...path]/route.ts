@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { revalidatePath } from "next/cache";
 import { getAdminWorkerToken, isAdminAuthenticated } from "@/lib/adminAuth";
 import { getCatalogApiBase } from "@/lib/catalogApiBase";
 
@@ -34,6 +35,21 @@ async function proxyAdminRequest(request: Request, context: RouteContext) {
     body,
     cache: "no-store",
   });
+  const isProductByIdWrite = path[0] === "products"
+    && path[1] === "by-id"
+    && /^\d+$/.test(path[2] || "")
+    && ((request.method === "PATCH" && path.length === 3)
+      || (request.method === "DELETE" && path.length === 3)
+      || (request.method === "POST" && path[3] === "restore" && path.length === 4));
+  if (response.ok && isProductByIdWrite) {
+    const result = await response.clone().json().catch(() => null) as { product?: { slug?: string } } | null;
+    if (result?.product?.slug) revalidatePath(`/product/${encodeURIComponent(result.product.slug)}`, "page");
+    revalidatePath("/", "page");
+    revalidatePath("/catalog", "page");
+    revalidatePath("/category/[slug]", "page");
+    revalidatePath("/category/[slug]/[subcategory]", "page");
+    revalidatePath("/sitemap.xml", "page");
+  }
   return new NextResponse(response.body, {
     status: response.status,
     headers: { "Content-Type": response.headers.get("Content-Type") || "application/json" },
