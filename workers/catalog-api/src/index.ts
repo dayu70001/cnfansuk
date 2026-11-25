@@ -2,6 +2,14 @@ import { catalogCategories, catalogSubcategories, canUpdateCatalogClassification
 import { buildDuplicateTitleGroups, countExactTitleGroups, normalizeProductTitle } from "../../../lib/productDuplicates";
 import { getOrderPaymentStage, type RawOrderStatus } from "../../../lib/orderStatus";
 import {
+  getCheckoutCurrency,
+  getLastMileCarrier,
+  getShippingMethod,
+  getShippingPrice,
+  isShippingMethodId,
+  type ShippingMethodId,
+} from "../../../lib/shipping";
+import {
   DEEPSEEK_API_URL,
   KIMI_API_URL,
   buildDeepSeekRequest,
@@ -20,6 +28,7 @@ import {
 
 type WorkerEnv = Env & {
   ADMIN_TOKEN: string;
+  LEGACY_CHECKOUT_COMPAT_UNTIL?: string;
   KIMI_API_KEY?: string;
   KIMI_MODEL?: string;
   DEEPSEEK_API_KEY?: string;
@@ -199,12 +208,6 @@ const ALLOWED_ORIGINS = new Set([
   "https://www.cnfans.co.uk",
   "http://localhost:4000",
 ]);
-const FREE_SHIPPING_THRESHOLD = 180;
-const SHIPPING_METHODS = {
-  "royal-mail-tracked": { label: "Royal Mail Tracked", estimate: "7–12 business days", priceGbp: 5 },
-  "dhl-express": { label: "DHL Express", estimate: "7–12 business days", priceGbp: 5 },
-  "fedex-priority": { label: "FedEx Priority", estimate: "5–9 business days", priceGbp: 15 },
-} as const;
 const PAYMENT_METHODS = {
   "bank-transfer": { label: "GBP Bank Transfer", feeRate: 0 },
 } as const;
@@ -227,10 +230,13 @@ const CATALOG_SIZE_STATS_CACHE_SECONDS = 86400;
 // rows. Future data writes should continue to use the normal version check.
 const CATALOG_CACHE_NAMESPACE = "v3-hard-delete-20260915";
 
-function calculateShippingFee(methodId: keyof typeof SHIPPING_METHODS, eligibilitySubtotal: number) {
-  return eligibilitySubtotal >= FREE_SHIPPING_THRESHOLD && methodId !== "fedex-priority"
-    ? 0
-    : SHIPPING_METHODS[methodId].priceGbp;
+function calculateShippingFee(
+  methodId: ShippingMethodId,
+  eligibilitySubtotal: number,
+  currency: CurrencyCode = "GBP",
+  countryCode = "",
+) {
+  return getShippingPrice(methodId, eligibilitySubtotal, currency, countryCode);
 }
 
 function corsHeaders(request: Request): HeadersInit {
@@ -951,8 +957,8 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function getCurrencyPrice(product: ProductRow, currency: CurrencyCode): number {
-  if (currency === "EUR") return Number(product.price_eur ?? product.price_gbp * 9 / 8);
-  if (currency === "USD") return Number(product.price_usd ?? product.price_gbp * 9 / 7);
+  if (currency === "EUR") return Number(product.price_eur) || Number(product.price_gbp) * 9 / 8;
+  if (currency === "USD") return Number(product.price_usd) || Number(product.price_gbp) * 9 / 7;
   return Number(product.price_gbp);
 }
 
@@ -961,12 +967,16 @@ type OrderQuote = {
   subtotal: number;
   shippingFee: number;
   finalTotal: number;
-  currency: "GBP";
+  currency: CurrencyCode;
   eligibilityCurrency: CurrencyCode;
   eligibilitySubtotal: number;
   freeShippingApplied: boolean;
+  countryCode: string;
+  lastMileCarrier: string | null;
   lineItems: Array<{ productCode: string; size: string; quantity: number; unitPrice: number; lineTotal: number }>;
 };
+
+type LegacyOrderQuote = Omit<OrderQuote, "countryCode" | "lastMileCarrier"> & { currency: "GBP" };
 
 function roundMoney(value: number) {
   return Math.round((value + Number.EPSILON) * 100) / 100;
@@ -977,12 +987,57 @@ function resolveEligibilityCurrency(value: unknown): CurrencyCode | null {
   return value === "GBP" || value === "EUR" || value === "USD" ? value : null;
 }
 
+function isLegacyCheckoutCompatibilityActive(env: WorkerEnv) {
+  const expiresAt = Date.parse(env.LEGACY_CHECKOUT_COMPAT_UNTIL || "");
+  return Number.isFinite(expiresAt) && Date.now() < expiresAt;
+}
+
+function isLegacyCheckoutQuote(value: unknown): boolean {
+  return isRecord(value)
+    && !Object.hasOwn(value, "countryCode")
+    && !Object.hasOwn(value, "lastMileCarrier");
+}
+
 function buildOrderQuote(
   requestedItems: RequestedOrderLine[],
   productsByCode: Map<string, ProductRow>,
-  shippingMethodId: keyof typeof SHIPPING_METHODS,
+  shippingMethodId: ShippingMethodId,
   eligibilityCurrency: CurrencyCode,
+  countryCode: string,
 ): OrderQuote {
+  let subtotalValue = 0;
+  let eligibilitySubtotal = 0;
+  const lineItems = requestedItems.map((item) => {
+    const product = productsByCode.get(item.productCode)!;
+    const unitPrice = getCurrencyPrice(product, eligibilityCurrency);
+    const lineTotal = unitPrice * item.quantity;
+    subtotalValue += lineTotal;
+    eligibilitySubtotal += getCurrencyPrice(product, eligibilityCurrency) * item.quantity;
+    return { productCode: item.productCode, size: item.size, quantity: item.quantity, unitPrice, lineTotal };
+  });
+  const subtotal = roundMoney(subtotalValue);
+  const shippingFee = calculateShippingFee(shippingMethodId, eligibilitySubtotal, eligibilityCurrency, countryCode);
+  const lastMileCarrier = getLastMileCarrier(countryCode)?.label || null;
+  return {
+    subtotal,
+    shippingFee,
+    finalTotal: roundMoney(subtotal + shippingFee),
+    currency: eligibilityCurrency,
+    eligibilityCurrency,
+    eligibilitySubtotal,
+    freeShippingApplied: shippingFee === 0 && shippingMethodId !== "fedex-priority",
+    countryCode,
+    lastMileCarrier,
+    lineItems,
+  };
+}
+
+function buildLegacyOrderQuote(
+  requestedItems: RequestedOrderLine[],
+  productsByCode: Map<string, ProductRow>,
+  shippingMethodId: ShippingMethodId,
+  eligibilityCurrency: CurrencyCode,
+): LegacyOrderQuote {
   let subtotalGbp = 0;
   let eligibilitySubtotal = 0;
   const lineItems = requestedItems.map((item) => {
@@ -994,7 +1049,7 @@ function buildOrderQuote(
     return { productCode: item.productCode, size: item.size, quantity: item.quantity, unitPrice, lineTotal };
   });
   const subtotal = roundMoney(subtotalGbp);
-  const shippingFee = calculateShippingFee(shippingMethodId, eligibilitySubtotal);
+  const shippingFee = calculateShippingFee(shippingMethodId, eligibilitySubtotal, eligibilityCurrency);
   return {
     subtotal,
     shippingFee,
@@ -1007,14 +1062,21 @@ function buildOrderQuote(
   };
 }
 
-function expectedQuoteMatches(expected: unknown, quote: OrderQuote) {
+function expectedQuoteMatches(expected: unknown, quote: OrderQuote | LegacyOrderQuote) {
   if (!isRecord(expected)) return false;
+  const expectedIsLegacy = isLegacyCheckoutQuote(expected);
+  const quoteIsLegacy = !("countryCode" in quote) && !("lastMileCarrier" in quote);
+  if (expectedIsLegacy !== quoteIsLegacy) return false;
+  const quoteCountryCode = "countryCode" in quote ? quote.countryCode : undefined;
+  const quoteLastMileCarrier = "lastMileCarrier" in quote ? quote.lastMileCarrier : undefined;
   const expectedLineItems = expected.lineItems;
   const expectedValues = [expected.subtotal, expected.shippingFee, expected.finalTotal, expected.eligibilitySubtotal];
   if (expectedValues.some((value) => typeof value !== "number" || !Number.isFinite(value))) return false;
   if (expected.currency !== quote.currency
     || expected.eligibilityCurrency !== quote.eligibilityCurrency
     || expected.freeShippingApplied !== quote.freeShippingApplied
+    || (!expectedIsLegacy && (expected.countryCode !== quoteCountryCode
+      || expected.lastMileCarrier !== quoteLastMileCarrier))
     || expected.subtotal !== quote.subtotal
     || expected.shippingFee !== quote.shippingFee
     || expected.finalTotal !== quote.finalTotal
@@ -1041,10 +1103,20 @@ async function handleOrderQuote(request: Request, env: WorkerEnv): Promise<Respo
   if (body.items.length < 1 || body.items.length > 50) {
     return jsonResponse(request, { error: "商品数量无效" }, 400);
   }
-  const eligibilityCurrency = resolveEligibilityCurrency(body.eligibilityCurrency);
-  if (!eligibilityCurrency) return jsonResponse(request, { error: "包邮资格币种无效" }, 400);
-  const shippingMethodId = cleanText(body.shippingMethodId, 40) as keyof typeof SHIPPING_METHODS;
-  if (!SHIPPING_METHODS[shippingMethodId]) return jsonResponse(request, { error: "配送方式无效" }, 400);
+  const requestedCurrency = resolveEligibilityCurrency(body.eligibilityCurrency);
+  if (!requestedCurrency) return jsonResponse(request, { error: "包邮资格币种无效" }, 400);
+  const legacyCheckout = !Object.hasOwn(body, "countryCode");
+  if (legacyCheckout && !isLegacyCheckoutCompatibilityActive(env)) {
+    return jsonResponse(request, {
+      error: "This checkout is out of date. Please refresh the page to get current delivery pricing.",
+      code: "CHECKOUT_VERSION_EXPIRED",
+    }, 409);
+  }
+  const countryCode = cleanText(body.countryCode, 3).toUpperCase();
+  const currency = legacyCheckout ? "GBP" : getCheckoutCurrency(countryCode, requestedCurrency);
+  const shippingMethodValue = cleanText(body.shippingMethodId, 40);
+  if (!isShippingMethodId(shippingMethodValue)) return jsonResponse(request, { error: "配送方式无效" }, 400);
+  const shippingMethodId = shippingMethodValue;
 
   const requestedItems: RequestedOrderLine[] = [];
   for (const rawItem of body.items) {
@@ -1095,12 +1167,10 @@ async function handleOrderQuote(request: Request, env: WorkerEnv): Promise<Respo
     }, 400);
   }
 
-  const quote = buildOrderQuote(
-    requestedItems,
-    new Map(products.map((product) => [product.product_code, product])),
-    shippingMethodId,
-    eligibilityCurrency,
-  );
+  const productsByCode = new Map(products.map((product) => [product.product_code, product]));
+  const quote = legacyCheckout
+    ? buildLegacyOrderQuote(requestedItems, productsByCode, shippingMethodId, requestedCurrency)
+    : buildOrderQuote(requestedItems, productsByCode, shippingMethodId, currency, countryCode);
   return jsonResponse(request, { quote });
 }
 
@@ -1196,6 +1266,7 @@ function checkoutOrderPayload(order: OrderCheckoutPayloadSource, items: OrderIte
     shippingMethodId: order.shipping_method_id,
     shippingMethodLabel: order.shipping_method_label,
     shippingEstimate: order.shipping_estimate,
+    lastMileCarrier: getLastMileCarrier(order.country_code)?.label || null,
   };
 }
 
@@ -1273,12 +1344,19 @@ async function handleCreateOrder(request: Request, env: WorkerEnv): Promise<Resp
       code: "QUOTE_REQUIRED",
     }, 409);
   }
-  const currency: CurrencyCode = "GBP";
-  const eligibilityCurrency = resolveEligibilityCurrency(body.eligibilityCurrency);
-  if (!eligibilityCurrency) return jsonResponse(request, { error: "包邮资格币种无效" }, 400);
-  const shippingMethodId = cleanText(body.shippingMethodId, 40) as keyof typeof SHIPPING_METHODS;
-  const shippingMethod = SHIPPING_METHODS[shippingMethodId];
-  if (!shippingMethod) return jsonResponse(request, { error: "配送方式无效" }, 400);
+  const legacyCheckout = isLegacyCheckoutQuote(body.expectedQuote);
+  if (legacyCheckout && !isLegacyCheckoutCompatibilityActive(env)) {
+    return jsonResponse(request, {
+      error: "This checkout is out of date. Please refresh the page to get current delivery pricing.",
+      code: "CHECKOUT_VERSION_EXPIRED",
+    }, 409);
+  }
+  const requestedCurrency = resolveEligibilityCurrency(body.eligibilityCurrency);
+  if (!requestedCurrency) return jsonResponse(request, { error: "包邮资格币种无效" }, 400);
+  const shippingMethodValue = cleanText(body.shippingMethodId, 40);
+  if (!isShippingMethodId(shippingMethodValue)) return jsonResponse(request, { error: "配送方式无效" }, 400);
+  const shippingMethodId = shippingMethodValue;
+  const shippingMethod = getShippingMethod(shippingMethodId);
   const paymentMethodId: keyof typeof PAYMENT_METHODS = "bank-transfer";
   const paymentMethod = PAYMENT_METHODS[paymentMethodId];
   if (body.items.length < 1 || body.items.length > 50) return jsonResponse(request, { error: "商品数量无效" }, 400);
@@ -1295,6 +1373,8 @@ async function handleCreateOrder(request: Request, env: WorkerEnv): Promise<Resp
   if (!customerName || !email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || !phone || !addressLine1 || !city || !postcode || !countryCode || !countryName) {
     return jsonResponse(request, { error: "请填写完整有效的客户与地址信息" }, 400);
   }
+  const currency = legacyCheckout ? "GBP" : getCheckoutCurrency(countryCode, requestedCurrency);
+  const eligibilityCurrency = legacyCheckout ? requestedCurrency : currency;
 
   const requestedItems: RequestedOrderLine[] = [];
   for (const rawItem of body.items) {
@@ -1391,14 +1471,18 @@ async function handleCreateOrder(request: Request, env: WorkerEnv): Promise<Resp
     return { item, product, unitPrice, lineTotal, imageUrl: images.get(item.productCode)?.[0]?.imageUrl || null };
   });
   subtotal = Math.round(subtotal * 100) / 100;
-  const shippingFee = calculateShippingFee(shippingMethodId, eligibilitySubtotal);
+  const shippingFee = calculateShippingFee(
+    shippingMethodId,
+    eligibilitySubtotal,
+    eligibilityCurrency,
+    legacyCheckout ? "" : countryCode,
+  );
   const paymentFee = Math.round((subtotal + shippingFee) * paymentMethod.feeRate * 100) / 100;
   const finalTotal = Math.round((subtotal + shippingFee + paymentFee) * 100) / 100;
-  const currentQuote: OrderQuote = {
+  const quoteValues = {
     subtotal,
     shippingFee,
     finalTotal,
-    currency,
     eligibilityCurrency,
     eligibilitySubtotal,
     freeShippingApplied: shippingFee === 0 && shippingMethodId !== "fedex-priority",
@@ -1410,6 +1494,14 @@ async function handleCreateOrder(request: Request, env: WorkerEnv): Promise<Resp
       lineTotal,
     })),
   };
+  const currentQuote: OrderQuote | LegacyOrderQuote = legacyCheckout
+    ? { ...quoteValues, currency: "GBP" }
+    : {
+      ...quoteValues,
+      currency,
+      countryCode,
+      lastMileCarrier: getLastMileCarrier(countryCode)?.label || null,
+    };
   const customerValues = [
     customerName, email, phone, cleanText(customer.preferredContact, 30) || null,
     cleanText(customer.whatsapp, 100) || null, cleanText(customer.telegram, 100) || null,
@@ -2368,6 +2460,7 @@ function adminOrderPayload(order: OrderRow) {
     ...order,
     payment_stage: getOrderPaymentStage(order),
     whatsapp_clicked: Boolean(order.whatsapp_clicked_at),
+    last_mile_carrier: getLastMileCarrier(order.country_code)?.label || null,
   };
 }
 
@@ -2428,6 +2521,7 @@ function publicOrderPayload(order: OrderRow, items: OrderItemRow[]) {
     currency: order.currency,
     shippingMethod: order.shipping_method_label,
     shippingEstimate: order.shipping_estimate,
+    lastMileCarrier: getLastMileCarrier(order.country_code)?.label || null,
     items: items.map((item) => ({
       productCode: item.product_code,
       title: item.title,

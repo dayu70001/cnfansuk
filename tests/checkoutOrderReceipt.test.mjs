@@ -48,7 +48,9 @@ test("Order Received details render from the saved order snapshot, not the curre
   assert.match(checkoutStyles, /\.checkout-receipt-details\s*\{[\s\S]*?background:\s*transparent/);
   assert.match(checkoutStyles, /\.checkout-received-details-toggle::after\s*\{[\s\S]*?content:\s*["']["'][\s\S]*?rotate\(45deg\)/);
   assert.match(checkoutStyles, /\.checkout-received-details-toggle\[aria-expanded="true"\]::after\s*\{[\s\S]*?rotate\(225deg\)/);
-  const mobileWhatsAppStyles = checkoutStyles.slice(checkoutStyles.lastIndexOf("@media (max-width: 600px)"));
+  const campaignStylesStart = checkoutStyles.indexOf("/* Black Friday Week:");
+  const beforeCampaignStyles = checkoutStyles.slice(0, campaignStylesStart);
+  const mobileWhatsAppStyles = beforeCampaignStyles.slice(beforeCampaignStyles.lastIndexOf("@media (max-width: 600px)"));
   assert.match(mobileWhatsAppStyles, /\.checkout-order-received \.checkout-received-actions\s*\{[^}]*position:\s*static[^}]*padding:\s*0[^}]*border:\s*0[^}]*background:\s*transparent[^}]*box-shadow:\s*none/);
   assert.match(mobileWhatsAppStyles, /\.checkout-order-received \.checkout-received-actions \.btn\s*\{[\s\S]*?position:\s*fixed[\s\S]*?right:\s*max\(16px, env\(safe-area-inset-right[\s\S]*?bottom:\s*calc\(10px \+ env\(safe-area-inset-bottom[\s\S]*?left:\s*max\(16px, env\(safe-area-inset-left[\s\S]*?height:\s*56px[\s\S]*?border-radius:\s*12px[\s\S]*?background:\s*linear-gradient\(105deg, #59CC6D 0%, #409B83 100%\)[\s\S]*?color:\s*#FFFFFF[\s\S]*?box-shadow:\s*none[\s\S]*?font-size:\s*16px[\s\S]*?font-weight:\s*600[\s\S]*?letter-spacing:\s*0\.1px/);
   assert.match(mobileWhatsAppStyles, /\.checkout-order-received \.checkout-received-actions \.btn:hover,[\s\S]*?background:\s*linear-gradient\(105deg, #59CC6D 0%, #409B83 100%\);[\s\S]*?color:\s*#FFFFFF;/);

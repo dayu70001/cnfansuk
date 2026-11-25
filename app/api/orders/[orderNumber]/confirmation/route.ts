@@ -7,6 +7,7 @@ type RouteContext = { params: Promise<{ orderNumber: string }> };
 function projectConfirmationOrder(order: AuthorizedWorkerOrder) {
   return {
     orderNumber: order.order_number,
+    createdAt: order.created_at || null,
     status: order.status,
     paymentStage: order.payment_stage,
     subtotal: order.subtotal,
@@ -15,6 +16,7 @@ function projectConfirmationOrder(order: AuthorizedWorkerOrder) {
     currency: order.currency,
     shippingMethod: order.shipping_method_label,
     shippingEstimate: order.shipping_estimate,
+    lastMileCarrier: order.last_mile_carrier || null,
     customer: order.customer_name && order.address_line1
       ? {
           name: order.customer_name,

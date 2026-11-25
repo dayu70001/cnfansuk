@@ -6,6 +6,7 @@ import { verifyOrderAccessToken } from "@/lib/orderAccessToken";
 
 export type AuthorizedWorkerOrder = {
   order_number: string;
+  created_at?: string | null;
   status: string;
   payment_stage?: string;
   subtotal: number;
@@ -15,6 +16,7 @@ export type AuthorizedWorkerOrder = {
   email: string;
   shipping_method_label: string;
   shipping_estimate: string;
+  last_mile_carrier?: string | null;
   customer_name?: string;
   phone?: string;
   address_line1?: string;
@@ -22,6 +24,7 @@ export type AuthorizedWorkerOrder = {
   city?: string;
   county?: string | null;
   postcode?: string;
+  country_code?: string;
   country_name?: string;
   items?: Array<{
     product_code: string;

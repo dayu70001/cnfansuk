@@ -8,6 +8,7 @@ import { cartItemToGoogleAnalyticsItem, trackGoogleAnalyticsEvent } from "@/lib/
 import { trackInitiateCheckout } from "@/lib/metaPixel";
 import { useCurrency } from "@/lib/useCurrency";
 import { useCart } from "./CartProvider";
+import { BlackFridayCartNotice } from "./BlackFridayCartNotice";
 
 export function CartDrawer() {
   const { items, isOpen, closeCart, updateQuantity, updateSize, removeItem } = useCart();
@@ -191,6 +192,7 @@ export function CartDrawer() {
                 </div>
               ))}
             </div>
+            <BlackFridayCartNotice />
             <div className="cart-summary">
               <div>
                 <span>Subtotal</span>

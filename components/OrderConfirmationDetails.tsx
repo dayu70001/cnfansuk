@@ -1,18 +1,28 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
+import { MetaPixelEventLink } from "@/components/MetaPixelEventLink";
+import { BlackFridayOrderOffer } from "@/components/BlackFridayOrderOffer";
+import { blackFridayClaimMessage, isBlackFridayOrderEligible } from "@/lib/blackFriday";
 import { formatMoney } from "@/lib/formatMoney";
+import type { CurrencyCode } from "@/lib/currency";
 import { getOrderAccessTokenStorageKey } from "@/lib/orderAccessTokenKey";
+import { getOrderPaymentStage, orderPaymentStageLabel } from "@/lib/orderStatus";
+import { buildPersonalWhatsAppLink } from "@/lib/personalWhatsAppLink";
 
 type ConfirmationOrder = {
   orderNumber: string;
+  createdAt?: string | null;
   status: string;
+  paymentStage?: string | null;
   subtotal: number;
   shippingFee: number;
   total: number;
-  currency: "GBP";
+  currency: CurrencyCode;
   shippingMethod: string;
   shippingEstimate: string;
+  lastMileCarrier?: string | null;
   customer: {
     name: string;
     addressLine1: string;
@@ -34,9 +44,11 @@ type ConfirmationOrder = {
 
 export function OrderConfirmationDetails({
   orderNumber,
+  personalWhatsappUrl,
   useLegacyConfirmationCookie = false,
 }: {
   orderNumber: string;
+  personalWhatsappUrl: string;
   useLegacyConfirmationCookie?: boolean;
 }) {
   const [order, setOrder] = useState<ConfirmationOrder | null>(null);
@@ -75,13 +87,47 @@ export function OrderConfirmationDetails({
     return () => { active = false; };
   }, [orderNumber, useLegacyConfirmationCookie]);
 
+  const eligible = order !== null && isBlackFridayOrderEligible(order);
+  const message = eligible
+    ? blackFridayClaimMessage(orderNumber)
+    : `Hi, I'd like to confirm my order #${orderNumber}.`;
+  const whatsappHref = buildPersonalWhatsAppLink({ personalWhatsappUrl }, message);
+  const whatsappAction = whatsappHref ? (
+    <MetaPixelEventLink
+      className={eligible ? "bf-claim-button" : "chan success-whatsapp"}
+      href={whatsappHref}
+      target="_blank"
+      rel="noopener noreferrer"
+      eventName="CheckoutWhatsAppContact"
+      eventParams={{
+        source_page: "order_success",
+        placement: eligible ? "black_friday_discount_claim" : "order_success_whatsapp",
+        button_label: eligible ? "Claim My Discount" : "Confirm order on WhatsApp",
+        destination: "whatsapp_personal",
+        order_number: orderNumber,
+      }}
+      recordWhatsappClickForOrder={orderNumber}
+    >
+      {eligible ? "Claim My Discount" : "Confirm order on WhatsApp"}
+    </MetaPixelEventLink>
+  ) : null;
+
   if (unavailable) {
-    return <p className="success-unavailable">Order details are no longer available in this browser. Please use your order number when contacting us.</p>;
+    return <>
+      <div className="success-actions">{whatsappAction}<Link className="chan success-track" href="/track-order">Track order →</Link></div>
+      <p className="success-unavailable">Order details are no longer available in this browser. Please use your order number when contacting us.</p>
+    </>;
   }
   if (!order) return <p className="success-loading">Loading your order summary…</p>;
 
   return (
     <div className="order-confirmation-details">
+      <p className="success-payment-status">{order.paymentStage
+        ? orderPaymentStageLabel(order.paymentStage as ReturnType<typeof getOrderPaymentStage>, "en")
+        : orderPaymentStageLabel(getOrderPaymentStage({ status: order.status }), "en")}</p>
+      {eligible ? <BlackFridayOrderOffer>{whatsappAction}</BlackFridayOrderOffer>
+        : <div className="success-actions">{whatsappAction}</div>}
+      <div className="success-actions bf-order-track"><Link className="chan success-track" href="/track-order">Track order →</Link></div>
       <section className="confirmation-card" aria-label="Order summary">
         <p className="eyebrow">Order summary</p>
         {order.items.map((item) => (
@@ -102,7 +148,7 @@ export function OrderConfirmationDetails({
             <p>{[order.customer.addressLine1, order.customer.addressLine2, order.customer.city, order.customer.county, order.customer.postcode, order.customer.countryName].filter(Boolean).join(", ")}</p>
           </>
         ) : <p>Delivery details are no longer available in this browser.</p>}
-        <p className="confirmation-delivery-note">{[order.shippingMethod, order.shippingEstimate].filter(Boolean).join(" · ")}</p>
+        <p className="confirmation-delivery-note">{[order.shippingMethod, order.shippingEstimate, order.lastMileCarrier ? `Last-mile carrier: ${order.lastMileCarrier}` : ""].filter(Boolean).join(" · ")}</p>
       </section>
     </div>
   );

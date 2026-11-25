@@ -16,6 +16,8 @@ import {
 import { trackContactWhatsApp, trackInitiateCheckout } from "@/lib/metaPixel";
 import {
   DEFAULT_SHIPPING_METHOD_ID,
+  getCheckoutCurrency,
+  getLastMileCarrier,
   getShippingMethod,
   getShippingPrice,
   hasFreeShipping,
@@ -27,6 +29,8 @@ import type { RawOrderStatus } from "@/lib/orderStatus";
 import type { CartItem, CustomerDetails } from "@/lib/types";
 import { getOrderAccessTokenStorageKey } from "@/lib/orderAccessTokenKey";
 import { buildPersonalWhatsAppLink } from "@/lib/personalWhatsAppLink";
+import { blackFridayClaimMessage, isBlackFridayOrderEligible } from "@/lib/blackFriday";
+import { BlackFridayOrderOffer } from "@/components/BlackFridayOrderOffer";
 import {
   ORDER_ADDRESS_FIELD_LABELS,
   ORDER_CONTACT_FIELD_LABELS,
@@ -97,6 +101,18 @@ const countries = [
   ["NL", "Netherlands"],
   ["BE", "Belgium"],
   ["PT", "Portugal"],
+  ["EE", "Estonia"],
+  ["LT", "Lithuania"],
+  ["LV", "Latvia"],
+  ["CY", "Cyprus"],
+  ["HU", "Hungary"],
+  ["RO", "Romania"],
+  ["MT", "Malta"],
+  ["SI", "Slovenia"],
+  ["SK", "Slovakia"],
+  ["BG", "Bulgaria"],
+  ["HR", "Croatia"],
+  ["US", "United States"],
   ["CH", "Switzerland"],
   ["AT", "Austria"],
   ["DK", "Denmark"],
@@ -104,7 +120,7 @@ const countries = [
   ["NO", "Norway"],
   ["FI", "Finland"],
   ["PL", "Poland"],
-  ["CZ", "Czech Republic"],
+  ["CZ", "Czechia"],
   ["GR", "Greece"],
   ["LU", "Luxembourg"],
   ["MC", "Monaco"],
@@ -153,7 +169,7 @@ type CheckoutOrder = {
   shippingFee: number;
   finalTotal: number;
   total: number;
-  currency: "GBP";
+  currency: CurrencyCode;
   status: RawOrderStatus;
   orderAccessToken?: string | null;
   items: CheckoutOrderItem[];
@@ -161,6 +177,7 @@ type CheckoutOrder = {
   shippingMethodId: ShippingMethodId;
   shippingMethodLabel: string;
   shippingEstimate: string;
+  lastMileCarrier?: string | null;
   eligibilityCurrency?: CurrencyCode;
   eligibilitySubtotal?: number;
   freeShippingApplied?: boolean;
@@ -170,10 +187,12 @@ type CheckoutQuote = {
   subtotal: number;
   shippingFee: number;
   finalTotal: number;
-  currency: "GBP";
+  currency: CurrencyCode;
   eligibilityCurrency: CurrencyCode;
   eligibilitySubtotal: number;
   freeShippingApplied: boolean;
+  countryCode: string;
+  lastMileCarrier: string | null;
   lineItems: Array<{ productCode: string; size: string; quantity: number; unitPrice: number; lineTotal: number }>;
 };
 
@@ -208,7 +227,7 @@ type CheckoutFlowProps = {
 
 export default function CheckoutFlow({ personalWhatsappUrl, personalWhatsappNumber }: CheckoutFlowProps) {
   const { items, cartRestored, removeSubmittedItems } = useCart();
-  const { currency: eligibilityCurrency, ready: currencyReady } = useCurrency();
+  const { currency: selectedCurrency, ready: currencyReady } = useCurrency();
   const router = useRouter();
   const searchParams = useSearchParams();
   const startNewCheckout = searchParams.get("startNew") === "1";
@@ -250,8 +269,11 @@ export default function CheckoutFlow({ personalWhatsappUrl, personalWhatsappNumb
     scrollPageInstantly(0);
   }, [startNewCheckout, step]);
 
+  const checkoutCurrency = getCheckoutCurrency(shipping.countryCode, selectedCurrency);
+  const eligibilityCurrency = checkoutCurrency;
   const subtotalInEligibilityCurrency = useMemo(() => getCartSubtotal(items, eligibilityCurrency), [eligibilityCurrency, items]);
   const localSubtotalGbp = useMemo(() => getCartSubtotal(items, "GBP"), [items]);
+  const localSubtotal = useMemo(() => getCartSubtotal(items, checkoutCurrency), [checkoutCurrency, items]);
   const quoteItems = useMemo(() => items.map((item) => ({
     productCode: item.productCode || item.productId,
     size: item.size || "",
@@ -261,13 +283,15 @@ export default function CheckoutFlow({ personalWhatsappUrl, personalWhatsappNumb
   const quoteKey = useMemo(() => JSON.stringify({
     shippingMethodId,
     eligibilityCurrency,
+    countryCode: shipping.countryCode,
     items: quoteItems,
-  }), [eligibilityCurrency, quoteItems, shippingMethodId]);
+  }), [eligibilityCurrency, quoteItems, shipping.countryCode, shippingMethodId]);
   const quoteScopeKey = useMemo(() => JSON.stringify({
     checkoutSessionId,
     eligibilityCurrency,
+    countryCode: shipping.countryCode,
     items: quoteItems,
-  }), [checkoutSessionId, eligibilityCurrency, quoteItems]);
+  }), [checkoutSessionId, eligibilityCurrency, quoteItems, shipping.countryCode]);
   const cartFingerprint = useMemo(() => JSON.stringify(
     [...quoteItems].sort((left, right) => (
       `${left.productCode}|${left.size}|${left.color}`.localeCompare(`${right.productCode}|${right.size}|${right.color}`)
@@ -288,9 +312,9 @@ export default function CheckoutFlow({ personalWhatsappUrl, personalWhatsappNumb
   const lastQuoteForCurrentCart = lastConfirmedPricingQuote?.scopeKey === quoteScopeKey
     ? lastConfirmedPricingQuote.quote
     : undefined;
-  const subtotal = activeQuote?.subtotal ?? lastQuoteForCurrentCart?.subtotal ?? localSubtotalGbp;
+  const subtotal = activeQuote?.subtotal ?? lastQuoteForCurrentCart?.subtotal ?? localSubtotal;
   const shippingPrice = activeQuote?.shippingFee
-    ?? getShippingPrice(shippingMethodId, subtotalInEligibilityCurrency, eligibilityCurrency);
+    ?? getShippingPrice(shippingMethodId, subtotalInEligibilityCurrency, eligibilityCurrency, shipping.countryCode);
   const total = activeQuote?.finalTotal ?? subtotal + shippingPrice;
   const checkoutTracked = useRef(false);
 
@@ -413,7 +437,7 @@ export default function CheckoutFlow({ personalWhatsappUrl, personalWhatsappNumb
     void fetch("/api/orders/quote", {
       method: "POST",
       headers: { "Content-Type": "application/json", Accept: "application/json" },
-      body: JSON.stringify({ items: quoteItems, shippingMethodId, eligibilityCurrency }),
+      body: JSON.stringify({ items: quoteItems, shippingMethodId, eligibilityCurrency, countryCode: shipping.countryCode }),
       cache: "no-store",
       signal: controller.signal,
     })
@@ -445,7 +469,7 @@ export default function CheckoutFlow({ personalWhatsappUrl, personalWhatsappNumb
       active = false;
       controller.abort();
     };
-  }, [cartRestored, currencyReady, eligibilityCurrency, hasCompleteSizes, hydrated, items, order, quoteItems, quoteKey, quoteRetry, quoteScopeKey, shippingMethodId, step]);
+  }, [cartRestored, currencyReady, eligibilityCurrency, hasCompleteSizes, hydrated, items, order, quoteItems, quoteKey, quoteRetry, quoteScopeKey, shipping.countryCode, shippingMethodId, step]);
 
   useEffect(() => {
     if (!hydrated || !checkoutSessionId) return;
@@ -474,10 +498,10 @@ export default function CheckoutFlow({ personalWhatsappUrl, personalWhatsappNumb
     checkoutTracked.current = true;
     trackGoogleAnalyticsEvent("begin_checkout", {
       currency: "GBP",
-      value: subtotal,
+      value: localSubtotalGbp,
       items: items.map((item) => cartItemToGoogleAnalyticsItem(item, getCartItemPrice(item, "GBP"))),
     });
-  }, [items, subtotal]);
+  }, [items, localSubtotalGbp]);
 
   function validateDetails() {
     const nextErrors: Record<string, string> = {};
@@ -569,12 +593,12 @@ export default function CheckoutFlow({ personalWhatsappUrl, personalWhatsappNumb
             color: item.color,
             size: item.size,
             quantity: item.quantity,
-            price: getCartItemPrice(item, "GBP"),
-            currency: "GBP",
+            price: getCartItemPrice(item, checkoutCurrency),
+            currency: checkoutCurrency,
           })),
           shippingMethodId,
           eligibilityCurrency,
-          currency: "GBP",
+          currency: checkoutCurrency,
           expectedQuote: activeQuote,
         }),
       });
@@ -607,10 +631,10 @@ export default function CheckoutFlow({ personalWhatsappUrl, personalWhatsappNumb
         removeSubmittedItems(submittedCartSnapshot);
       }
       trackGoogleAnalyticsEvent("add_shipping_info", {
-        currency: "GBP",
+        currency: result.order.currency,
         value: result.order.total,
         shipping_tier: getShippingMethod(shippingMethodId).label,
-        items: items.map((item) => cartItemToGoogleAnalyticsItem(item, getCartItemPrice(item, "GBP"))),
+        items: items.map((item) => cartItemToGoogleAnalyticsItem(item, getCartItemPrice(item, result.order!.currency))),
       });
       setMaxStep(2);
       setStep("payment");
@@ -637,7 +661,9 @@ export default function CheckoutFlow({ personalWhatsappUrl, personalWhatsappNumb
 
   const orderItems = order?.items ?? items;
   const whatsappMessage = order
-    ? `Hi CNFans UK, please confirm my order #${order.orderNumber}`
+    ? isBlackFridayOrderEligible(order)
+      ? blackFridayClaimMessage(order.orderNumber)
+      : `Hi CNFans UK, please confirm my order #${order.orderNumber}`
     : "";
   const whatsappHref = buildPersonalWhatsAppLink(
     { personalWhatsappUrl, personalWhatsappNumber },
@@ -650,7 +676,8 @@ export default function CheckoutFlow({ personalWhatsappUrl, personalWhatsappNumb
   const summaryLineTotals = order
     ? order.items.map((item) => item.lineTotal)
     : (activeQuote ?? lastQuoteForCurrentCart)?.lineItems.map((line) => line.lineTotal);
-  const summaryEligibilityCurrency = order?.eligibilityCurrency ?? eligibilityCurrency;
+  const summaryCurrency = order?.currency ?? checkoutCurrency;
+  const summaryEligibilityCurrency = order?.eligibilityCurrency ?? summaryCurrency;
   const summaryEligibilitySubtotal = order?.eligibilitySubtotal
     ?? activeQuote?.eligibilitySubtotal
     ?? subtotalInEligibilityCurrency;
@@ -696,6 +723,7 @@ export default function CheckoutFlow({ personalWhatsappUrl, personalWhatsappNumb
         open={summaryOpen}
         onToggle={() => setSummaryOpen(!summaryOpen)}
         eligibilityCurrency={summaryEligibilityCurrency}
+        currency={summaryCurrency}
         eligibilitySubtotal={summaryEligibilitySubtotal}
         lineTotals={summaryLineTotals}
         freeShippingApplied={summaryFreeShippingApplied}
@@ -720,6 +748,9 @@ export default function CheckoutFlow({ personalWhatsappUrl, personalWhatsappNumb
             <DeliveryStep
               shippingPrice={shippingPrice}
               eligibilityCurrency={eligibilityCurrency}
+              currency={checkoutCurrency}
+              countryCode={shipping.countryCode}
+              lastMileCarrier={getLastMileCarrier(shipping.countryCode)?.label || null}
               eligibilitySubtotal={activeQuote?.eligibilitySubtotal ?? subtotalInEligibilityCurrency}
               selectedMethodId={shippingMethodId}
               quoteLoading={quoteLoading}
@@ -759,7 +790,7 @@ export default function CheckoutFlow({ personalWhatsappUrl, personalWhatsappNumb
                     button_label: "Contact on WhatsApp",
                     num_items: orderItems.length,
                     value: order.finalTotal,
-                    currency: "GBP",
+                    currency: order.currency,
                   });
                   recordWhatsAppOrderClick(order);
                 }}
@@ -783,6 +814,7 @@ export default function CheckoutFlow({ personalWhatsappUrl, personalWhatsappNumb
             shippingPrice={summaryShippingPrice}
             total={summaryTotal}
             eligibilityCurrency={summaryEligibilityCurrency}
+            currency={summaryCurrency}
             eligibilitySubtotal={summaryEligibilitySubtotal}
             lineTotals={summaryLineTotals}
             freeShippingApplied={summaryFreeShippingApplied}
@@ -1015,6 +1047,9 @@ function DetailsStep({
 function DeliveryStep({
   shippingPrice,
   eligibilityCurrency,
+  currency,
+  countryCode,
+  lastMileCarrier,
   eligibilitySubtotal,
   selectedMethodId,
   quoteLoading,
@@ -1031,6 +1066,9 @@ function DeliveryStep({
 }: {
   shippingPrice: number;
   eligibilityCurrency: CurrencyCode;
+  currency: CurrencyCode;
+  countryCode: string;
+  lastMileCarrier: string | null;
   eligibilitySubtotal: number;
   selectedMethodId: ShippingMethodId;
   quoteLoading: boolean;
@@ -1067,7 +1105,7 @@ function DeliveryStep({
             <strong aria-live={method.id === selectedMethodId ? "polite" : undefined}>
               {formatDeliveryPrice(method.id === selectedMethodId && quoteReady
                 ? shippingPrice
-                : getShippingPrice(method.id, eligibilitySubtotal, eligibilityCurrency))}
+                : getShippingPrice(method.id, eligibilitySubtotal, eligibilityCurrency, countryCode), currency)}
             </strong>
           </label>
         ))}
@@ -1095,12 +1133,18 @@ function DeliveryStep({
           <strong aria-live="polite">
             {getShippingMethod(selectedMethodId).label} · {formatDeliveryPrice(quoteReady
                 ? shippingPrice
-                : getShippingPrice(selectedMethodId, eligibilitySubtotal, eligibilityCurrency))}
+                : getShippingPrice(selectedMethodId, eligibilitySubtotal, eligibilityCurrency, countryCode), currency)}
           </strong>
         </div>
+        {lastMileCarrier ? (
+          <div>
+            <span>Last-mile carrier</span>
+            <strong>{lastMileCarrier}</strong>
+          </div>
+        ) : null}
       </div>
       <p className="checkout-currency-note">
-        Order totals are in GBP. Free standard delivery eligibility uses your selected {eligibilityCurrency} display currency ({currencyThresholdLabel(eligibilityCurrency)}).
+        Checkout totals are shown in {currency}. Free standard delivery eligibility uses {currencyThresholdLabel(eligibilityCurrency)}.
       </p>
       <div className="checkout-actions">
         <button className="checkout-back" type="button" onClick={onBack}>
@@ -1127,6 +1171,7 @@ function PaymentStep({
   onWhatsAppClick: () => void;
 }) {
   const [detailsOpen, setDetailsOpen] = useState(false);
+  const blackFridayEligible = isBlackFridayOrderEligible(order);
   const displaySnapshot: OrderDisplaySnapshot = {
     customerName: order.customer.name,
     email: order.customer.email,
@@ -1183,7 +1228,8 @@ function PaymentStep({
           <h4>Delivery Method</h4>
           <OrderDetailFields rows={[
             { label: "Service", value: [order.shippingMethodLabel, order.shippingEstimate].filter(Boolean).join(" · ") },
-            { label: "Delivery fee", value: formatMoney(order.shippingFee, "GBP") },
+            ...(order.lastMileCarrier ? [{ label: "Last-mile carrier", value: order.lastMileCarrier }] : []),
+            { label: "Delivery fee", value: formatMoney(order.shippingFee, order.currency) },
           ]} />
         </section>
         <section className="checkout-order-detail-section">
@@ -1191,27 +1237,40 @@ function PaymentStep({
           <dl className="checkout-order-detail-totals">
             <div>
               <dt>Items subtotal</dt>
-              <dd>{formatMoney(order.subtotal, "GBP")}</dd>
+              <dd>{formatMoney(order.subtotal, order.currency)}</dd>
             </div>
             <div>
               <dt>Delivery</dt>
-              <dd>{formatMoney(order.shippingFee, "GBP")}</dd>
+              <dd>{formatMoney(order.shippingFee, order.currency)}</dd>
             </div>
             <div className="checkout-order-detail-total">
               <dt>Order total</dt>
-              <dd>{formatMoney(order.finalTotal, "GBP")}</dd>
+              <dd>{formatMoney(order.finalTotal, order.currency)}</dd>
             </div>
           </dl>
         </section>
       </div>
       <p className="checkout-submit-note">Thank you. Your order has been received.</p>
       <div className="checkout-receipt-details">
-        <div className="checkout-received-card">
+        <div className={blackFridayEligible ? "checkout-received-card checkout-received-card-bf" : "checkout-received-card"}>
           <div><span>Order</span><strong>#{order.orderNumber}</strong></div>
-          <div><span>Amount due</span><strong>{formatMoney(order.finalTotal, "GBP")}</strong></div>
+          <div><span>TOTAL</span><strong>{formatMoney(order.finalTotal, order.currency)}{blackFridayEligible ? <small className="checkout-bf-total-note">Before Black Friday discount</small> : null}</strong></div>
           <div><span>Status</span><strong>Awaiting Payment</strong></div>
         </div>
       </div>
+      {blackFridayEligible && whatsappHref ? (
+        <BlackFridayOrderOffer>
+          <a className="bf-claim-button bf-desktop-claim" href={whatsappHref} target="_blank" rel="noopener noreferrer" onClick={onWhatsAppClick}>
+            <WhatsappIcon />Claim Discount on WhatsApp
+          </a>
+        </BlackFridayOrderOffer>
+      ) : null}
+      {blackFridayEligible && whatsappHref ? (
+        <a className="btn btn-solid bf-mobile-fixed-claim" href={whatsappHref} target="_blank" rel="noopener noreferrer" onClick={onWhatsAppClick}>
+          <span className="checkout-whatsapp-icon" aria-hidden="true"><WhatsappIcon /></span>
+          <span className="checkout-whatsapp-label">Claim Discount on WhatsApp</span>
+        </a>
+      ) : null}
       <div className="checkout-payment-copy">
         <section className="checkout-payment-info" aria-labelledby="checkout-payment-info-heading">
           <h3 id="checkout-payment-info-heading">Payment Information</h3>
@@ -1220,6 +1279,7 @@ function PaymentStep({
         </section>
         <p className="checkout-payment-note">No payment has been taken yet.</p>
       </div>
+      {!blackFridayEligible || !whatsappHref ? (
       <div className="checkout-actions checkout-received-actions">
         {whatsappHref ? (
           <a className="btn btn-solid" href={whatsappHref} target="_blank" rel="noopener noreferrer" onClick={onWhatsAppClick}>
@@ -1234,6 +1294,7 @@ function PaymentStep({
           <span className="checkout-submit-note">WhatsApp contact is temporarily unavailable. Please contact customer support.</span>
         )}
       </div>
+      ) : null}
     </div>
   );
 }
@@ -1254,6 +1315,10 @@ function ReceiptOrderItem({ item }: { item: CheckoutOrderItem }) {
       </div>
     </article>
   );
+}
+
+function WhatsappIcon() {
+  return <svg viewBox="0 0 24 24" fill="currentColor" focusable="false" aria-hidden="true"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.198-.347.223-.644.075-.297-.149-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.347-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 0 1-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 0 1-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 0 1 2.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0 0 12.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 0 0 5.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 0 0-3.48-8.363z" /></svg>;
 }
 
 function OrderDetailFields({ rows }: { rows: Array<{ label: string; value?: string | null }> }) {
@@ -1332,6 +1397,7 @@ function MobileSummary({
   total,
   open,
   onToggle,
+  currency,
   eligibilityCurrency,
   eligibilitySubtotal,
   lineTotals,
@@ -1344,6 +1410,7 @@ function MobileSummary({
   total: number;
   open: boolean;
   onToggle: () => void;
+  currency: CurrencyCode;
   eligibilityCurrency: CurrencyCode;
   eligibilitySubtotal: number;
   lineTotals?: number[];
@@ -1362,7 +1429,7 @@ function MobileSummary({
       >
         <span>Order summary</span>
         <strong aria-live="polite">
-          {formatMoney(total, "GBP")}
+          {formatMoney(total, currency)}
         </strong>
       </button>
       <div id="checkout-summary-mobile-content" hidden={!open}>
@@ -1372,6 +1439,7 @@ function MobileSummary({
             subtotal={subtotal}
             shippingPrice={shippingPrice}
             total={total}
+            currency={currency}
             eligibilityCurrency={eligibilityCurrency}
             eligibilitySubtotal={eligibilitySubtotal}
             lineTotals={lineTotals}
@@ -1390,6 +1458,7 @@ function OrderSummary({
   subtotal,
   shippingPrice,
   total,
+  currency,
   eligibilityCurrency,
   eligibilitySubtotal,
   lineTotals,
@@ -1401,6 +1470,7 @@ function OrderSummary({
   subtotal: number;
   shippingPrice: number;
   total: number;
+  currency: CurrencyCode;
   eligibilityCurrency: CurrencyCode;
   eligibilitySubtotal: number;
   lineTotals?: number[];
@@ -1424,7 +1494,7 @@ function OrderSummary({
                   {[item.color, `Size ${item.size}`, `Qty ${item.quantity}`].filter(Boolean).join(" · ")}
                 </span>
               </span>
-              <strong>{formatMoney(lineTotals?.[index] ?? getCartItemPrice(item, "GBP") * item.quantity, "GBP")}</strong>
+              <strong>{formatMoney(lineTotals?.[index] ?? getCartItemPrice(item, currency) * item.quantity, currency)}</strong>
             </article>
           ))}
         </div>
@@ -1432,11 +1502,11 @@ function OrderSummary({
       <div className="totals">
         <div>
           <span>Subtotal</span>
-          <strong>{formatMoney(subtotal, "GBP")}</strong>
+          <strong>{formatMoney(subtotal, currency)}</strong>
         </div>
         <div>
           <span>Delivery</span>
-          <strong>{formatDeliveryPrice(shippingPrice)}</strong>
+          <strong>{formatDeliveryPrice(shippingPrice, currency)}</strong>
         </div>
         {quoteReady && freeShippingApplied === true ? (
           <p className="free-shipping-applied">Free standard delivery applied</p>
@@ -1445,11 +1515,11 @@ function OrderSummary({
         ) : (
           <p className="free-shipping-hint">Free standard delivery on orders {currencyThresholdLabel(eligibilityCurrency)}+</p>
         )}
-        <p className="checkout-currency-note">Order totals are in GBP. Free standard delivery eligibility uses your selected {eligibilityCurrency} display currency.</p>
+        <p className="checkout-currency-note">Order totals are shown in {currency}. Free standard delivery eligibility uses {currencyThresholdLabel(eligibilityCurrency)}.</p>
         <div>
           <span>Total</span>
           <strong aria-live="polite">
-            {formatMoney(total, "GBP")}
+            {formatMoney(total, currency)}
           </strong>
         </div>
       </div>
@@ -1457,8 +1527,8 @@ function OrderSummary({
   );
 }
 
-function formatDeliveryPrice(price: number) {
-  return price === 0 ? "Free" : formatMoney(price, "GBP");
+function formatDeliveryPrice(price: number, currency: CurrencyCode) {
+  return price === 0 ? "Free" : formatMoney(price, currency);
 }
 
 function formatReceiptDate(value?: string | null) {
@@ -1483,10 +1553,12 @@ function isCheckoutQuote(value: unknown): value is CheckoutQuote {
   return isMoney(quote.subtotal)
     && isMoney(quote.shippingFee)
     && isMoney(quote.finalTotal)
-    && quote.currency === "GBP"
+    && (quote.currency === "GBP" || quote.currency === "EUR" || quote.currency === "USD")
     && (quote.eligibilityCurrency === "GBP" || quote.eligibilityCurrency === "EUR" || quote.eligibilityCurrency === "USD")
     && isMoney(quote.eligibilitySubtotal)
     && typeof quote.freeShippingApplied === "boolean"
+    && typeof quote.countryCode === "string"
+    && (typeof quote.lastMileCarrier === "string" || quote.lastMileCarrier === null)
     && Array.isArray(quote.lineItems)
     && quote.lineItems.every((line) => Boolean(line)
       && typeof line.productCode === "string"

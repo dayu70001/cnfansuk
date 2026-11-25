@@ -4,6 +4,9 @@ compatibility_date = "2026-06-14"
 compatibility_flags = ["nodejs_compat"]
 workers_dev = true
 
+[vars]
+LEGACY_CHECKOUT_COMPAT_UNTIL = "2026-11-28T00:00:00Z"
+
 [observability]
 enabled = true
 

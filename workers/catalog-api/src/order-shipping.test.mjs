@@ -31,7 +31,10 @@ function makeProduct(code, { gbp = 20, eur = null, usd = null, status = "active"
   };
 }
 
-function createTestEnv(products, { synchronizeSessionLookups = false } = {}) {
+function createTestEnv(products, {
+  synchronizeSessionLookups = false,
+  legacyCheckoutCompatUntil = "2999-01-01T00:00:00Z",
+} = {}) {
   const queries = [];
   const orders = new Map();
   const orderItems = new Map();
@@ -180,7 +183,11 @@ function createTestEnv(products, { synchronizeSessionLookups = false } = {}) {
     },
   };
   return {
-    env: { DB, ADMIN_TOKEN: "test-admin-token" },
+    env: {
+      DB,
+      ADMIN_TOKEN: "test-admin-token",
+      LEGACY_CHECKOUT_COMPAT_UNTIL: legacyCheckoutCompatUntil,
+    },
     queries,
     orders,
     orderItems,
@@ -198,8 +205,8 @@ async function post(path, env, body) {
   }), env, {});
 }
 
-async function quoteFor(testEnv, items, shippingMethodId = "royal-mail-tracked", eligibilityCurrency = "GBP") {
-  const response = await post("/orders/quote", testEnv.env, { items, shippingMethodId, eligibilityCurrency });
+async function quoteFor(testEnv, items, shippingMethodId = "royal-mail-tracked", eligibilityCurrency = "GBP", countryCode = ({ GBP: "GB", EUR: "FR", USD: "US" })[eligibilityCurrency]) {
+  const response = await post("/orders/quote", testEnv.env, { items, shippingMethodId, eligibilityCurrency, countryCode });
   assert.equal(response.status, 200);
   return (await response.json()).quote;
 }
@@ -263,11 +270,13 @@ for (const currency of ["GBP", "EUR", "USD"]) {
         items: [{ productCode: product.product_code, size: "M", quantity: 1 }],
         shippingMethodId: "royal-mail-tracked",
         eligibilityCurrency: currency,
+        countryCode: ({ GBP: "GB", EUR: "FR", USD: "US" })[currency],
       });
       const body = await response.json();
       assert.equal(response.status, 200);
-      assert.equal(body.quote.shippingFee, amount >= 180 ? 0 : 5);
-      assert.equal(body.quote.currency, "GBP");
+      const belowThresholdFee = currency === "USD" ? 6.43 : 5;
+      assert.equal(body.quote.shippingFee, amount >= 180 ? 0 : belowThresholdFee);
+      assert.equal(body.quote.currency, currency);
       assert.equal(testEnv.writeCount, 0, "quoting is strictly read-only");
       assert.ok(testEnv.queries.some(({ sql }) => /FROM\s+products\b/i.test(sql)));
     });
@@ -289,18 +298,152 @@ test("GBP standard shipping keeps charging below the new 180 threshold, includin
   }
 });
 
-test("DHL is free at the selected-currency threshold while FedEx keeps its GBP 15 charge", async () => {
+test("DHL is free at the destination-currency threshold while FedEx retains its GBP 15 priority tier", async () => {
   const product = makeProduct("EXPRESS", { gbp: 150, eur: 180, usd: 210 });
   const testEnv = createTestEnv([product]);
   const body = {
     items: [{ productCode: product.product_code, size: "M", quantity: 1 }],
     eligibilityCurrency: "EUR",
+    countryCode: "FR",
   };
   const dhl = await post("/orders/quote", testEnv.env, { ...body, shippingMethodId: "dhl-express" });
   const fedex = await post("/orders/quote", testEnv.env, { ...body, shippingMethodId: "fedex-priority" });
   assert.equal((await dhl.json()).quote.shippingFee, 0);
-  assert.equal((await fedex.json()).quote.shippingFee, 15);
+  assert.equal((await fedex.json()).quote.shippingFee, 16.88);
   assert.equal(testEnv.writeCount, 0);
+});
+
+test("mapped-country quotes use the destination currency, carrier and one flat EUR fee per order", async () => {
+  const product = makeProduct("FR-FLAT-FEE", { gbp: 20, eur: 22 });
+  const testEnv = createTestEnv([product]);
+  const items = [
+    { productCode: product.product_code, size: "M", quantity: 1 },
+    { productCode: product.product_code, size: "L", quantity: 1 },
+  ];
+  const quote = await quoteFor(testEnv, items, "royal-mail-tracked", "GBP", "FR");
+  assert.equal(quote.currency, "EUR");
+  assert.equal(quote.subtotal, 44);
+  assert.equal(quote.shippingFee, 5, "flat shipping is charged once, not once per line item");
+  assert.equal(quote.finalTotal, 49);
+  assert.equal(quote.lastMileCarrier, "Colis Privé");
+
+  const result = await (await post("/orders", testEnv.env, {
+    checkoutSessionId: "fr-flat-fee-session",
+    customer: {
+      fullName: "Test Customer", email: "test@example.invalid", phone: "0000000000",
+      addressLine1: "1 Test Street", city: "Paris", postcode: "75001", countryCode: "FR", countryName: "France",
+    },
+    items,
+    shippingMethodId: "royal-mail-tracked",
+    eligibilityCurrency: "GBP",
+    expectedQuote: quote,
+  })).json();
+  assert.equal(result.order.currency, "EUR", "the server derives order currency from country, not the client selector");
+  assert.equal(result.order.shippingFee, 5);
+  assert.equal(result.order.total, 49);
+  assert.equal(result.order.lastMileCarrier, "Colis Privé");
+  assert.deepEqual(result.order.items.map((item) => item.currency), ["EUR", "EUR"]);
+});
+
+test("pre-deployment checkout requests temporarily retain the legacy GBP quote shape", async () => {
+  const product = makeProduct("LEGACY-QUOTE", { gbp: 20, eur: 22, usd: 24 });
+  const testEnv = createTestEnv([product]);
+  const response = await post("/orders/quote", testEnv.env, {
+    items: [{ productCode: product.product_code, size: "M", quantity: 1 }],
+    shippingMethodId: "royal-mail-tracked",
+    eligibilityCurrency: "EUR",
+  });
+  const { quote } = await response.json();
+  assert.equal(response.status, 200);
+  assert.equal(quote.currency, "GBP");
+  assert.equal(quote.subtotal, 20);
+  assert.equal(quote.shippingFee, 5.63);
+  assert.equal(quote.eligibilityCurrency, "EUR");
+  assert.equal(quote.eligibilitySubtotal, 22);
+  assert.equal(Object.hasOwn(quote, "countryCode"), false);
+  assert.equal(Object.hasOwn(quote, "lastMileCarrier"), false);
+  assert.equal(testEnv.writeCount, 0);
+});
+
+test("pre-deployment checkout can finish with its matching legacy quote during the short compatibility window", async () => {
+  const product = makeProduct("LEGACY-FINISH", { gbp: 20, eur: 22 });
+  const testEnv = createTestEnv([product]);
+  const items = [{ productCode: product.product_code, size: "M", quantity: 1 }];
+  const expectedQuote = await (await post("/orders/quote", testEnv.env, {
+    items,
+    shippingMethodId: "royal-mail-tracked",
+    eligibilityCurrency: "EUR",
+  })).json().then((result) => result.quote);
+  const response = await post("/orders", testEnv.env, {
+    checkoutSessionId: "legacy-checkout-france-session",
+    customer: {
+      fullName: "Test Customer", email: "test@example.invalid", phone: "0000000000",
+      addressLine1: "1 Test Street", city: "Paris", postcode: "75001", countryCode: "FR", countryName: "France",
+    },
+    items,
+    shippingMethodId: "royal-mail-tracked",
+    eligibilityCurrency: "EUR",
+    currency: "GBP",
+    expectedQuote,
+  });
+  const result = await response.json();
+  assert.equal(response.status, 201);
+  assert.equal(result.order.currency, "GBP");
+  assert.equal(result.order.subtotal, 20);
+  assert.equal(result.order.shippingFee, 5.63);
+  assert.equal(result.order.items[0].currency, "GBP");
+});
+
+test("expired legacy checkout protocol is rejected without querying or writing", async () => {
+  const product = makeProduct("LEGACY-EXPIRED", { gbp: 20 });
+  const testEnv = createTestEnv([product], { legacyCheckoutCompatUntil: "2020-01-01T00:00:00Z" });
+  const quoteResponse = await post("/orders/quote", testEnv.env, {
+    items: [{ productCode: product.product_code, size: "M", quantity: 1 }],
+    shippingMethodId: "royal-mail-tracked",
+    eligibilityCurrency: "GBP",
+  });
+  const quoteBody = await quoteResponse.json();
+  assert.equal(quoteResponse.status, 409);
+  assert.equal(quoteBody.code, "CHECKOUT_VERSION_EXPIRED");
+  assert.equal(testEnv.queries.length, 0);
+
+  const orderResponse = await post("/orders", testEnv.env, {
+    checkoutSessionId: "legacy-expired-session",
+    customer: {
+      fullName: "Test Customer", email: "test@example.invalid", phone: "0000000000",
+      addressLine1: "1 Test Street", city: "London", postcode: "AA1 1AA", countryCode: "GB", countryName: "United Kingdom",
+    },
+    items: [{ productCode: product.product_code, size: "M", quantity: 1 }],
+    shippingMethodId: "royal-mail-tracked",
+    eligibilityCurrency: "GBP",
+    expectedQuote: { subtotal: 20, shippingFee: 5, finalTotal: 25, currency: "GBP", eligibilityCurrency: "GBP", eligibilitySubtotal: 20, freeShippingApplied: false, lineItems: [{ productCode: product.product_code, size: "M", quantity: 1, unitPrice: 20, lineTotal: 20 }] },
+  });
+  const orderBody = await orderResponse.json();
+  assert.equal(orderResponse.status, 409);
+  assert.equal(orderBody.code, "CHECKOUT_VERSION_EXPIRED");
+  assert.equal(testEnv.orderInsertCount, 0);
+});
+
+test("listed non-euro European destinations use fixed EUR while unlisted routes keep existing rate behavior", async () => {
+  const product = makeProduct("ROUTES", { gbp: 30, eur: 33, usd: 36 });
+  const testEnv = createTestEnv([product]);
+  const items = [{ productCode: product.product_code, size: "M", quantity: 1 }];
+  const sweden = await quoteFor(testEnv, items, "royal-mail-tracked", "GBP", "SE");
+  const uk = await quoteFor(testEnv, items, "dhl-express", "USD", "GB");
+  const us = await quoteFor(testEnv, items, "royal-mail-tracked", "GBP", "US");
+  const switzerland = await quoteFor(testEnv, items, "royal-mail-tracked", "GBP", "CH");
+  assert.equal(sweden.currency, "EUR");
+  assert.equal(sweden.shippingFee, 5);
+  assert.equal(sweden.lastMileCarrier, "PostPlus");
+  assert.equal(uk.currency, "GBP");
+  assert.equal(uk.shippingFee, 5);
+  assert.equal(uk.lastMileCarrier, "Royal Mail");
+  assert.equal(us.currency, "USD");
+  assert.equal(us.shippingFee, 6.43, "US keeps the existing GBP-based £5 rate converted using the existing USD fallback");
+  assert.equal(us.lastMileCarrier, "USPS");
+  assert.equal(switzerland.currency, "GBP");
+  assert.equal(switzerland.shippingFee, 5, "unmapped countries keep the existing GBP rate");
+  assert.equal(switzerland.lastMileCarrier, null);
 });
 
 test("quote rejects missing and inactive products without writes", async () => {
@@ -371,16 +514,17 @@ test("quote ignores a client-supplied price and uses the active catalog price", 
   assert.equal(testEnv.writeCount, 0);
 });
 
-test("order creation keeps GBP settlement and independently applies the selected display currency threshold", async () => {
+test("order creation stores the destination currency total and fixed EUR fee from the server quote", async () => {
   const product = makeProduct("GBP-ORDER", { gbp: 141.25, eur: 180, usd: 165 });
   const testEnv = createTestEnv([product]);
   const quoteResponse = await post("/orders/quote", testEnv.env, {
     items: [{ productCode: product.product_code, size: "M", quantity: 1 }],
     shippingMethodId: "royal-mail-tracked",
     eligibilityCurrency: "EUR",
+    countryCode: "FR",
   });
   const { quote } = await quoteResponse.json();
-  assert.equal(quote.subtotal, 141.25);
+  assert.equal(quote.subtotal, 180);
   assert.equal(quote.shippingFee, 0);
   const orderResponse = await post("/orders", testEnv.env, {
     checkoutSessionId: "session-unique-1",
@@ -389,22 +533,24 @@ test("order creation keeps GBP settlement and independently applies the selected
       email: "test@example.invalid",
       phone: "0000000000",
       addressLine1: "1 Test Street",
-      city: "London",
-      postcode: "AA1 1AA",
-      countryCode: "GB",
-      countryName: "United Kingdom",
+      city: "Paris",
+      postcode: "75001",
+      countryCode: "FR",
+      countryName: "France",
     },
     items: [{ productCode: product.product_code, size: "M", quantity: 1, price: 9999, currency: "USD" }],
     shippingMethodId: "royal-mail-tracked",
-    eligibilityCurrency: "EUR",
+    eligibilityCurrency: "GBP",
     currency: "USD",
     expectedQuote: quote,
   });
   const result = await orderResponse.json();
   assert.equal(orderResponse.status, 201);
-  assert.equal(result.order.subtotal, 141.25, "client-supplied unit price is ignored");
+  assert.equal(result.order.subtotal, 180, "the server uses the stored EUR price, not the client-supplied amount");
   assert.equal(result.order.shippingFee, 0);
-  assert.equal(result.order.currency, "GBP");
+  assert.equal(result.order.currency, "EUR");
+  assert.equal(result.order.total, 180);
+  assert.equal(result.order.lastMileCarrier, "Colis Privé");
   assert.equal(testEnv.orderInsertCount, 1);
 });
 
@@ -519,6 +665,7 @@ test("quote snapshot compares currency and exact item lines even when totals mat
   };
   for (const expectedQuote of [
     { ...quote, eligibilityCurrency: "EUR" },
+    { ...quote, countryCode: "FR", lastMileCarrier: "Colis Privé" },
     { ...quote, lineItems: [{ ...quote.lineItems[0], productCode: "OTHER-PRODUCT" }] },
   ]) {
     const response = await post("/orders", testEnv.env, {

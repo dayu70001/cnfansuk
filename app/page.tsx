@@ -4,6 +4,8 @@ import type { Metadata } from "next";
 import { MetaPixelEventLink } from "@/components/MetaPixelEventLink";
 import { CustomerFeedbackCarousel } from "@/components/CustomerFeedbackCarousel";
 import { ProductCard } from "@/components/ProductCard";
+import { BlackFridayCampaign } from "@/components/BlackFridayCampaign";
+import { isBlackFridayActiveAt } from "@/lib/blackFriday";
 import { JsonLd } from "@/components/JsonLd";
 import { customerFeedbackItems } from "@/data/customerFeedback";
 import { products } from "@/data/products";
@@ -105,6 +107,9 @@ export default async function Home() {
     <>
       <JsonLd data={orgSchema} />
       <JsonLd data={websiteSchema} />
+      {/* ISR serializes this server-only clock value; the client corrects it at both boundaries. */}
+      {/* eslint-disable-next-line react-hooks/purity */}
+      <BlackFridayCampaign initialActive={isBlackFridayActiveAt(Date.now())} />
       <div className="wrap">
         <section className="hero">
           <div className="hero-text">

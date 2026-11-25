@@ -46,8 +46,8 @@ test("cart cleanup runs only after a validated success and targets the submitted
 
 test("cart snapshot changes invalidate quote state, and completed-order totals stay fixed", () => {
   assert.match(flow, /const quoteItems = useMemo\(\(\) => items\.map\(\(item\) => \(\{[\s\S]*?productCode: item\.productCode \|\| item\.productId,[\s\S]*?size: item\.size \|\| "",[\s\S]*?quantity: item\.quantity/);
-  assert.match(flow, /const quoteKey = useMemo\(\(\) => JSON\.stringify\(\{\s*shippingMethodId,\s*eligibilityCurrency,\s*items: quoteItems,/);
-  assert.match(flow, /\[cartRestored, currencyReady, eligibilityCurrency, hasCompleteSizes, hydrated, items, order, quoteItems, quoteKey, quoteRetry, quoteScopeKey, shippingMethodId, step\]/);
+  assert.match(flow, /const quoteKey = useMemo\(\(\) => JSON\.stringify\(\{\s*shippingMethodId,\s*eligibilityCurrency,\s*countryCode: shipping\.countryCode,\s*items: quoteItems,/);
+  assert.match(flow, /\[cartRestored, currencyReady, eligibilityCurrency, hasCompleteSizes, hydrated, items, order, quoteItems, quoteKey, quoteRetry, quoteScopeKey, shipping\.countryCode, shippingMethodId, step\]/);
   assert.match(flow, /const summarySubtotal = order \? order\.subtotal : subtotal/);
   assert.match(flow, /const summaryShippingPrice = order \? order\.shippingFee : shippingPrice/);
   assert.match(flow, /const summaryTotal = order \? order\.finalTotal : total/);
@@ -125,7 +125,8 @@ test("Order Received keeps a compact unpaid receipt and WhatsApp payment guidanc
   const result = flow.slice(flow.indexOf("function PaymentStep("), flow.indexOf("function CheckoutInput("));
   assert.match(result, /<h2>Order Received<\/h2>/);
   assert.match(result, /Thank you\. Your order has been received\./);
-  assert.match(result, /Amount due/);
+  assert.match(result, /<span>TOTAL<\/span>/);
+  assert.match(result, /Before Black Friday discount/);
   assert.match(result, /Awaiting Payment/);
   assert.match(result, /order\.orderNumber/);
   assert.match(result, /order\.finalTotal/);
@@ -151,7 +152,8 @@ test("Order Received keeps a compact unpaid receipt and WhatsApp payment guidanc
   assert.match(flow, /result\.order\.items\?\.length/);
   assert.match(flow, /setStep\("payment"\)/);
   assert.match(flow, /setOrder\(\{ \.\.\.result\.order/);
-  assert.match(result, /<div className="checkout-payment-copy">\s*<section className="checkout-payment-info"[\s\S]*?<\/section>\s*<p className="checkout-payment-note">No payment has been taken yet\.<\/p>\s*<\/div>\s*<div className="checkout-actions checkout-received-actions">/);
+  assert.match(result, /<div className="checkout-payment-copy">\s*<section className="checkout-payment-info"[\s\S]*?<\/section>\s*<p className="checkout-payment-note">No payment has been taken yet\.<\/p>\s*<\/div>\s*\{!blackFridayEligible \|\| !whatsappHref \? \(\s*<div className="checkout-actions checkout-received-actions">/);
+  assert.ok(result.indexOf("<BlackFridayOrderOffer>") < result.indexOf('className="checkout-payment-copy"'), "campaign claim must precede payment instructions");
   const receivedActions = result.slice(result.indexOf('className="checkout-actions checkout-received-actions"'));
   assert.doesNotMatch(receivedActions, /checkout-payment-note/);
   assert.doesNotMatch(collapsedReceipt, /<h4>Items Ordered|<h4>Delivery Address/);

@@ -15,16 +15,16 @@ test("delivery and total amounts remain numeric estimates until the quote is con
   const continueToDelivery = flow.slice(flow.indexOf("function continueToDelivery()"), flow.indexOf("async function confirmOrder()"));
   const quoteEffect = flow.slice(flow.indexOf("useEffect(() => {\n    if (!hydrated || !cartRestored || !currencyReady || step !== \"delivery\""), flow.indexOf("useEffect(() => {\n    if (!hydrated || !checkoutSessionId"));
 
-  assert.match(delivery, /formatDeliveryPrice\(method\.id === selectedMethodId && quoteReady\s*\?\s*shippingPrice\s*:\s*getShippingPrice\(method\.id, eligibilitySubtotal, eligibilityCurrency\)\)/);
+  assert.match(delivery, /formatDeliveryPrice\(method\.id === selectedMethodId && quoteReady\s*\?\s*shippingPrice\s*:\s*getShippingPrice\(method\.id, eligibilitySubtotal, eligibilityCurrency, countryCode\), currency\)/);
   assert.doesNotMatch(delivery, /\?\s*"—"|Checking…|checkout-quote-updating/);
-  assert.match(delivery, /getShippingPrice\(method\.id, eligibilitySubtotal, eligibilityCurrency\)/);
+  assert.match(delivery, /getShippingPrice\(method\.id, eligibilitySubtotal, eligibilityCurrency, countryCode\)/);
   assert.match(delivery, /Amounts are estimates while we verify\./);
   assert.match(delivery, /Amounts are estimates until confirmed\./);
   assert.match(delivery, /Unable to verify; amounts remain estimates\./);
-  assert.match(summary, /<strong>\{formatDeliveryPrice\(shippingPrice\)\}<\/strong>/);
-  assert.match(summary, /<strong aria-live="polite">\s*\{formatMoney\(total, "GBP"\)\}\s*<\/strong>/);
+  assert.match(summary, /<strong>\{formatDeliveryPrice\(shippingPrice, currency\)\}<\/strong>/);
+  assert.match(summary, /<strong aria-live="polite">\s*\{formatMoney\(total, currency\)\}\s*<\/strong>/);
   assert.doesNotMatch(summary, /Unable to confirm total|quoteFailed[^;]*\?|"—"|Checking…|checkout-quote-updating/);
-  assert.match(flow, /<strong aria-live="polite">\s*\{formatMoney\(total, "GBP"\)\}\s*<\/strong>/);
+  assert.match(flow, /<strong aria-live="polite">\s*\{formatMoney\(total, currency\)\}\s*<\/strong>/);
   assert.match(flow, /const \[lastConfirmedPricingQuote, setLastConfirmedPricingQuote\] = useState/);
   assert.match(flow, /const lastQuoteForCurrentCart = lastConfirmedPricingQuote\?\.scopeKey === quoteScopeKey/);
   assert.match(flow, /const activeQuote = quoteStateMatches && quoteState\.status === "ready" \? quoteState\.quote : undefined/);
