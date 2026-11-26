@@ -1,6 +1,11 @@
 import type { Product } from "@/lib/types";
 import { getCustomerPurchaseSizes } from "@/lib/productSizes";
 import { getCatalogApiBase } from "@/lib/catalogApiBase";
+import {
+  SitemapSnapshotError,
+  validateSitemapCatalogSnapshot,
+  type SitemapCatalogSnapshot,
+} from "@/lib/sitemapSnapshot";
 
 export function catalogApiUrl(path: string): string {
   const normalisedPath = path.startsWith("/") ? path : `/${path}`;
@@ -181,6 +186,52 @@ export async function fetchSitemapProducts(): Promise<Array<{ slug: string; last
   }
 
   return products;
+}
+
+export async function fetchSitemapCatalogSnapshot(staticManifestHash: string): Promise<SitemapCatalogSnapshot> {
+  let base: string;
+  try {
+    base = getCatalogApiBase();
+  } catch {
+    throw new Error("sitemap_catalog_upstream_unavailable");
+  }
+  const url = new URL(`${base.replace(/\/+$/, "")}/sitemap-snapshot`);
+  url.searchParams.set("manifest", staticManifestHash);
+  const failures: Array<"network_error" | "upstream_error" | "invalid_snapshot"> = [];
+
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      const response = await fetch(url, {
+        cache: "no-store",
+        headers: { Accept: "application/json" },
+        signal: AbortSignal.timeout(10_000),
+      });
+      if (response.status >= 500) {
+        failures.push("upstream_error");
+        if (attempt === 0) continue;
+        break;
+      }
+      if (!response.ok) throw new Error("sitemap_catalog_upstream_rejected");
+
+      const contentLength = Number(response.headers.get("content-length") || 0);
+      if (contentLength > 25 * 1024 * 1024) throw new Error("sitemap_catalog_payload_too_large");
+      const text = await response.text();
+      if (new TextEncoder().encode(text).byteLength > 25 * 1024 * 1024) throw new Error("sitemap_catalog_payload_too_large");
+      const parsed: unknown = JSON.parse(text);
+      const snapshot = await validateSitemapCatalogSnapshot(parsed);
+      if (snapshot.staticManifestHash !== staticManifestHash) {
+        throw new SitemapSnapshotError("static_manifest_mismatch");
+      }
+      return snapshot;
+    } catch (error) {
+      if (error instanceof Error && error.message === "sitemap_catalog_upstream_rejected") throw error;
+      failures.push(error instanceof SyntaxError || error instanceof SitemapSnapshotError ? "invalid_snapshot" : "network_error");
+      if (attempt === 1) break;
+    }
+  }
+
+  const finalFailure = failures.at(-1) || "upstream_error";
+  throw new Error(`sitemap_catalog_${finalFailure}`);
 }
 
 export async function fetchCatalogFilters(): Promise<CatalogFilters | null> {

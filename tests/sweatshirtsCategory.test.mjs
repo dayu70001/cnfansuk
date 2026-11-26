@@ -74,7 +74,7 @@ test("New In derives its filters from the complete 100-product New In collection
 test("direct Sweatshirts page uses exact category/subcategory catalog query and keeps pagination and sitemap rules", () => {
   const subcategoryPage = read("app/category/[slug]/[subcategory]/page.tsx");
   const generalCatalogPage = read("app/catalog/page.tsx");
-  const sitemap = read("app/sitemap.ts");
+  const sitemap = read("lib/sitemap.ts");
   assert.match(subcategoryPage, /category:\s*slug,\s*subcategory,\s*q,\s*brand,\s*price,\s*sort,\s*page,\s*limit:\s*PAGE_SIZE/);
   assert.match(subcategoryPage, /getSubcategoryCount\(filters,\s*slug,\s*subcategory\)[\s\S]*?catalog\?\.total/);
   assert.match(subcategoryPage, /sweatshirtFacetCount\s*\?\?\s*0\)\s*<=\s*0/);
@@ -86,6 +86,7 @@ test("direct Sweatshirts page uses exact category/subcategory catalog query and 
   assert.match(generalCatalogPage, /category:\s*"tops",\s*subcategory:\s*"sweatshirts",\s*page:\s*1,\s*limit:\s*1/);
   assert.match(generalCatalogPage, /mergeCatalogSubcategoryCount\(/);
   assert.match(sitemap, /catalogSeoSubcategories/);
-  assert.match(sitemap, /category:\s*item\.category,\s*subcategory:\s*item\.value,\s*page:\s*1,\s*limit:\s*1/);
-  assert.match(sitemap, /count\s*>=\s*5/);
+  assert.match(sitemap, /catalogSeoSubcategories/);
+  assert.match(sitemap, /subcategoryCounts\.get\(`\$\{item\.category\}\/\$\{item\.value\}`\)\s*\|\|\s*0\)\s*>=\s*SUBCATEGORY_THRESHOLD/);
+  assert.match(sitemap, /SUBCATEGORY_THRESHOLD = 5/);
 });

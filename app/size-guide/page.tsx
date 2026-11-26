@@ -1,4 +1,12 @@
+import type { Metadata } from "next";
 import { MetaPixelEventLink } from "@/components/MetaPixelEventLink";
+import { SITE_URL } from "@/lib/site";
+
+export const metadata: Metadata = {
+  title: "Clothing Size Guide",
+  description: "Find sizing guidance and learn how to compare garment measurements with clothing you already own.",
+  alternates: { canonical: `${SITE_URL}/size-guide` },
+};
 
 const measureGroups = [
   {

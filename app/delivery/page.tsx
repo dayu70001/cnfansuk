@@ -1,4 +1,12 @@
+import type { Metadata } from "next";
 import Link from "next/link";
+import { SITE_URL } from "@/lib/site";
+
+export const metadata: Metadata = {
+  title: "Delivery & Shipping Information",
+  description: "Information on order preparation, dispatch, tracking updates and delivery timing by destination.",
+  alternates: { canonical: `${SITE_URL}/delivery` },
+};
 
 const deliverySteps = [
   {

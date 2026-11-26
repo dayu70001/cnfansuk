@@ -1,4 +1,12 @@
+import type { Metadata } from "next";
 import { MetaPixelEventLink } from "@/components/MetaPixelEventLink";
+import { SITE_URL } from "@/lib/site";
+
+export const metadata: Metadata = {
+  title: "Contact Us",
+  description: "Contact CNFANS UK about product questions, sizing help or an existing order.",
+  alternates: { canonical: `${SITE_URL}/contact` },
+};
 
 const emailPrep = [
   "Your order number, if you have one",

@@ -1,4 +1,12 @@
+import type { Metadata } from "next";
 import Link from "next/link";
+import { SITE_URL } from "@/lib/site";
+
+export const metadata: Metadata = {
+  title: "Returns & Refunds",
+  description: "Information about return requests, item condition and steps for incorrect, damaged or faulty items.",
+  alternates: { canonical: `${SITE_URL}/returns` },
+};
 
 const policyItems = [
   {

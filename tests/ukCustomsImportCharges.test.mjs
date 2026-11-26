@@ -9,7 +9,7 @@ const read = (relativePath) => fs.readFileSync(path.join(root, relativePath), "u
 const page = read("app/uk-customs-and-import-charges/page.tsx");
 const delivery = read("app/delivery/page.tsx");
 const howToOrder = read("app/how-to-order/page.tsx");
-const sitemap = read("app/sitemap.ts");
+const sitemap = read("lib/sitemap.ts");
 
 test("UK customs support route has the requested metadata, heading and sitemap entry", () => {
   assert.match(page, /path:\s*"\/uk-customs-and-import-charges"/);

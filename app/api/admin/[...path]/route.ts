@@ -48,7 +48,7 @@ async function proxyAdminRequest(request: Request, context: RouteContext) {
     revalidatePath("/catalog", "page");
     revalidatePath("/category/[slug]", "page");
     revalidatePath("/category/[slug]/[subcategory]", "page");
-    revalidatePath("/sitemap.xml", "page");
+    revalidatePath("/sitemap.xml");
   }
   return new NextResponse(response.body, {
     status: response.status,

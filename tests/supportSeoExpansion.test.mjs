@@ -11,7 +11,7 @@ const howToOrder = read("app/how-to-order/page.tsx");
 const delivery = read("app/delivery/page.tsx");
 const trackOrder = read("app/track-order/page.tsx");
 const returns = read("app/returns/page.tsx");
-const sitemap = read("app/sitemap.ts");
+const sitemap = read("lib/sitemap.ts");
 
 test("legacy payment-help URL keeps its self-canonical route with current order-support copy", () => {
   assert.match(paymentHelp, /path:\s*"\/bank-transfer-payment-help"/);

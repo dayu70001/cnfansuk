@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import { createRequire } from "node:module";
 import path from "node:path";
 import vm from "node:vm";
 import ts from "typescript";
@@ -7,8 +8,12 @@ import { fileURLToPath } from "node:url";
 const workerDirectory = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const projectRoot = path.resolve(workerDirectory, "../../..");
 
-export function loadWorker() {
-  return loadProjectTypeScript(path.join(workerDirectory, "index.ts"));
+export function loadWorker(mocks = {}) {
+  const require = createRequire(import.meta.url);
+  return loadProjectTypeScript(path.join(workerDirectory, "index.ts"), {
+    "node:crypto": require("node:crypto"),
+    ...mocks,
+  });
 }
 
 export function loadProjectTypeScript(filename, mocks = {}) {

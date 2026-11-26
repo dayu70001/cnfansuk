@@ -26,7 +26,7 @@ const { FIT_EASE, SIZE_REFERENCE, isValidSizeInput, recommendSize } = moduleShim
 const page = read("app/size-recommender/page.tsx");
 const client = read("app/size-recommender/SizeRecommenderClient.tsx");
 const sizeGuide = read("app/cnfans-size-guide/page.tsx");
-const sitemap = read("app/sitemap.ts");
+const sitemap = read("lib/sitemap.ts");
 
 const recommend = (height, weight, bodyChest, fit) => recommendSize({ height, weight, bodyChest, fit });
 

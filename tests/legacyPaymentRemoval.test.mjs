@@ -54,7 +54,7 @@ test("public payment copy is truthful while indexed help URLs and order history 
   ].join("\n");
   assert.doesNotMatch(publicCopy, /Stripe Hosted Checkout|Stripe processes payments|Stripe Privacy Policy|Stripe&rsquo;s secure hosted page|bank transfer instructions/i);
   assert.match(publicCopy, /Online payment through the website is temporarily unavailable/);
-  assert.match(read("app/sitemap.ts"), /"\/bank-transfer-payment-help"/);
+  assert.match(read("lib/sitemap.ts"), /"\/bank-transfer-payment-help"/);
   assert.match(read("components/AdminOrderPanel.tsx"), /payment_confirmed_at/);
   assert.match(read("lib/orderStatus.ts"), /payment_submitted|payment_confirmed/);
   assert.match(read("workers/catalog-api/src/index.ts"), /payment_confirmed_at/);

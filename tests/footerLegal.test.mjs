@@ -44,11 +44,11 @@ test("footer disables prefetch only for the requested informational links", () =
 });
 
 test("sitemap includes each of the three policy URLs exactly once", () => {
-  const sitemap = read("app/sitemap.ts");
+  const sitemap = read("lib/sitemap.ts");
   for (const route of ["/privacy-policy", "/terms", "/payment-security"]) {
     assert.equal(sitemap.split(`"${route}"`).length - 1, 1, `${route} should be listed once`);
   }
-  assert.match(sitemap, /const publicPages: MetadataRoute\.Sitemap = \[\.\.\.PUBLIC_PATHS, \.\.\.indexableSubcategoryPaths\]/);
+  assert.match(sitemap, /const publicPaths = \[\.\.\.SITEMAP_STATIC_PATHS, \.\.\.subcategoryPaths\]/);
 });
 
 test("retained payment artwork assets contain no executable or external SVG content", () => {

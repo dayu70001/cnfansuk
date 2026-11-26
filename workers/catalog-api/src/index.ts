@@ -2,6 +2,13 @@ import { catalogCategories, catalogSubcategories, canUpdateCatalogClassification
 import { buildDuplicateTitleGroups, countExactTitleGroups, normalizeProductTitle } from "../../../lib/productDuplicates";
 import { getOrderPaymentStage, type RawOrderStatus } from "../../../lib/orderStatus";
 import {
+  createSitemapCatalogSnapshot,
+  validateSitemapCatalogSnapshot,
+  type SitemapCatalogProduct,
+  type SitemapCatalogSnapshot,
+} from "../../../lib/sitemapSnapshot";
+import { buildSitemapEntries, SitemapProtocolError, validateSitemapXml } from "../../../lib/sitemap";
+import {
   getCheckoutCurrency,
   getLastMileCarrier,
   getShippingMethod,
@@ -218,6 +225,10 @@ const NEW_IN_LIMIT = 100;
 const FILTER_CACHE_SECONDS = 1800;
 const PRODUCT_CACHE_SECONDS = 1800;
 const SITEMAP_CACHE_SECONDS = 3600;
+const SITEMAP_SNAPSHOT_CACHE_SECONDS = 300;
+const SITEMAP_SNAPSHOT_MAX_AGE_SECONDS = 86400;
+const SITEMAP_SNAPSHOT_MAX_BYTES = 25 * 1024 * 1024;
+const SITEMAP_SNAPSHOT_R2_KEY = "__cnfans/system/sitemap/catalog-snapshot-v1.json";
 const CATALOG_CACHE_SECONDS = 300;
 const CATALOG_STATS_CACHE_SECONDS = 86400;
 const CATALOG_SIZE_STATS_CACHE_SECONDS = 86400;
@@ -898,6 +909,265 @@ async function cachedSitemapProducts(request: Request, env: WorkerEnv, ctx: Exec
   });
   if (responseWithCache.status === 200) ctx.waitUntil(cache.put(key, responseWithCache.clone()));
   return responseWithCache;
+}
+
+type SitemapSnapshotDbRow = {
+  active_count: number | string;
+  id: number | null;
+  slug: string | null;
+  updated_at: string | null;
+  created_at: string | null;
+  category: string | null;
+  subcategory: string | null;
+};
+
+type StoredSitemapSnapshot = {
+  snapshot: SitemapCatalogSnapshot | null;
+  etag: string | null;
+};
+
+function normaliseSitemapDate(value: string | null) {
+  if (!value) return null;
+  const trimmed = value.trim();
+  const candidate = trimmed.includes("T") ? trimmed : `${trimmed.replace(" ", "T")}Z`;
+  const date = new Date(candidate);
+  if (Number.isNaN(date.getTime())) throw new Error("invalid_sitemap_timestamp");
+  return date.toISOString();
+}
+
+function sitemapSnapshotAgeSeconds(snapshot: SitemapCatalogSnapshot, now = Date.now()) {
+  const ageSeconds = Math.floor((now - Date.parse(snapshot.generatedAt)) / 1000);
+  if (ageSeconds < -300) return Number.POSITIVE_INFINITY;
+  return Math.max(0, ageSeconds);
+}
+
+function validatePublishableSitemapSnapshot(snapshot: SitemapCatalogSnapshot) {
+  if (snapshot.totalCount === 0) throw new Error("empty_catalog_rejected");
+  return validateSitemapXml(buildSitemapEntries(snapshot));
+}
+
+function safeSitemapRefreshReason(error: unknown) {
+  if (error instanceof SitemapProtocolError) return error.code;
+  if (error instanceof Error && [
+    "empty_catalog_rejected",
+    "invalid_sitemap_timestamp",
+    "snapshot_query_returned_no_count",
+    "invalid_active_product_count",
+    "unexpected_empty_catalog_rows",
+    "incomplete_active_catalog_snapshot",
+    "invalid_active_catalog_row",
+    "snapshot_storage_limit_exceeded",
+  ].includes(error.message)) return error.message;
+  return "sitemap_snapshot_refresh_failed";
+}
+
+function logSitemapRefreshFailure(event: string, error: unknown, snapshot?: SitemapCatalogSnapshot) {
+  const protocol = error instanceof SitemapProtocolError;
+  console.error(JSON.stringify({
+    event,
+    reason: safeSitemapRefreshReason(error),
+    ...(protocol
+      ? { url_count: error.urlCount, xml_bytes: error.xmlBytes }
+      : snapshot
+        ? { url_count: snapshot.totalCount, xml_bytes: null }
+        : {}),
+  }));
+}
+
+async function readStoredSitemapSnapshot(env: WorkerEnv): Promise<StoredSitemapSnapshot> {
+  try {
+    const object = await env.PRODUCT_IMAGES.get(SITEMAP_SNAPSHOT_R2_KEY);
+    if (!object) return { snapshot: null, etag: null };
+    if (object.size > SITEMAP_SNAPSHOT_MAX_BYTES) {
+      console.error(JSON.stringify({ event: "sitemap_lkg_read_failed", reason: "stored_object_too_large" }));
+      return { snapshot: null, etag: object.etag };
+    }
+    try {
+      const parsed = JSON.parse(await object.text()) as { snapshot?: unknown };
+      const snapshot = await validateSitemapCatalogSnapshot(parsed.snapshot);
+      return { snapshot, etag: object.etag };
+    } catch {
+      console.error(JSON.stringify({ event: "sitemap_lkg_read_failed", reason: "stored_object_invalid" }));
+      return { snapshot: null, etag: object.etag };
+    }
+  } catch {
+    console.error(JSON.stringify({ event: "sitemap_lkg_read_failed", reason: "r2_unavailable" }));
+    return { snapshot: null, etag: null };
+  }
+}
+
+async function writeStoredSitemapSnapshot(env: WorkerEnv, snapshot: SitemapCatalogSnapshot, etag: string | null) {
+  const serialized = JSON.stringify({ snapshot });
+  if (new TextEncoder().encode(serialized).byteLength > SITEMAP_SNAPSHOT_MAX_BYTES) {
+    throw new Error("snapshot_storage_limit_exceeded");
+  }
+  const result = await env.PRODUCT_IMAGES.put(SITEMAP_SNAPSHOT_R2_KEY, serialized, {
+    onlyIf: etag ? { etagMatches: etag } : { etagDoesNotMatch: "*" },
+    customMetadata: {
+      catalogVersion: snapshot.catalogVersion,
+      generatedAt: snapshot.generatedAt,
+      integrityHash: snapshot.integrityHash,
+    },
+    httpMetadata: {
+      contentType: "application/json; charset=utf-8",
+      cacheControl: "private, no-store",
+    },
+  });
+  // A lost compare-and-swap means another invocation wrote a snapshot after
+  // the read above. Keep that newer/competing value rather than overwriting it.
+  return Boolean(result);
+}
+
+async function querySitemapCatalogSnapshot(request: Request, env: WorkerEnv, staticManifestHash: string) {
+  // The count and active rows are read in one SQLite statement, so a genuine
+  // zero-active-products catalogue is distinguishable from a missing or
+  // truncated result. The LEFT JOIN emits one sentinel row for a real zero.
+  const { results = [] } = await d1All<SitemapSnapshotDbRow>(
+    env,
+    { endpoint: "/sitemap-snapshot", label: "sitemap_catalog_snapshot" },
+    `SELECT catalog.active_count, products.id, products.slug, products.updated_at,
+            products.created_at, products.category, products.subcategory
+     FROM (SELECT COUNT(*) AS active_count FROM products WHERE status = ?) AS catalog
+     LEFT JOIN products ON products.status = ?
+     ORDER BY products.id ASC`,
+    ["active", "active"],
+  );
+  if (!results.length) throw new Error("snapshot_query_returned_no_count");
+
+  const expectedCount = Number(results[0].active_count);
+  if (!Number.isSafeInteger(expectedCount) || expectedCount < 0) throw new Error("invalid_active_product_count");
+  let rows: SitemapSnapshotDbRow[];
+  if (expectedCount === 0) {
+    if (results.length !== 1 || results[0].id !== null) throw new Error("unexpected_empty_catalog_rows");
+    rows = [];
+  } else {
+    if (results.length !== expectedCount || results.some((row) => Number(row.active_count) !== expectedCount || row.id === null)) {
+      throw new Error("incomplete_active_catalog_snapshot");
+    }
+    rows = results;
+  }
+
+  const products: SitemapCatalogProduct[] = rows.map((row) => {
+    const id = Number(row.id);
+    if (!Number.isSafeInteger(id) || id <= 0 || typeof row.slug !== "string" || typeof row.category !== "string") {
+      throw new Error("invalid_active_catalog_row");
+    }
+    return {
+      id,
+      slug: row.slug.trim(),
+      lastModified: normaliseSitemapDate(row.updated_at || row.created_at),
+      category: row.category.trim(),
+      subcategory: row.subcategory?.trim() || null,
+    };
+  });
+  const snapshot = await createSitemapCatalogSnapshot(products, new Date().toISOString(), staticManifestHash);
+  return validateSitemapCatalogSnapshot(snapshot);
+}
+
+function sitemapSnapshotResponse(request: Request, snapshot: SitemapCatalogSnapshot, delivery: "fresh" | "cached" | "last-known-good") {
+  return jsonResponse(request, { ...snapshot, delivery }, 200, {
+    "Cache-Control": "no-store",
+  });
+}
+
+async function handleSitemapSnapshot(request: Request, env: WorkerEnv) {
+  const staticManifestHash = new URL(request.url).searchParams.get("manifest");
+  if (!staticManifestHash || !/^[a-f0-9]{64}$/.test(staticManifestHash)) {
+    return jsonResponse(request, { error: "invalid_sitemap_manifest" }, 400, { "Cache-Control": "no-store" });
+  }
+  const stored = await readStoredSitemapSnapshot(env);
+  const candidate = stored.snapshot?.staticManifestHash === staticManifestHash ? stored.snapshot : null;
+  const candidateAge = candidate ? sitemapSnapshotAgeSeconds(candidate) : Number.POSITIVE_INFINITY;
+  let existingSnapshot: SitemapCatalogSnapshot | null = null;
+  if (candidate && candidate.totalCount > 0 && candidateAge <= SITEMAP_SNAPSHOT_MAX_AGE_SECONDS) {
+    try {
+      validatePublishableSitemapSnapshot(candidate);
+      existingSnapshot = candidate;
+    } catch (error) {
+      logSitemapRefreshFailure("sitemap_lkg_rejected", error, candidate);
+    }
+  }
+  const existingAge = existingSnapshot ? candidateAge : Number.POSITIVE_INFINITY;
+  if (existingSnapshot && existingAge <= SITEMAP_SNAPSHOT_CACHE_SECONDS) {
+    return sitemapSnapshotResponse(request, existingSnapshot, "cached");
+  }
+
+  try {
+    const snapshot = await querySitemapCatalogSnapshot(request, env, staticManifestHash);
+    // Empty catalogues are anomalous for this live retail site. Likewise, a
+    // snapshot whose complete Sitemap would violate protocol limits must not
+    // replace a still-usable R2 last-known-good object.
+    const sitemap = validatePublishableSitemapSnapshot(snapshot);
+    try {
+      const written = await writeStoredSitemapSnapshot(env, snapshot, stored.etag);
+      if (!written) {
+        const conflict = await readStoredSitemapSnapshot(env);
+        let conflictSnapshotValid = false;
+        if (conflict.snapshot?.staticManifestHash === staticManifestHash && conflict.snapshot.totalCount > 0) {
+          try {
+            validatePublishableSitemapSnapshot(conflict.snapshot);
+            conflictSnapshotValid = true;
+          } catch (error) {
+            logSitemapRefreshFailure("sitemap_lkg_conflict_object_rejected", error, conflict.snapshot);
+          }
+        }
+        console.error(JSON.stringify({
+          event: "sitemap_lkg_write_conflict",
+          reason: "etag_condition_failed",
+          url_count: sitemap.urlCount,
+          xml_bytes: sitemap.xmlBytes,
+          conflict_snapshot_valid: conflictSnapshotValid,
+        }));
+      }
+    } catch {
+      // A fully checked current D1 snapshot remains valid for this response;
+      // the R2 write failure only means it cannot become the next LKG.
+      console.error(JSON.stringify({ event: "sitemap_lkg_write_failed", reason: "r2_write_failed" }));
+    }
+    return sitemapSnapshotResponse(request, snapshot, "fresh");
+  } catch (error) {
+    logSitemapRefreshFailure("sitemap_snapshot_refresh_failed", error);
+    if (existingSnapshot && existingAge <= SITEMAP_SNAPSHOT_MAX_AGE_SECONDS) {
+      return sitemapSnapshotResponse(request, existingSnapshot, "last-known-good");
+    }
+    return jsonResponse(request, {
+      error: "sitemap_snapshot_temporarily_unavailable",
+      retryAfterSeconds: 60,
+    }, 503, { "Cache-Control": "no-store", "Retry-After": "60" });
+  }
+}
+
+async function refreshSitemapSnapshotAfterProductWrite(env: WorkerEnv) {
+  const request = new Request("https://internal.cnfans.invalid/sitemap-snapshot");
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      const stored = await readStoredSitemapSnapshot(env);
+      const staticManifestHash = stored.snapshot?.staticManifestHash;
+      if (!staticManifestHash) return;
+      const snapshot = await querySitemapCatalogSnapshot(request, env, staticManifestHash);
+      validatePublishableSitemapSnapshot(snapshot);
+      if (await writeStoredSitemapSnapshot(env, snapshot, stored.etag)) return;
+      const conflict = await readStoredSitemapSnapshot(env);
+      if (conflict.snapshot?.staticManifestHash === staticManifestHash && conflict.snapshot.totalCount > 0) {
+        try {
+          validatePublishableSitemapSnapshot(conflict.snapshot);
+        } catch (error) {
+          logSitemapRefreshFailure("sitemap_lkg_conflict_object_rejected", error, conflict.snapshot);
+        }
+      }
+      console.error(JSON.stringify({ event: "sitemap_lkg_write_failed", reason: "concurrent_refresh_conflict" }));
+    } catch (error) {
+      logSitemapRefreshFailure("sitemap_lkg_write_failed", error);
+      return;
+    }
+  }
+  console.error(JSON.stringify({ event: "sitemap_lkg_write_failed", reason: "concurrent_refresh_conflict" }));
+}
+
+function scheduleSitemapSnapshotRefresh(env: WorkerEnv, ctx: ExecutionContext) {
+  if (typeof ctx?.waitUntil === "function") {
+    ctx.waitUntil(refreshSitemapSnapshotAfterProductWrite(env));
+  }
 }
 
 async function handleSiteSettings(request: Request, env: WorkerEnv) {
@@ -2704,6 +2974,7 @@ export default {
       if (pathname === "/filters" && request.method === "GET") return cachedFilters(request, env, ctx);
       if (pathname === "/catalog-size-stats" && request.method === "GET") return cachedCatalogSizeStats(request, env, ctx);
       if (pathname === "/sitemap-products" && request.method === "GET") return cachedSitemapProducts(request, env, ctx);
+      if (pathname === "/sitemap-snapshot" && request.method === "GET") return handleSitemapSnapshot(request, env);
       if (pathname === "/site-settings" && request.method === "GET") return handleSiteSettings(request, env);
       if (pathname === "/orders/quote" && request.method === "POST") return handleOrderQuote(request, env);
       if (pathname === "/orders" && request.method === "POST") return handleCreateOrder(request, env);
@@ -2741,12 +3012,28 @@ export default {
       if (pathname === "/admin/classification/scan-one-vision" && request.method === "POST") return handleVisionClassificationScanOne(request, env);
       if (pathname === "/admin/site-settings" && request.method === "PUT") return handleAdminSiteSettings(request, env);
       const adminProductMatch = pathname.match(/^\/admin\/products\/([^/]+)$/);
-      if (adminProductMatch && request.method === "PATCH") return handleAdminProductUpdate(request, env, decodeURIComponent(adminProductMatch[1]));
+      if (adminProductMatch && request.method === "PATCH") {
+        const response = await handleAdminProductUpdate(request, env, decodeURIComponent(adminProductMatch[1]));
+        if (response.ok) scheduleSitemapSnapshotRefresh(env, ctx);
+        return response;
+      }
       const adminProductByIdMatch = pathname.match(/^\/admin\/products\/by-id\/(\d+)$/);
-      if (adminProductByIdMatch && request.method === "PATCH") return handleAdminProductTitleUpdate(request, env, Number(adminProductByIdMatch[1]));
-      if (adminProductByIdMatch && request.method === "DELETE") return handleAdminProductSoftDelete(request, env, Number(adminProductByIdMatch[1]));
+      if (adminProductByIdMatch && request.method === "PATCH") {
+        const response = await handleAdminProductTitleUpdate(request, env, Number(adminProductByIdMatch[1]));
+        if (response.ok) scheduleSitemapSnapshotRefresh(env, ctx);
+        return response;
+      }
+      if (adminProductByIdMatch && request.method === "DELETE") {
+        const response = await handleAdminProductSoftDelete(request, env, Number(adminProductByIdMatch[1]));
+        if (response.ok) scheduleSitemapSnapshotRefresh(env, ctx);
+        return response;
+      }
       const adminProductRestoreMatch = pathname.match(/^\/admin\/products\/by-id\/(\d+)\/restore$/);
-      if (adminProductRestoreMatch && request.method === "POST") return handleAdminProductRestore(request, env, Number(adminProductRestoreMatch[1]));
+      if (adminProductRestoreMatch && request.method === "POST") {
+        const response = await handleAdminProductRestore(request, env, Number(adminProductRestoreMatch[1]));
+        if (response.ok) scheduleSitemapSnapshotRefresh(env, ctx);
+        return response;
+      }
       if (pathname === "/admin/orders" && request.method === "GET") return handleAdminOrders(request, env);
       const paymentConfirmedMatch = pathname.match(/^\/admin\/orders\/([^/]+)\/payment-confirmed$/);
       if (paymentConfirmedMatch && request.method === "PATCH") {
