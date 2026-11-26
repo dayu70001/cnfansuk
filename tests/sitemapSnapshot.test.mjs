@@ -94,6 +94,28 @@ test("duplicate IDs/slugs, invalid slugs, malformed timestamps and altered integ
   }
 });
 
+test("slug validation accepts consecutive hyphens used by existing catalog URLs but rejects unsafe path forms", async () => {
+  const snapshot = await createSitemapCatalogSnapshot([
+    product(1, "single-hyphen-item"),
+    product(2, "historical--double--hyphen"),
+    product(3, "historical---triple-hyphen"),
+  ], "2026-11-26T12:30:00.000Z", manifestHash);
+  const validated = await validateSitemapCatalogSnapshot(snapshot);
+  const entries = buildSitemapEntries(validated);
+  const xml = validateSitemapXml(entries);
+  assert.ok(xml.xml.includes("/product/historical--double--hyphen</loc>"));
+  assert.ok(xml.xml.includes("/product/historical---triple-hyphen</loc>"));
+
+  for (const invalid of ["../admin", "-leading", "trailing-", "a/b", "a?query", "a%2fb", "has space", "under_score"]) {
+    const invalidSnapshot = await createSitemapCatalogSnapshot(
+      [product(1, invalid)],
+      "2026-11-26T12:30:00.000Z",
+      manifestHash,
+    );
+    await assert.rejects(() => validateSitemapCatalogSnapshot(invalidSnapshot), SitemapSnapshotError, invalid);
+  }
+});
+
 test("XML output escapes values and preserves the Sitemap protocol structure", () => {
   const xml = renderSitemapXml([{
     url: "https://www.cnfans.co.uk/product/a&b",
@@ -194,7 +216,7 @@ test("XML size uses actual UTF-8 bytes for multibyte content and rejects duplica
 test("sitemap route serves complete XML and fails closed on upstream or expired snapshots", async () => {
   const failures = [];
   let generatedAt = new Date().toISOString();
-  let products = [product(1, "route-test-product")];
+  let products = [product(1, "route-test-product"), product(2, "route-test--historical-slug")];
   const routeModule = loadProjectTypeScript(path.join(root, "app/sitemap.xml/route.ts"), {
     "@/lib/catalogApi": { fetchSitemapCatalogSnapshot: async () => {
       if (failures.length) throw failures.shift();
@@ -208,7 +230,9 @@ test("sitemap route serves complete XML and fails closed on upstream or expired 
   assert.equal(response.status, 200);
   assert.match(response.headers.get("Content-Type"), /application\/xml/);
   assert.match(response.headers.get("Cache-Control"), /no-store/);
-  assert.match(await response.text(), /route-test-product/);
+  const sitemapXml = await response.text();
+  assert.match(sitemapXml, /route-test-product/);
+  assert.match(sitemapXml, /route-test--historical-slug/);
 
   products = [];
   const emptyCatalog = await route.GET();
@@ -222,7 +246,7 @@ test("sitemap route serves complete XML and fails closed on upstream or expired 
   assert.equal(overflow.headers.get("Retry-After"), "60");
   assert.match(await overflow.text(), /Temporarily unavailable/);
 
-  products = [product(1, "route-test-product")];
+  products = [product(1, "route-test-product"), product(2, "route-test--historical-slug")];
   generatedAt = new Date(Date.now() - 25 * 60 * 60 * 1000).toISOString();
   const unavailable = await route.GET();
   assert.equal(unavailable.status, 503);

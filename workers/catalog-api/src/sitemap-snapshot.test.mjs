@@ -112,6 +112,23 @@ test("sitemap snapshot reads all rows in one D1 statement and stores an R2 LKG",
   assert.equal(state.queries, 1);
 });
 
+test("Worker snapshot generation, R2 round-trip, and cached read preserve a historical consecutive-hyphen slug", async () => {
+  const { env, state } = makeEnv([product(1, "historical--double--hyphen")]);
+  const first = await getSnapshot(env);
+  const generated = await first.json();
+  assert.equal(first.status, 200);
+  assert.equal(generated.products[0].slug, "historical--double--hyphen");
+  assert.equal(state.writes, 1);
+
+  const second = await getSnapshot(env);
+  const cached = await second.json();
+  assert.equal(second.status, 200);
+  assert.equal(cached.delivery, "cached");
+  assert.equal(cached.products[0].slug, "historical--double--hyphen");
+  const stored = JSON.parse(state.objects.get(SITEMAP_SNAPSHOT_KEY).value).snapshot;
+  assert.equal(stored.products[0].slug, "historical--double--hyphen");
+});
+
 test("zero active products never creates or stores an empty sitemap", async () => {
   const { env, state } = makeEnv([]);
   const response = await getSnapshot(env);

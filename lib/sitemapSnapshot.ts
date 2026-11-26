@@ -126,7 +126,7 @@ export async function validateSitemapCatalogSnapshot(value: unknown): Promise<Si
       || !Number.isSafeInteger(id)
       || id <= previousId
       || typeof slug !== "string"
-      || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug)
+      || !/^[a-z0-9]+(?:-+[a-z0-9]+)*$/.test(slug)
       || slug.length > 180
       || typeof product.category !== "string"
       || !product.category.trim()
