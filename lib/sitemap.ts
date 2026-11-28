@@ -26,6 +26,8 @@ export const SITEMAP_STATIC_PATHS = [
   "/payment-security",
   "/bank-transfer-payment-help",
   "/uk-customs-and-import-charges",
+  "/cnfans-status",
+  "/cnfans-alternative",
   "/guides",
   "/cnfans-spreadsheet",
   "/cnfans-finds",

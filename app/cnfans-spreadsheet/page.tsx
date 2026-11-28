@@ -9,9 +9,9 @@ import { fetchFirstPartyCatalogueData } from "@/lib/firstPartyData";
 
 export const metadata: Metadata = buildGuideMetadata({
   path: "/cnfans-spreadsheet",
-  title: "CNFans Spreadsheet UK | Clothing Finds, QC Photos & Product Links",
+  title: "CNFans Spreadsheet 2026 UK | Clothing Finds & Product Links",
   description:
-    "Explore CNFans UK clothing finds, everyday apparel picks, size notes and product links for UK buyers looking for a simpler way to browse styles.",
+    "Looking for a CNFans spreadsheet in 2026? Understand shared clothing lists, check product links and browse the independent CNFANS UK clothing catalogue.",
 });
 
 export default async function CnfansSpreadsheetPage() {
@@ -19,39 +19,42 @@ export default async function CnfansSpreadsheetPage() {
 
   return (
     <main className="seo-page">
-      <JsonLd data={buildGuidePageSchemas({ path: "/cnfans-spreadsheet", name: "CNFans Spreadsheet UK", description: "A practical guide to CNFans spreadsheets, clothing finds, product links and the checks UK shoppers can make before ordering." })} />
+      <JsonLd data={buildGuidePageSchemas({ path: "/cnfans-spreadsheet", name: "CNFans Spreadsheet UK", description: "A practical guide to shared CNFans clothing spreadsheets, product links and the independent CNFANS UK catalogue." })} />
       <header className="seo-hero">
         <p className="eyebrow">CNFANS UK guide</p>
         <h1>CNFANS Spreadsheet UK</h1>
         <p className="seo-lead">
-          A plain-English look at what people mean by a &ldquo;CNFANS spreadsheet&rdquo;, and how CNFANS UK keeps things
-          simpler with a proper clothing shop, clear product links and honest size notes.
+          A plain-English guide to shared &ldquo;CNFANS spreadsheet&rdquo; lists, product links and clothing finds. CNFANS.co.uk
+          is an independent clothing shop, not a spreadsheet or the same service as CNFans.com.
         </p>
       </header>
 
       <section className="seo-section">
         <h2>What is a CNFANS spreadsheet?</h2>
         <p>
-          A CNFANS spreadsheet is usually a shared list of clothing finds &mdash; hoodies, jackets, tops and bottoms &mdash;
-          with a photo, a short note and a link for each item. People pass these lists around so friends can browse the
-          same styles without starting from scratch.
+          A CNFANS spreadsheet usually means a shared list of clothing finds, often with an image, a short note and a product
+          link. It can help someone collect ideas, compare styles or keep a personal shortlist.
         </p>
         <p>
-          The idea is handy, but spreadsheets get out of date fast. Links break, sizes go missing and it&rsquo;s hard to
-          tell what is actually available. CNFANS UK is an independent clothing store and product discovery site, so
-          instead of a loose list you get a tidy shop where every style has its own page, photos and details in one place.
+          A shared sheet can become outdated: listings move, details change and a saved link may stop opening. CNFANS.co.uk
+          is independently operated and sells clothing directly through its own product pages. It is separate from CNFans.com
+          and does not transfer or access another service&rsquo;s accounts, orders or balances. Browse our current{" "}
+          <Link href="/category/new-in">clothing catalogue</Link> or read about this{" "}
+          <Link href="/cnfans-alternative">direct-shopping alternative</Link>.
         </p>
       </section>
 
       <section className="seo-section">
         <h2>Clothing finds for UK buyers</h2>
         <p>
-          If you have been scrolling through spreadsheets looking for everyday pieces, our shop covers the same ground in a
-          cleaner way. We focus on wardrobe staples that are easy to wear on repeat rather than one-off novelty items.
+          If you have been searching a CNFans clothing spreadsheet for hoodies, jackets, tops, trousers or sets, use the live
+          catalogue to open current product pages and review their listed options. New products are added weekly; availability
+          and product details can change.
         </p>
         <p>
-          Everything is written for UK shoppers: UK English, familiar sizing language and delivery notes that make sense for
-          orders coming to the UK. You can browse by category or start with the latest arrivals.
+          Start with <Link href="/category/new-in">New In</Link> or browse <Link href="/category/tops">Tops</Link>,{" "}
+          <Link href="/category/outerwear">Outerwear</Link>, <Link href="/category/bottoms">Bottoms</Link> and{" "}
+          <Link href="/category/co-ords-sets">Co-ords &amp; Sets</Link>. Product pages show the current listing details and price.
         </p>
       </section>
 
@@ -80,17 +83,18 @@ export default async function CnfansSpreadsheetPage() {
       <section className="seo-section">
         <h2>How to use product links</h2>
         <p>
-          Each product link opens a single page with photos, a description and the details you need before choosing a size.
-          Rather than copying rows from a spreadsheet, you can add an item to your bag straight from its page.
+          Each CNFANS.co.uk product link opens a page with the available listing information, images and options. Check the
+          current page before ordering rather than relying on a copied row from an older spreadsheet.
         </p>
         <p>
-          If you found a style on a shared list somewhere else, search our shop for something similar &mdash; there is a good
-          chance we carry a comparable everyday piece. When you are unsure which page matches, our team is happy to point you
-          in the right direction.
+          If a third-party product link no longer works, the original listing may have moved or become unavailable. You can
+          browse the <Link href="/cnfans-finds">CNFANS clothing finds</Link> or read our guide to{" "}
+          <Link href="/cnfans-dead-links">CNFans links that stop working</Link>. We can review a reference image and suggest
+          a similar item from the available catalogue, but cannot promise an identical match.
         </p>
       </section>
 
-      {catalogueData ? <FirstPartyCatalogueSnapshot data={catalogueData} /> : null}
+      <FirstPartyCatalogueSnapshot data={catalogueData} />
 
       <section className="seo-section">
         <h2>Size and delivery notes</h2>
@@ -100,38 +104,34 @@ export default async function CnfansSpreadsheetPage() {
           be relaxed. If you are between sizes, get in touch and we will talk it through.
         </p>
         <p>
-          For timings, tracking and what happens after you order, see our{" "}
-          <Link href="/cnfans-delivery-uk">UK delivery guide</Link>. It covers processing, updates and what to do if a parcel is
-          running late.
+          For preparation, transit, tracking and shipping prices, see <Link href="/delivery">UK &amp; Europe delivery information</Link>.
+          For sizing help, use our <Link href="/cnfans-size-guide">clothing size guide</Link> or ask the team before ordering.
         </p>
       </section>
 
       <section className="seo-section">
-        <h2>Why a shop beats a spreadsheet</h2>
+        <h2>Spreadsheet links and current availability</h2>
         <p>
-          Shared lists are a nice idea, but they age quickly. A shop keeps everything current: if a style is on the page, you
-          can see it, read the details and order it in one place. There is no chasing broken links or wondering whether a row
-          is still accurate.
+          A third-party spreadsheet is not controlled by CNFANS.co.uk, and we cannot repair or guarantee its links. If a link
+          fails, check whether the destination is temporarily unavailable, has moved or is no longer listed before assuming the
+          entire site is offline. See the <Link href="/cnfans-status">CNFans website status update</Link> for what we could verify.
         </p>
         <p>
-          It is also simpler to trust. Every product page shows the same clear information, so you always know what you are
-          looking at. That is the whole idea behind CNFANS UK &mdash; the convenience of a good finds list, with none of the
-          guesswork.
+          For a separate way to discover clothing, use our live catalogue or browse the <Link href="/cnfans-finds">finds pages</Link>.
+          Read each current product page for price, size options and availability.
         </p>
       </section>
 
       <section className="seo-section">
         <h2>Keeping track of styles you like</h2>
         <p>
-          One reason people build spreadsheets is simply to remember the styles they like. A shop makes that easier: you can
-          browse a category, open anything that catches your eye and come back to it later without keeping a separate list.
-          Because every item lives on its own page, there is nothing to copy across or keep updated.
+          A spreadsheet can still be useful for personal research. If you prefer a direct shop, CNFANS.co.uk sells through its
+          own catalogue and handles customer questions through its existing support channels.
         </p>
         <p>
-          It is also worth being clear about who we are. CNFANS UK is an independent clothing store and product discovery
-          site &mdash; not an official channel for anyone else. What you see is our own everyday apparel, described honestly,
-          so you can decide what is right for you. If you want a second opinion before ordering, our team is happy to help
-          rather than leaving you to guess from a list.
+          We are an independent clothing business, not an official CNFans.com channel or replacement. For more about how we
+          operate, read <Link href="/about">About CNFANS UK</Link>; for questions about direct shopping, see{" "}
+          <Link href="/cnfans-alternative">CNFANS as a clothing alternative</Link>.
         </p>
       </section>
 
@@ -143,6 +143,8 @@ export default async function CnfansSpreadsheetPage() {
           { href: "/cnfans-size-guide", title: "CNFans UK Size Guide", blurb: "Fit notes for hoodies, jackets, tops and bottoms." },
           { href: "/cnfans-delivery-uk", title: "CNFans UK Delivery Guide", blurb: "Timings, tracking and order updates for UK buyers." },
           { href: "/how-to-order", title: "How to Order", blurb: "A simple step-by-step guide to placing an order." },
+          { href: "/cnfans-alternative", title: "CNFans Alternative", blurb: "How direct clothing shopping with an independent UK store works." },
+          { href: "/cnfans-dead-links", title: "CNFans Dead Links", blurb: "Troubleshoot a moved or unavailable spreadsheet link." },
         ]}
       />
     </main>

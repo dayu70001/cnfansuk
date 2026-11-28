@@ -1,5 +1,6 @@
-import { fetchCatalogFilters, fetchCatalogPage, fetchCatalogProductBySlug, fetchCatalogSizeStats, type CatalogFilters, type CatalogSizeStats } from "@/lib/catalogApi";
+import { fetchCatalogFilters, fetchCatalogPage, fetchCatalogProductBySlug, type CatalogFilters } from "@/lib/catalogApi";
 import { catalogCategories, catalogSubcategories } from "@/lib/catalogTaxonomy";
+import { validateFirstPartyCatalogueState } from "@/lib/firstPartyCatalogueValidation";
 import type { Product } from "@/lib/types";
 
 const EXAMPLE_SUBCATEGORIES = [
@@ -26,7 +27,6 @@ export type FirstPartyCatalogueData = {
   categoryCounts: Array<{ category: string; label: string; count: number }>;
   subcategoryCounts: Array<{ category: string; subcategory: string; label: string; count: number; href: string }>;
   examples: FirstPartyProductExample[];
-  sizeStats: CatalogSizeStats | null;
 };
 
 /**
@@ -35,54 +35,60 @@ export type FirstPartyCatalogueData = {
  * unavailable, return null so a guide never renders made-up numbers.
  */
 export async function fetchFirstPartyCatalogueData(): Promise<FirstPartyCatalogueData | null> {
-  const [filters, sizeStats] = await Promise.all([fetchCatalogFilters(), fetchCatalogSizeStats()]);
-  if (!filters) return null;
+  try {
+    const [filters, firstPage] = await Promise.all([
+      fetchCatalogFilters(),
+      fetchCatalogPage({ sort: "newest", page: 1, limit: 1 }, { bypassNextCache: true }),
+    ]);
+    const totalListings = validateFirstPartyCatalogueState(filters, firstPage);
+    if (totalListings === null || !filters) return null;
 
-  const categoryCounts = mapCategoryCounts(filters);
-  const subcategoryCounts = mapSubcategoryCounts(filters);
-  const available = new Set(subcategoryCounts.filter((row) => row.count > 0).map((row) => `${row.category}/${row.subcategory}`));
-  const examplePages = await Promise.all(
-    EXAMPLE_SUBCATEGORIES
-      .filter(([category, subcategory]) => available.has(`${category}/${subcategory}`))
-      .map(async ([category, subcategory]) => ({
-        category,
-        subcategory,
-        page: await fetchCatalogPage(
-          { category, subcategory, sort: "newest", page: 1, limit: 1 },
-          { bypassNextCache: true },
-        ),
-      })),
-  );
-  const resolvedExamples = await Promise.all(examplePages.map(async (item) => {
-    const listedProduct = item.page?.products[0];
-    const product = listedProduct?.slug ? await fetchCatalogProductBySlug(listedProduct.slug) || listedProduct : listedProduct;
-    return { item, product };
-  }));
-  const examples: FirstPartyProductExample[] = [];
-  const seen = new Set<string>();
-  for (const { item, product } of resolvedExamples) {
-    if (!product || seen.has(product.id)) continue;
-    seen.add(product.id);
-    examples.push({
-      product,
-      categoryLabel: categoryLabel(item.category),
-      subcategoryLabel: subcategoryLabel(item.category, item.subcategory),
-    });
+    const categoryCounts = mapCategoryCounts(filters);
+    const subcategoryCounts = mapSubcategoryCounts(filters);
+    const available = new Set(subcategoryCounts.filter((row) => row.count > 0).map((row) => `${row.category}/${row.subcategory}`));
+    const examplePages = await Promise.all(
+      EXAMPLE_SUBCATEGORIES
+        .filter(([category, subcategory]) => available.has(`${category}/${subcategory}`))
+        .map(async ([category, subcategory]) => ({
+          category,
+          subcategory,
+          page: await fetchCatalogPage(
+            { category, subcategory, sort: "newest", page: 1, limit: 1 },
+            { bypassNextCache: true },
+          ),
+        })),
+    );
+    const resolvedExamples = await Promise.all(examplePages.map(async (item) => {
+      const listedProduct = item.page?.products[0];
+      const product = listedProduct?.slug ? await fetchCatalogProductBySlug(listedProduct.slug) || listedProduct : listedProduct;
+      return { item, product };
+    }));
+    const examples: FirstPartyProductExample[] = [];
+    const seen = new Set<string>();
+    for (const { item, product } of resolvedExamples) {
+      if (!product || seen.has(product.id)) continue;
+      seen.add(product.id);
+      examples.push({
+        product,
+        categoryLabel: categoryLabel(item.category),
+        subcategoryLabel: subcategoryLabel(item.category, item.subcategory),
+      });
+    }
+
+    return {
+      totalListings,
+      categoryCounts,
+      subcategoryCounts,
+      examples,
+    };
+  } catch {
+    return null;
   }
-
-  return {
-    totalListings: categoryCounts.reduce((total, row) => total + row.count, 0),
-    categoryCounts,
-    subcategoryCounts,
-    examples,
-    sizeStats,
-  };
 }
 
 function mapCategoryCounts(filters: CatalogFilters) {
-  const counts = new Map(filters.counts.categories.map((row) => [row.category, Number(row.count) || 0]));
-  return catalogCategories
-    .map((category) => ({ category: category.value, label: category.label, count: counts.get(category.value) || 0 }))
+  return filters.counts.categories
+    .map((row) => ({ category: row.category, label: categoryLabel(row.category), count: Number(row.count) }))
     .filter((row) => row.count > 0);
 }
 

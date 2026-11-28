@@ -10,7 +10,7 @@ import { buildGuideIndexSchemas, buildGuideMetadata } from "@/lib/seoPage";
 
 const PAGE_TITLE = "Men's Clothing Guides UK | CNFans UK";
 const PAGE_DESCRIPTION =
-  "Browse men's clothing guides for UK shoppers, covering T-shirts, hoodies, jackets, trousers, tracksuits, sizing, delivery and product checks.";
+  "Browse CNFANS UK guides for clothing finds, spreadsheets, website status, direct shopping, sizing, delivery and product checks.";
 
 export const metadata: Metadata = buildGuideMetadata({
   path: "/guides",
@@ -21,6 +21,8 @@ export const metadata: Metadata = buildGuideMetadata({
 const guides = [
   { href: "/cnfans-finds", title: "CNFans Finds UK", blurb: "Everyday finds across hoodies, jackets, tops, bottoms and sets." },
   { href: "/cnfans-spreadsheet", title: "CNFans Spreadsheet UK", blurb: "What a finds spreadsheet is, and a simpler way to browse styles." },
+  { href: "/cnfans-status", title: "CNFans Website Status", blurb: "What we could verify about CNFans.com, with a clear last-checked date." },
+  { href: "/cnfans-alternative", title: "CNFans Alternative for UK & Europe", blurb: "Learn how independent direct clothing shopping with CNFANS.co.uk works." },
   { href: "/cnfans-hoodie-finds", title: "CNFans Hoodie Finds UK", blurb: "Everyday hoodies, sweatshirts and matching sets." },
   { href: "/cnfans-jacket-finds", title: "CNFans Jacket Finds UK", blurb: "Outerwear, coats and layering pieces for daily wear." },
   { href: "/how-to-order", title: "How to Order", blurb: "A simple step-by-step guide from browsing to tracking." },

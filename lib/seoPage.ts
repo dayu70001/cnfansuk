@@ -41,6 +41,8 @@ export function buildGuideMetadata({
 export const GUIDE_INDEX_ITEMS = [
   { path: "/cnfans-finds", name: "CNFans Finds UK" },
   { path: "/cnfans-spreadsheet", name: "CNFans Spreadsheet UK" },
+  { path: "/cnfans-status", name: "CNFans Website Status" },
+  { path: "/cnfans-alternative", name: "CNFans Alternative for UK & Europe" },
   { path: "/cnfans-hoodie-finds", name: "CNFans Hoodie Finds UK" },
   { path: "/cnfans-jacket-finds", name: "CNFans Jacket Finds UK" },
   { path: "/how-to-order", name: "How to Order" },

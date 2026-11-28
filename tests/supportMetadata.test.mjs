@@ -10,9 +10,9 @@ const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
 const pages = [
   {
     file: "app/delivery/page.tsx",
-    title: "Delivery & Shipping Information",
-    description: "Information on order preparation, dispatch, tracking updates and delivery timing by destination.",
-    canonical: "/delivery",
+    title: "Delivery & Shipping Information | CNFans UK",
+    descriptionSource: "description: pageDescription",
+    canonicalSource: "path: \"/delivery\"",
     h1: "Delivery",
   },
   {
@@ -48,8 +48,16 @@ test("five approved support pages define page-level title, description and self-
   for (const page of pages) {
     const source = read(page.file);
     assert.match(source, new RegExp(`title: "${page.title.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}"`), page.file);
-    assert.ok(source.includes(`description: "${page.description}"`), `${page.file} description`);
-    assert.ok(source.includes(`canonical: \u0060\u0024{SITE_URL}${page.canonical}\u0060`), `${page.file} canonical`);
+    if (page.descriptionSource) {
+      assert.ok(source.includes(page.descriptionSource), `${page.file} description`);
+    } else {
+      assert.ok(source.includes(`description: "${page.description}"`), `${page.file} description`);
+    }
+    if (page.canonicalSource) {
+      assert.ok(source.includes(page.canonicalSource), `${page.file} canonical`);
+    } else {
+      assert.ok(source.includes(`canonical: \u0060\u0024{SITE_URL}${page.canonical}\u0060`), `${page.file} canonical`);
+    }
     if (page.h1) assert.ok(source.includes(`<h1>${page.h1}</h1>`) || source.includes(`<h1>${page.h1}`), `${page.file} H1 remains in markup`);
     assert.doesNotMatch(source, /robots:\s*\{/);
   }

@@ -134,7 +134,7 @@ export async function fetchCatalogPage(
 ): Promise<{ products: Product[]; total: number; page: number; limit: number; totalPages: number } | null> {
   const response = await requestCatalog<CatalogResponse>("/catalog", query, 3600, options.bypassNextCache);
   const catalogItems = response?.products || response?.items;
-  if (!catalogItems) return response ? { products: [], total: 0, page: query.page || 1, limit: query.limit || 20, totalPages: 0 } : null;
+  if (!response || !Array.isArray(catalogItems)) return null;
   const total = Number(response.total ?? response.pagination?.total ?? catalogItems.length);
   const limit = Number(response.limit ?? response.pagination?.limit ?? query.limit ?? 20);
   const totalPages = Number(response.totalPages ?? response.pagination?.totalPages ?? (limit > 0 ? Math.ceil(total / limit) : 0));

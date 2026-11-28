@@ -1077,10 +1077,10 @@ export const PHASE_FOUR_GUIDES: LongTailGuide[] = [
   },
   {
     path: "/cnfans-dead-links",
-    title: "Why CNFans Spreadsheet Links Stop Working",
-    description: "Find out why CNFans spreadsheet links can fail and how to separate an expired link, a moved listing and a temporary access issue.",
-    h1: "Why CNFans Spreadsheet Links Stop Working",
-    intro: "A dead link does not always mean the underlying find was useless. The row may point to a moved listing, an expired product, a temporary error or a destination that is no longer available.",
+    title: "CNFans Links Not Working? Spreadsheet & Product Link Help",
+    description: "Troubleshoot CNFans links that are not working, including expired spreadsheet rows, moved product pages and temporary website access problems.",
+    h1: "CNFans Links Not Working? How to Check a Spreadsheet or Product Link",
+    intro: "A failed CNFans link can point to a moved listing, an expired product, a temporary access issue or a copied URL problem. Check the destination before assuming the whole website or every product is unavailable.",
     sections: [
       {
         heading: "The link and the product are separate",
@@ -1094,6 +1094,13 @@ export const PHASE_FOUR_GUIDES: LongTailGuide[] = [
         paragraphs: [
           "A listing may have been removed, renamed or moved to another address. A link can also be copied incorrectly, lose part of its query string or point to a page that is temporarily unavailable. Access rules and browser issues are another possibility, especially when only one device sees the error.",
           "Do not assume every failure has the same cause. A blank page, a not-found response, a redirect to a different item and a temporary loading problem each deserve a different next step.",
+        ],
+      },
+      {
+        heading: "A website status issue is not the same as a dead product link",
+        paragraphs: [
+          "One product URL can fail while a website remains available, and a wider access problem does not prove that every saved product has been removed. Check the original destination and the date of the link before drawing a conclusion.",
+          "Our <a href=\"/cnfans-status\">CNFans website status page</a> records what we could verify and when. CNFANS.co.uk is an independent clothing shop, not CNFans.com or an official replacement; see the <a href=\"/cnfans-alternative\">direct-shopping overview</a> for our own service.",
         ],
       },
       {
@@ -1117,12 +1124,21 @@ export const PHASE_FOUR_GUIDES: LongTailGuide[] = [
           "The <a href=\"/cnfans-spreadsheet\">CNFans spreadsheet guide</a> explains the broader role of a sheet. This article stays focused on link health and the practical decision to move on when the source is no longer reliable.",
         ],
       },
+      {
+        heading: "Looking for a similar clothing item?",
+        paragraphs: [
+          "If a link is no longer available, note the clothing type, colour and visible design details, then browse the current <a href=\"/category/new-in\">CNFANS UK catalogue</a> or <a href=\"/cnfans-finds\">clothing finds</a>. You can send a reference image through the existing <a href=\"/connect\">customer support channels</a> and ask us to look for a similar option.",
+          "We cannot promise that an identical item exists or remains available. Check the current listing, measurements and price before ordering.",
+        ],
+      },
     ],
     note: "Treat a dead link as a troubleshooting clue, not as proof that every detail in the row was wrong. Verify the current find before saving a replacement.",
     related: [
       { href: "/cnfans-spreadsheet", title: "CNFans Spreadsheet UK", blurb: "Understand what spreadsheet rows are meant to provide." },
       { href: "/cnfans-spreadsheet-search-tips", title: "Spreadsheet Search Tips", blurb: "Search a large sheet without endless scrolling." },
       { href: "/cnfans-finds", title: "CNFans Finds UK", blurb: "Browse current clothing finds by category." },
+      { href: "/cnfans-status", title: "CNFans Website Status", blurb: "Check what we could verify and when." },
+      { href: "/cnfans-alternative", title: "CNFans Alternative", blurb: "Learn about independent direct clothing shopping." },
     ],
     browseHref: "/category/new-in",
     browseLabel: "Browse New In",
@@ -1233,15 +1249,15 @@ export const PHASE_FOUR_GUIDES: LongTailGuide[] = [
   },
   {
     path: "/cnfans-reddit",
-    title: "CNFans Reddit Questions: Sizing, QC, Shipping and Finds Explained",
-    description: "A neutral guide to recurring CNFans Reddit questions about sizing, QC photos, shipping, spreadsheets and clothing finds.",
-    h1: "CNFans Reddit Questions: Sizing, QC, Shipping and Finds",
-    intro: "Public community discussions often return to the same CNFans questions: which size to choose, what QC photos show, how shipping figures work and where to find useful clothing references.",
+    title: "CNFans Reddit Search Guide | Finds, Sizing & Shipping",
+    description: "A neutral guide for people searching Reddit about CNFans alternatives, spreadsheets, clothing finds, sizing, QC photos and shipping information.",
+    h1: "Searching Reddit for CNFans? Check Finds, Links and Shopping Details",
+    intro: "If you search Reddit for CNFans, alternatives, spreadsheets or clothing finds, use posts as leads rather than current service information. Dates, product links, order details and shipping routes can change.",
     sections: [
       {
         heading: "Sizing questions need measurements",
         paragraphs: [
-          "Community advice can be a useful starting point, but a recommendation such as size up or stay true to size only makes sense with the garment, the cut and the person's measurements in view. A hoodie, jacket and pair of jeans should not share one automatic rule.",
+          "A Reddit sizing suggestion is a personal account, not a universal rule. A recommendation such as size up or stay true to size only makes sense with the garment, the cut and the person's measurements in view. A hoodie, jacket and pair of jeans should not share one automatic rule.",
           "Use a garment you already like as the reference. The <a href=\"/cnfans-size-guide\">CNFans size guide</a> explains the measuring method, while the pages for <a href=\"/cnfans-hoodie-finds\">hoodie finds</a> and <a href=\"/cnfans-jacket-finds\">jacket finds</a> add context about different shapes.",
         ],
       },
@@ -1255,22 +1271,22 @@ export const PHASE_FOUR_GUIDES: LongTailGuide[] = [
       {
         heading: "Shipping answers should stay conditional",
         paragraphs: [
-          "Shipping discussions can become confusing when one parcel's weight or route is repeated as if it were a universal rule. Estimates, packaging, dimensions and the selected service can all affect the result, so check the current information for the parcel in front of you.",
-          "For plain-English background, read the <a href=\"/cnfans-delivery-uk\">CNFans UK delivery guide</a>, <a href=\"/cnfans-volumetric-weight\">volumetric weight</a> and <a href=\"/cnfans-packaging-weight\">packaging weight</a> pages. This site is an independent clothing and product discovery site, not an official Reddit or CNFans service account.",
+          "One parcel's weight or route is not a universal shipping rule. Estimates, packaging, dimensions, destination and selected service can affect the result, so confirm current details for the order in front of you.",
+          "For current business information, read <a href=\"/delivery\">CNFANS UK delivery details</a> and the <a href=\"/cnfans-volumetric-weight\">volumetric weight</a> or <a href=\"/cnfans-packaging-weight\">packaging weight</a> guides. This site is independently operated and is not a Reddit account or CNFans.com service page.",
         ],
       },
       {
         heading: "Finds and spreadsheet advice",
         paragraphs: [
-          "A spreadsheet can help collect a large number of references, while a finds page can be easier to browse by clothing type. Old rows may contain links that have moved or expired, so verify the current product before treating a community reference as live.",
-          "The <a href=\"/cnfans-spreadsheet\">CNFans spreadsheet guide</a>, <a href=\"/cnfans-spreadsheet-search-tips\">spreadsheet search tips</a> and <a href=\"/cnfans-finds-vs-spreadsheet\">finds versus spreadsheet</a> comparison cover those choices without pretending that one format suits every reader.",
+          "A spreadsheet can collect references; a finds page can be easier to browse by clothing type. Old rows may contain moved or expired URLs, so verify the current product rather than treating a Reddit or spreadsheet link as live proof.",
+          "Use the <a href=\"/cnfans-spreadsheet\">CNFans spreadsheet guide</a>, <a href=\"/cnfans-spreadsheet-search-tips\">spreadsheet search tips</a> and <a href=\"/cnfans-finds-vs-spreadsheet\">finds versus spreadsheet</a> comparison. If you want a separate direct shop, read about the <a href=\"/cnfans-alternative\">CNFANS UK clothing alternative</a>.",
         ],
       },
       {
-        heading: "How to read community answers",
+        heading: "Check the context behind an answer",
         paragraphs: [
-          "Look for the details behind an answer: product type, actual measurements, photos, parcel context and when the information was posted. A short confident reply can be less useful than a careful answer that explains what remains uncertain.",
-          "Do not copy community posts as proof or treat an unverified quote as a guarantee. Use public discussion to identify questions, then confirm the current product and service information through the relevant listing and guide.",
+          "Look for the details behind an answer: product type, actual measurements, photos, parcel context and posting date. A confident reply can be less useful than a careful answer that explains what remains uncertain.",
+          "Reddit replies are individual experiences, so check the date and details of each post. Confirm current product and service information through the relevant listing or business page; for a CNFans.com access question, see the dated <a href=\"/cnfans-status\">status note</a>.",
         ],
         items: [
           "Separate a personal recommendation from a general sizing rule.",
@@ -1285,6 +1301,8 @@ export const PHASE_FOUR_GUIDES: LongTailGuide[] = [
       { href: "/cnfans-qc-photos", title: "CNFans QC Photos Guide", blurb: "Review visible details with sensible limits." },
       { href: "/cnfans-spreadsheet", title: "CNFans Spreadsheet UK", blurb: "Understand spreadsheet references and product links." },
       { href: "/cnfans-delivery-uk", title: "CNFans UK Delivery Guide", blurb: "Keep shipping and tracking information current." },
+      { href: "/cnfans-alternative", title: "CNFans Alternative", blurb: "Understand CNFANS.co.uk's independent direct-shopping model." },
+      { href: "/cnfans-dead-links", title: "CNFans Dead Links", blurb: "Check moved, expired and temporarily unavailable links." },
     ],
     browseHref: "/category/new-in",
     browseLabel: "Browse New In",

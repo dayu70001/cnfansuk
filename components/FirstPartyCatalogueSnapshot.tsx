@@ -2,14 +2,20 @@ import Link from "next/link";
 import type { FirstPartyCatalogueData } from "@/lib/firstPartyData";
 import { displaySizeLabels } from "@/lib/firstPartyData";
 
-export function FirstPartyCatalogueSnapshot({ data }: { data: FirstPartyCatalogueData }) {
+export function FirstPartyCatalogueSnapshot({ data }: { data: FirstPartyCatalogueData | null }) {
   return (
     <section className="seo-section first-party-snapshot" aria-labelledby="catalogue-snapshot-heading">
       <h2 id="catalogue-snapshot-heading">What&apos;s in the catalogue right now</h2>
-      <p>
-        This snapshot is taken from listings currently available to browse on CNFANS UK. It is a live catalogue view rather
-        than a saved spreadsheet, so the links below open the same categories and product pages shoppers can use today.
-      </p>
+      {!data ? (
+        <p role="status">Live catalogue figures are temporarily unavailable, so a product count is not shown. Please browse the current catalogue or try again later.</p>
+      ) : data.totalListings === 0 ? (
+        <p role="status">There are currently no active product listings in the catalogue.</p>
+      ) : (
+        <>
+          <p>
+            This snapshot is taken from listings currently available to browse on CNFANS UK. It is a live catalogue view rather
+            than a saved spreadsheet, so the links below open the same categories and product pages shoppers can use today.
+          </p>
 
       <div className="first-party-total">
         <span>Total current listings</span>
@@ -65,6 +71,8 @@ export function FirstPartyCatalogueSnapshot({ data }: { data: FirstPartyCatalogu
           </ul>
         </div>
       ) : null}
+        </>
+      )}
     </section>
   );
 }
